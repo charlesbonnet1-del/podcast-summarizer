@@ -6,6 +6,9 @@ import { Settings, Volume2, User } from "lucide-react";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { DangerZone } from "@/components/settings/danger-zone";
 
+// Force dynamic rendering - requires Supabase auth
+export const dynamic = 'force-dynamic';
+
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

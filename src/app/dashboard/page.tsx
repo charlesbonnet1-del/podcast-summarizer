@@ -15,6 +15,9 @@ import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
 import { EpisodesList } from "@/components/dashboard/episodes-list";
 import { ContentQueue } from "@/components/dashboard/content-queue";
 
+// Force dynamic rendering - requires Supabase auth
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

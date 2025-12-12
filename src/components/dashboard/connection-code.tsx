@@ -59,12 +59,12 @@ export function ConnectionCode({ code, telegramConnected }: ConnectionCodeProps)
         <p>To connect:</p>
         <ol className="list-decimal list-inside space-y-1 ml-1">
           <li>Open <a 
-            href="https://t.me/SingularDailyBot" 
+            href="https://t.me/Mets_tes_bot" 
             target="_blank" 
             rel="noopener noreferrer"
             className="text-[#0088cc] hover:underline inline-flex items-center gap-1"
           >
-            @SingularDailyBot
+            @Mets_tes_bot
             <ExternalLink className="w-3 h-3" />
           </a></li>
           <li>Send the command <code className="bg-secondary px-1.5 py-0.5 rounded">/start</code></li>

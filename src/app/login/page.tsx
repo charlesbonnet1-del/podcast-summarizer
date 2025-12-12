@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,17 +10,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Headphones, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-// Force dynamic rendering
-export const dynamic = 'force-dynamic';
-
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const supabase = createClient();
+  const [supabase, setSupabase] = useState<ReturnType<typeof import("@/lib/supabase/client").createClient> | null>(null);
+
+  // Initialize Supabase client on mount (client-side only)
+  useEffect(() => {
+    const initSupabase = async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      setSupabase(createClient());
+    };
+    initSupabase();
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) return;
     setLoading(true);
 
     const { error } = await supabase.auth.signInWithPassword({
@@ -40,6 +46,7 @@ export default function LoginPage() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) return;
     setLoading(true);
 
     const { error } = await supabase.auth.signUp({
@@ -61,6 +68,7 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!supabase) return;
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

@@ -2,6 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardNav } from "@/components/dashboard/nav";
 
+// Force dynamic rendering - requires Supabase auth
+export const dynamic = 'force-dynamic';
+
 export default async function SettingsLayout({
   children,
 }: {
