@@ -1,0 +1,22 @@
+# fly.toml - Fly.io configuration for Singular Daily Bot
+
+app = "singular-daily-bot"
+primary_region = "cdg"  # Paris
+
+[build]
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false  # Keep bot running!
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
