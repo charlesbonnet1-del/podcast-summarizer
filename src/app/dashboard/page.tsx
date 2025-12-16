@@ -14,6 +14,7 @@ import { ConnectionCode } from "@/components/dashboard/connection-code";
 import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
 import { EpisodesList } from "@/components/dashboard/episodes-list";
 import { ContentQueue } from "@/components/dashboard/content-queue";
+import { TopicsManager } from "@/components/dashboard/topics-manager";
 
 // Force dynamic rendering - requires Supabase auth
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,9 @@ export default async function DashboardPage() {
 
       {/* Quick Actions */}
       <div className="grid md:grid-cols-2 gap-6">
+        {/* Topics Manager - NEW */}
+        <TopicsManager />
+
         {/* Telegram Connection */}
         <Card className="shadow-zen rounded-2xl border-border">
           <CardHeader className="pb-3">
@@ -88,29 +92,29 @@ export default async function DashboardPage() {
             />
           </CardContent>
         </Card>
-
-        {/* RSS Feed */}
-        <Card className="shadow-zen rounded-2xl border-border">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Rss className="w-5 h-5 text-orange-500" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Your Podcast Feed</CardTitle>
-                <CardDescription>
-                  Add to any podcast app
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <RssFeedLink 
-              feedUrl={`${appUrl}/api/feed/${profile?.rss_token}`} 
-            />
-          </CardContent>
-        </Card>
       </div>
+
+      {/* RSS Feed - Full width */}
+      <Card className="shadow-zen rounded-2xl border-border">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+              <Rss className="w-5 h-5 text-orange-500" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Your Podcast Feed</CardTitle>
+              <CardDescription>
+                Add to any podcast app
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <RssFeedLink 
+            feedUrl={`${appUrl}/api/feed/${profile?.rss_token}`} 
+          />
+        </CardContent>
+      </Card>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

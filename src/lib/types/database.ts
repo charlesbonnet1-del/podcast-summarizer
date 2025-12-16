@@ -136,3 +136,10 @@ export interface Database {
 export type User = Database['public']['Tables']['users']['Row']
 export type ContentQueue = Database['public']['Tables']['content_queue']['Row']
 export type Episode = Database['public']['Tables']['episodes']['Row']
+
+export interface UserInterest {
+  id: string
+  user_id: string
+  keyword: string
+  created_at: string
+}
