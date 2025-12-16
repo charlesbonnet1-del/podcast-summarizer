@@ -36,7 +36,7 @@ export function TopicsManager() {
       } else {
         toast.error("Failed to load topics");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to load topics");
     } finally {
       setLoading(false);
@@ -72,7 +72,7 @@ export function TopicsManager() {
       } else {
         toast.error(data.error || "Failed to add topic");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to add topic");
     } finally {
       setAdding(false);
@@ -93,7 +93,7 @@ export function TopicsManager() {
       } else {
         toast.error("Failed to remove topic");
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to remove topic");
     } finally {
       setDeletingId(null);
@@ -123,7 +123,7 @@ export function TopicsManager() {
           <div>
             <CardTitle className="text-lg">My Topics</CardTitle>
             <CardDescription>
-              We'll fetch daily news on these subjects
+              We&apos;ll fetch daily news on these subjects
             </CardDescription>
           </div>
         </div>
@@ -185,7 +185,7 @@ export function TopicsManager() {
         ) : interests.length === 0 ? (
           <div className="text-center py-6">
             <p className="text-sm text-muted-foreground">
-              No topics yet. Add topics above and we'll fetch news for you daily!
+              No topics yet. Add topics above and we&apos;ll fetch news for you daily!
             </p>
           </div>
         ) : (
