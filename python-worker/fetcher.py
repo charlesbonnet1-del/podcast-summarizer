@@ -101,19 +101,53 @@ def parse_google_news_rss(xml_content: str, max_items: int = 3) -> list[dict]:
             source_elem = item.find("source")
             
             if title_elem is not None and link_elem is not None:
-                article = {
-                    "title": title_elem.text or "Untitled",
-                    "url": link_elem.text,
-                    "pub_date": pub_date_elem.text if pub_date_elem is not None else None,
-                    "source": source_elem.text if source_elem is not None else "Unknown",
-                }
-                articles.append(article)
+                # Resolve Google News redirect URL to get real article URL
+                google_url = link_elem.text
+                real_url = resolve_google_news_url(google_url)
+                
+                if real_url:
+                    article = {
+                        "title": title_elem.text or "Untitled",
+                        "url": real_url,
+                        "pub_date": pub_date_elem.text if pub_date_elem is not None else None,
+                        "source": source_elem.text if source_elem is not None else "Unknown",
+                    }
+                    articles.append(article)
         
         return articles
     
     except ET.ParseError as e:
         log.error("Error parsing RSS XML", error=str(e))
         return []
+
+
+def resolve_google_news_url(google_url: str) -> str | None:
+    """Follow Google News redirect to get the real article URL."""
+    try:
+        headers = {
+            "User-Agent": USER_AGENT,
+        }
+        # Follow redirects to get final URL
+        response = httpx.head(google_url, headers=headers, timeout=10, follow_redirects=True)
+        final_url = str(response.url)
+        
+        # Make sure we got a real URL, not still a Google URL
+        if "news.google.com" not in final_url:
+            return final_url
+        
+        # If HEAD didn't work, try GET
+        response = httpx.get(google_url, headers=headers, timeout=10, follow_redirects=True)
+        final_url = str(response.url)
+        
+        if "news.google.com" not in final_url:
+            return final_url
+            
+        log.warning("Could not resolve Google News URL", url=google_url)
+        return None
+        
+    except Exception as e:
+        log.error("Error resolving Google News URL", url=google_url, error=str(e))
+        return None
 
 
 def fetch_news_for_keyword(keyword: str) -> list[dict]:
