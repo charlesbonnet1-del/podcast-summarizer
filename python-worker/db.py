@@ -162,18 +162,10 @@ def remove_user_interest(user_id: str, keyword: str) -> bool:
 
 
 def get_all_active_keywords() -> list:
-    """Get all unique keywords from users with connected Telegram (active users)."""
+    """Get all unique keywords from all users."""
     try:
-        # Get users with telegram connected
-        users_result = supabase.table("users").select("id").not_.is_("telegram_chat_id", "null").execute()
-        
-        if not users_result.data:
-            return []
-        
-        user_ids = [u["id"] for u in users_result.data]
-        
-        # Get unique keywords for these users
-        interests_result = supabase.table("user_interests").select("keyword, user_id").in_("user_id", user_ids).execute()
+        # Get all keywords from user_interests
+        interests_result = supabase.table("user_interests").select("keyword, user_id").execute()
         
         if not interests_result.data:
             return []
