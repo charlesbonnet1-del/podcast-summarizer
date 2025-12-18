@@ -4,13 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { 
-  Bot, 
   Rss, 
   Clock, 
   Headphones,
   Plus
 } from "lucide-react";
-import { ConnectionCode } from "@/components/dashboard/connection-code";
 import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
 import { ContentQueue } from "@/components/dashboard/content-queue";
 import { TopicsManager } from "@/components/dashboard/topics-manager";
@@ -152,53 +150,27 @@ export default async function DashboardPage() {
 
       <Separator />
 
-      {/* Settings Row */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Telegram Connection */}
-        <Card className="shadow-zen rounded-2xl border-border">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#0088cc]/10 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-[#0088cc]" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Connect Telegram</CardTitle>
-                <CardDescription>
-                  Send content to your queue via bot
-                </CardDescription>
-              </div>
+      {/* RSS Feed */}
+      <Card className="shadow-zen rounded-2xl border-border">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+              <Rss className="w-5 h-5 text-orange-500" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <ConnectionCode 
-              code={profile?.connection_code || "------"} 
-              telegramConnected={!!profile?.telegram_chat_id}
-            />
-          </CardContent>
-        </Card>
-
-        {/* RSS Feed */}
-        <Card className="shadow-zen rounded-2xl border-border">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Rss className="w-5 h-5 text-orange-500" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Your Podcast Feed</CardTitle>
-                <CardDescription>
-                  Add to any podcast app
-                </CardDescription>
-              </div>
+            <div>
+              <CardTitle className="text-lg">Your Podcast Feed</CardTitle>
+              <CardDescription>
+                Add to any podcast app
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
-            <RssFeedLink 
-              feedUrl={`${appUrl}/api/feed/${profile?.rss_token}`} 
-            />
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <RssFeedLink 
+            feedUrl={`${appUrl}/api/feed/${profile?.rss_token}`} 
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

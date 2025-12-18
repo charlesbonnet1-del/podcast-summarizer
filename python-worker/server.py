@@ -1,6 +1,5 @@
 """
 HTTP Server for triggering podcast generation from the Dashboard.
-Runs alongside the Telegram bot.
 """
 import os
 import threading
@@ -30,6 +29,12 @@ def verify_auth():
         token = auth_header[7:]
         return token == WORKER_SECRET
     return False
+
+
+@app.route("/", methods=["GET"])
+def root():
+    """Root endpoint."""
+    return jsonify({"service": "singular-daily-worker", "status": "running"})
 
 
 @app.route("/health", methods=["GET"])

@@ -37,13 +37,9 @@ export async function POST() {
   const workerUrl = process.env.WORKER_URL;
   
   if (!workerUrl) {
-    // If no worker URL, return instructions
     return NextResponse.json({
-      success: true,
-      message: "Generation queued",
-      pending_items: pendingContent.length,
-      note: "Use /generate on Telegram bot or wait for scheduled generation"
-    });
+      error: "Worker not configured. Please set WORKER_URL environment variable.",
+    }, { status: 500 });
   }
 
   try {
@@ -58,20 +54,20 @@ export async function POST() {
     });
 
     if (!response.ok) {
-      throw new Error("Worker failed");
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Worker failed");
     }
 
     const result = await response.json();
-    return NextResponse.json(result);
-
-  } catch (error) {
-    // Fallback: just confirm the queue status
     return NextResponse.json({
-      success: true,
-      message: "Generation request received",
-      pending_items: pendingContent.length,
-      note: "Your podcast will be generated shortly"
+      ...result,
+      pending_items: pendingContent.length
     });
+
+  } catch {
+    return NextResponse.json({
+      error: "Failed to start generation. Please try again.",
+    }, { status: 500 });
   }
 }
 

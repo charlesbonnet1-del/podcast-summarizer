@@ -19,5 +19,5 @@ COPY . .
 # Expose HTTP port
 EXPOSE 8080
 
-# Run main (bot + HTTP server)
-CMD ["python", "main.py"]
+# Run HTTP server
+CMD ["python", "server.py"]

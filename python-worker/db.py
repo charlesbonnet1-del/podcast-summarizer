@@ -185,8 +185,22 @@ def get_all_active_keywords() -> list:
 
 
 def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, edition: str, source: str = "google_news") -> dict | None:
-    """Add a news item to the content queue from automatic fetching."""
+    """Add a news item to the content queue from automatic fetching.
+    Checks for duplicates before inserting.
+    """
     try:
+        # Check if URL already exists for this user (any status)
+        existing = supabase.table("content_queue") \
+            .select("id") \
+            .eq("user_id", user_id) \
+            .eq("url", url) \
+            .execute()
+        
+        if existing.data:
+            # Already exists, skip silently
+            return None
+        
+        # Insert new item
         result = supabase.table("content_queue").insert({
             "user_id": user_id,
             "url": url,
@@ -199,8 +213,5 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
         }).execute()
         return result.data[0] if result.data else None
     except Exception as e:
-        # Ignore duplicates
-        if "duplicate" in str(e).lower():
-            return None
         print(f"Error adding auto content: {e}")
         return None
