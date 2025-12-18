@@ -78,8 +78,8 @@ def update_content_status(content_id: str, status: str, processed_content: str =
         return False
 
 
-def create_episode(user_id: str, title: str, summary_text: str, audio_url: str, audio_duration: int, sources: list) -> dict | None:
-    """Create a new episode record."""
+def create_episode(user_id: str, title: str, summary_text: str, audio_url: str, audio_duration: int, sources_data: list) -> dict | None:
+    """Create a new episode record with sources_data for Show Notes."""
     try:
         result = supabase.table("episodes").insert({
             "user_id": user_id,
@@ -87,7 +87,7 @@ def create_episode(user_id: str, title: str, summary_text: str, audio_url: str, 
             "summary_text": summary_text,
             "audio_url": audio_url,
             "audio_duration": audio_duration,
-            "sources": sources
+            "sources_data": sources_data
         }).execute()
         return result.data[0] if result.data else None
     except Exception as e:

@@ -21,6 +21,7 @@ from generator import (
     generate_audio,
     generate_episode_title,
     get_audio_duration,
+    build_sources_data,
 )
 
 load_dotenv()
@@ -144,15 +145,17 @@ def process_user_queue(user_id: str) -> dict | None:
     # Generate episode title
     title = generate_episode_title(sources, script)
     
+    # Build sources data for Show Notes
+    sources_data = build_sources_data(sources)
+    
     # Create episode record
-    source_urls = [s["url"] for s in sources]
     episode = create_episode(
         user_id=user_id,
         title=title,
         summary_text=script[:1000] + "..." if len(script) > 1000 else script,
         audio_url=audio_url,
         audio_duration=audio_duration,
-        sources=source_urls
+        sources_data=sources_data
     )
     
     if episode:
