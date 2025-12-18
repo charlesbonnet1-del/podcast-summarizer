@@ -12,10 +12,12 @@ import {
 } from "lucide-react";
 import { ConnectionCode } from "@/components/dashboard/connection-code";
 import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
-import { EpisodesList } from "@/components/dashboard/episodes-list";
 import { ContentQueue } from "@/components/dashboard/content-queue";
 import { TopicsManager } from "@/components/dashboard/topics-manager";
 import { GenerateButton } from "@/components/dashboard/generate-button";
+import { AddUrl } from "@/components/dashboard/add-url";
+import { AudioPlayer } from "@/components/dashboard/audio-player";
+import { ShowNotes } from "@/components/dashboard/show-notes";
 
 // Force dynamic rendering - requires Supabase auth
 export const dynamic = 'force-dynamic';
@@ -35,13 +37,20 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
 
-  // Fetch recent episodes
-  const { data: episodes } = await supabase
+  // Fetch latest episode (for player)
+  const { data: latestEpisode } = await supabase
     .from("episodes")
     .select("*")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(1)
+    .single();
+
+  // Fetch recent episodes count
+  const { count: episodesCount } = await supabase
+    .from("episodes")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
 
   // Fetch pending content
   const { data: pendingContent } = await supabase
@@ -50,9 +59,12 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .eq("status", "pending")
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(20);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://singular.daily";
+
+  // Parse sources_data safely
+  const sourcesData = latestEpisode?.sources_data || [];
 
   return (
     <div className="space-y-8">
@@ -66,16 +78,81 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Quick Actions - Row 1 */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Topics Manager */}
-        <TopicsManager />
+      {/* Audio Player Section */}
+      <section>
+        <AudioPlayer episode={latestEpisode} />
+        {latestEpisode && sourcesData.length > 0 && (
+          <div className="mt-4">
+            <ShowNotes 
+              sources={sourcesData} 
+              summary={latestEpisode.summary_text} 
+            />
+          </div>
+        )}
+      </section>
 
-        {/* Generate Button */}
-        <GenerateButton pendingCount={pendingContent?.length ?? 0} />
+      <Separator />
+
+      {/* Input Section - Topics & URL */}
+      <section>
+        <h2 className="text-xl font-semibold mb-4">Add Content</h2>
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Topics Manager */}
+          <TopicsManager />
+          
+          {/* Add URL */}
+          <AddUrl />
+        </div>
+      </section>
+
+      {/* Generate Button */}
+      <GenerateButton pendingCount={pendingContent?.length ?? 0} />
+
+      <Separator />
+
+      {/* Content Queue */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">Content Queue</h2>
+            <p className="text-sm text-muted-foreground">
+              {pendingContent?.length ?? 0} items waiting to be processed
+            </p>
+          </div>
+        </div>
+        <ContentQueue items={pendingContent ?? []} />
+      </section>
+
+      <Separator />
+
+      {/* Stats Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard 
+          label="Episodes" 
+          value={episodesCount ?? 0} 
+          icon={<Headphones className="w-4 h-4" />}
+        />
+        <StatCard 
+          label="In Queue" 
+          value={pendingContent?.length ?? 0}
+          icon={<Plus className="w-4 h-4" />}
+        />
+        <StatCard 
+          label="Duration" 
+          value={`${profile?.default_duration ?? 15}min`}
+          icon={<Clock className="w-4 h-4" />}
+        />
+        <StatCard 
+          label="Plan" 
+          value={profile?.subscription_status ?? "Free"}
+          icon={<Badge variant="secondary" className="text-xs capitalize">{profile?.subscription_status ?? "free"}</Badge>}
+          valueIsComponent
+        />
       </div>
 
-      {/* Quick Actions - Row 2 */}
+      <Separator />
+
+      {/* Settings Row */}
       <div className="grid md:grid-cols-2 gap-6">
         {/* Telegram Connection */}
         <Card className="shadow-zen rounded-2xl border-border">
@@ -122,61 +199,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard 
-          label="Episodes" 
-          value={episodes?.length ?? 0} 
-          icon={<Headphones className="w-4 h-4" />}
-        />
-        <StatCard 
-          label="In Queue" 
-          value={pendingContent?.length ?? 0}
-          icon={<Plus className="w-4 h-4" />}
-        />
-        <StatCard 
-          label="Duration" 
-          value={`${profile?.default_duration ?? 15}min`}
-          icon={<Clock className="w-4 h-4" />}
-        />
-        <StatCard 
-          label="Plan" 
-          value={profile?.subscription_status ?? "Free"}
-          icon={<Badge variant="secondary" className="text-xs capitalize">{profile?.subscription_status ?? "free"}</Badge>}
-          valueIsComponent
-        />
-      </div>
-
-      <Separator />
-
-      {/* Content Queue */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold">Content Queue</h2>
-            <p className="text-sm text-muted-foreground">
-              Links waiting to be processed into your next episode
-            </p>
-          </div>
-        </div>
-        <ContentQueue items={pendingContent ?? []} />
-      </section>
-
-      <Separator />
-
-      {/* Recent Episodes */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold">Recent Episodes</h2>
-            <p className="text-sm text-muted-foreground">
-              Your generated audio digests
-            </p>
-          </div>
-        </div>
-        <EpisodesList episodes={episodes ?? []} />
-      </section>
     </div>
   );
 }
