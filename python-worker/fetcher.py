@@ -103,7 +103,7 @@ def parse_google_news_rss(xml_content: str, max_items: int = 3) -> list[dict]:
             if title_elem is not None and link_elem is not None:
                 # Resolve Google News redirect URL to get real article URL
                 google_url = link_elem.text
-                real_url = resolve_google_news_url(google_url)
+                real_url = decode_google_news_url(google_url)
                 
                 if real_url:
                     article = {
@@ -113,6 +113,7 @@ def parse_google_news_rss(xml_content: str, max_items: int = 3) -> list[dict]:
                         "source": source_elem.text if source_elem is not None else "Unknown",
                     }
                     articles.append(article)
+                    log.info("Resolved article URL", title=article["title"][:50], url=real_url[:80])
         
         return articles
     
@@ -121,32 +122,53 @@ def parse_google_news_rss(xml_content: str, max_items: int = 3) -> list[dict]:
         return []
 
 
-def resolve_google_news_url(google_url: str) -> str | None:
-    """Follow Google News redirect to get the real article URL."""
+def decode_google_news_url(google_url: str) -> str | None:
+    """
+    Decode Google News URL to get the real article URL.
+    Google News URLs contain base64-encoded article URLs.
+    """
+    import base64
+    import re
+    
     try:
-        headers = {
-            "User-Agent": USER_AGENT,
-        }
-        # Follow redirects to get final URL
-        response = httpx.head(google_url, headers=headers, timeout=10, follow_redirects=True)
-        final_url = str(response.url)
+        # Extract the encoded part from the URL
+        # Format: https://news.google.com/rss/articles/BASE64STRING?oc=5
+        match = re.search(r'/articles/([^?]+)', google_url)
+        if not match:
+            log.warning("Could not find article ID in URL", url=google_url)
+            return None
         
-        # Make sure we got a real URL, not still a Google URL
-        if "news.google.com" not in final_url:
-            return final_url
+        encoded = match.group(1)
         
-        # If HEAD didn't work, try GET
-        response = httpx.get(google_url, headers=headers, timeout=10, follow_redirects=True)
-        final_url = str(response.url)
+        # Add padding if needed
+        padding = 4 - (len(encoded) % 4)
+        if padding != 4:
+            encoded += '=' * padding
         
-        if "news.google.com" not in final_url:
-            return final_url
-            
-        log.warning("Could not resolve Google News URL", url=google_url)
+        # Try to decode
+        try:
+            decoded = base64.urlsafe_b64decode(encoded).decode('utf-8', errors='ignore')
+        except:
+            # Try standard base64
+            decoded = base64.b64decode(encoded).decode('utf-8', errors='ignore')
+        
+        # Find URLs in the decoded string
+        url_pattern = r'https?://[^\s<>"\'\\]+'
+        urls = re.findall(url_pattern, decoded)
+        
+        # Filter out Google URLs and get the real article URL
+        for url in urls:
+            if 'google.com' not in url and 'googleapis.com' not in url:
+                # Clean up the URL (remove trailing garbage)
+                clean_url = re.split(r'[<>\s"\']', url)[0]
+                if clean_url.startswith('http'):
+                    return clean_url
+        
+        log.warning("No valid URL found in decoded content", decoded_preview=decoded[:200])
         return None
         
     except Exception as e:
-        log.error("Error resolving Google News URL", url=google_url, error=str(e))
+        log.error("Error decoding Google News URL", url=google_url, error=str(e))
         return None
 
 
