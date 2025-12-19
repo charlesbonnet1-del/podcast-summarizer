@@ -50,7 +50,7 @@ function EpisodeCard({ episode }: { episode: Episode }) {
     return `${minutes} min`;
   };
 
-  const sources = Array.isArray(episode.sources) ? episode.sources : [];
+  const sources = Array.isArray(episode.sources_data) ? episode.sources_data : [];
 
   return (
     <Card className="shadow-zen rounded-2xl border-border hover-lift">
