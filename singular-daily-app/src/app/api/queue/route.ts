@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       url: url,
       source_type: sourceType,
       source: "manual",
+      priority: "high",  // Manual URLs get high priority
       title: domain, // Will be updated when processed
       status: "pending"
     })

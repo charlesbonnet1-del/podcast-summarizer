@@ -132,13 +132,24 @@ def generate_podcast_script(
 # AUDIO GENERATION (Azure TTS + OpenAI Fallback)
 # ============================================
 
+# Map OpenAI voices to Azure voices
+VOICE_MAP_AZURE = {
+    "alloy": "fr-FR-DeniseNeural",
+    "echo": "fr-FR-HenriNeural",
+    "fable": "fr-FR-DeniseNeural",
+    "onyx": "fr-FR-HenriNeural",
+    "nova": "fr-FR-DeniseNeural",
+    "shimmer": "fr-FR-DeniseNeural",
+}
+
 def generate_audio(
     script: str,
-    voice: str = "fr-FR-DeniseNeural",  # Azure voice
+    voice: str = "alloy",
     output_path: str = None
 ) -> str | None:
     """
     Generate audio using Azure TTS (primary) or OpenAI TTS (fallback).
+    Voice can be OpenAI voice name (alloy, nova, etc.) - will be mapped to Azure.
     """
     if not script:
         log.warning("No script provided")
@@ -150,14 +161,16 @@ def generate_audio(
     
     # Try Azure TTS first
     if azure_speech_key:
-        result = generate_audio_azure(script, voice, output_path)
+        # Map OpenAI voice to Azure voice
+        azure_voice = VOICE_MAP_AZURE.get(voice, "fr-FR-DeniseNeural")
+        result = generate_audio_azure(script, azure_voice, output_path)
         if result:
             return result
         log.warning("Azure TTS failed, trying OpenAI fallback")
     
     # Fallback to OpenAI TTS
     if openai_client:
-        return generate_audio_openai(script, output_path)
+        return generate_audio_openai(script, voice, output_path)
     
     log.error("No TTS provider available")
     return None
@@ -206,10 +219,15 @@ def generate_audio_azure(script: str, voice: str, output_path: str) -> str | Non
         return None
 
 
-def generate_audio_openai(script: str, output_path: str) -> str | None:
+def generate_audio_openai(script: str, voice: str, output_path: str) -> str | None:
     """Generate audio using OpenAI TTS (fallback)."""
+    # Validate OpenAI voice
+    valid_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+    if voice not in valid_voices:
+        voice = "nova"  # Good default for French
+    
     try:
-        log.info("Generating audio with OpenAI TTS (fallback)")
+        log.info("Generating audio with OpenAI TTS (fallback)", voice=voice)
         
         # OpenAI TTS limit: 4096 chars per request
         max_chunk = 4000
@@ -217,7 +235,7 @@ def generate_audio_openai(script: str, output_path: str) -> str | None:
         if len(script) <= max_chunk:
             response = openai_client.audio.speech.create(
                 model="tts-1",
-                voice="nova",  # Good for French
+                voice=voice,
                 input=script
             )
             response.stream_to_file(output_path)
@@ -230,7 +248,7 @@ def generate_audio_openai(script: str, output_path: str) -> str | None:
                 chunk_path = output_path.replace(".mp3", f"_part{i}.mp3")
                 response = openai_client.audio.speech.create(
                     model="tts-1",
-                    voice="nova",
+                    voice=voice,
                     input=chunk
                 )
                 response.stream_to_file(chunk_path)

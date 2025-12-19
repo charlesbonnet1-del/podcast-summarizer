@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Settings, Volume2, User } from "lucide-react";
 import { SettingsForm } from "@/components/settings/settings-form";
+import { ProfileForm } from "@/components/settings/profile-form";
 import { DangerZone } from "@/components/settings/danger-zone";
 
 // Force dynamic rendering - requires Supabase auth
@@ -24,6 +25,8 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .single();
 
+  const settings = profile?.settings || {};
+
   return (
     <div className="max-w-2xl space-y-8">
       {/* Header */}
@@ -37,7 +40,7 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      {/* Account Info */}
+      {/* Profile Info */}
       <Card className="shadow-zen rounded-2xl border-border">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -45,33 +48,19 @@ export default async function SettingsPage() {
               <User className="w-5 h-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">Account</CardTitle>
-              <CardDescription>Your account information</CardDescription>
+              <CardTitle className="text-lg">Your Profile</CardTitle>
+              <CardDescription>Personalize your podcast greeting</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label className="text-sm text-muted-foreground">Email</label>
-            <p className="font-medium">{user.email}</p>
-          </div>
-          <div>
-            <label className="text-sm text-muted-foreground">Plan</label>
-            <p className="font-medium capitalize">{profile?.subscription_status || "Free"}</p>
-          </div>
-          <div>
-            <label className="text-sm text-muted-foreground">Member since</label>
-            <p className="font-medium">
-              {profile?.created_at 
-                ? new Date(profile.created_at).toLocaleDateString("en-US", {
-                    month: "long",
-                    day: "numeric",
-                    year: "numeric"
-                  })
-                : "—"
-              }
-            </p>
-          </div>
+        <CardContent className="space-y-6">
+          <ProfileForm 
+            email={user.email || ""}
+            firstName={profile?.first_name || ""}
+            lastName={profile?.last_name || ""}
+            memberSince={profile?.created_at}
+            plan={profile?.subscription_status || "free"}
+          />
         </CardContent>
       </Card>
 
@@ -90,8 +79,8 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <SettingsForm 
-            defaultDuration={profile?.default_duration ?? 15}
-            voiceId={profile?.voice_id ?? "alloy"}
+            targetDuration={settings.target_duration ?? 15}
+            voiceId={settings.voice_id ?? "alloy"}
           />
         </CardContent>
       </Card>

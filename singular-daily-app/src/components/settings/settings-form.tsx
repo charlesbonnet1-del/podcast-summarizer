@@ -15,13 +15,13 @@ import { Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 
 interface SettingsFormProps {
-  defaultDuration: number;
+  targetDuration: number;
   voiceId: string;
 }
 
 const VOICES = [
-  { id: "alloy", name: "Alloy", description: "Neutral and balanced" },
-  { id: "echo", name: "Echo", description: "Warm and conversational" },
+  { id: "alloy", name: "Alloy (Denise)", description: "Neutral and balanced" },
+  { id: "echo", name: "Echo (Henri)", description: "Warm and conversational" },
   { id: "fable", name: "Fable", description: "Expressive and dynamic" },
   { id: "onyx", name: "Onyx", description: "Deep and authoritative" },
   { id: "nova", name: "Nova", description: "Friendly and upbeat" },
@@ -30,14 +30,13 @@ const VOICES = [
 
 const DURATIONS = [
   { value: 5, label: "5 minutes", description: "Quick summary" },
-  { value: 10, label: "10 minutes", description: "Brief digest" },
   { value: 15, label: "15 minutes", description: "Standard (recommended)" },
   { value: 20, label: "20 minutes", description: "Detailed overview" },
   { value: 30, label: "30 minutes", description: "In-depth coverage" },
 ];
 
-export function SettingsForm({ defaultDuration, voiceId }: SettingsFormProps) {
-  const [duration, setDuration] = useState(defaultDuration.toString());
+export function SettingsForm({ targetDuration, voiceId }: SettingsFormProps) {
+  const [duration, setDuration] = useState(targetDuration.toString());
   const [voice, setVoice] = useState(voiceId);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -55,12 +54,25 @@ export function SettingsForm({ defaultDuration, voiceId }: SettingsFormProps) {
       return;
     }
 
+    // Get current settings
+    const { data: profile } = await supabase
+      .from("users")
+      .select("settings")
+      .eq("id", user.id)
+      .single();
+
+    const currentSettings = profile?.settings || {};
+
+    // Merge new settings
+    const newSettings = {
+      ...currentSettings,
+      target_duration: parseInt(duration),
+      voice_id: voice,
+    };
+
     const { error } = await supabase
       .from("users")
-      .update({
-        default_duration: parseInt(duration),
-        voice_id: voice,
-      })
+      .update({ settings: newSettings })
       .eq("id", user.id);
 
     if (error) {
@@ -76,7 +88,7 @@ export function SettingsForm({ defaultDuration, voiceId }: SettingsFormProps) {
   };
 
   const hasChanges = 
-    parseInt(duration) !== defaultDuration || voice !== voiceId;
+    parseInt(duration) !== targetDuration || voice !== voiceId;
 
   return (
     <div className="space-y-6">
