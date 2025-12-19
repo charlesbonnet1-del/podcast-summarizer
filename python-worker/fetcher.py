@@ -1,5 +1,5 @@
 """
-Fetcher module for Google News RSS.
+Fetcher module for Bing News RSS.
 Fetches news based on user interests/keywords.
 
 Usage:
@@ -10,9 +10,10 @@ import os
 import sys
 import time
 import argparse
-from datetime import datetime
-from urllib.parse import quote_plus
+from datetime import datetime, timedelta, timezone
+from urllib.parse import quote_plus, unquote, parse_qs, urlparse
 import xml.etree.ElementTree as ET
+import re
 
 import httpx
 import structlog
@@ -31,34 +32,48 @@ log = structlog.get_logger()
 # CONFIGURATION
 # ============================================
 
-# User-Agent to mimic a real browser (CRITICAL for Google News)
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
 
-# Delay between requests to avoid rate limiting
-REQUEST_DELAY_SECONDS = 3
-
-# Max articles per keyword
+REQUEST_DELAY_SECONDS = 2
 MAX_ARTICLES_PER_KEYWORD = 3
 
-# Google News RSS base URL (French)
-GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=fr&gl=FR&ceid=FR:fr"
-
-# Alternative: English
-# GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+# Bing News RSS - supports any keyword search
+BING_NEWS_RSS_URL = "https://www.bing.com/news/search?q={query}&format=rss"
 
 
 # ============================================
 # FETCHER FUNCTIONS
 # ============================================
 
-def build_google_news_url(keyword: str) -> str:
-    """Build Google News RSS URL for a keyword."""
+def build_bing_news_url(keyword: str) -> str:
+    """Build Bing News RSS URL for a keyword."""
     encoded_keyword = quote_plus(keyword)
-    return GOOGLE_NEWS_RSS_URL.format(query=encoded_keyword)
+    return BING_NEWS_RSS_URL.format(query=encoded_keyword)
+
+
+def extract_real_url(bing_url: str) -> str | None:
+    """Extract the real article URL from Bing's redirect URL."""
+    try:
+        # Bing URLs look like: http://www.bing.com/news/apiclick.aspx?...&url=https%3a%2f%2f...&...
+        parsed = urlparse(bing_url)
+        params = parse_qs(parsed.query)
+        
+        if 'url' in params:
+            real_url = unquote(params['url'][0])
+            return real_url
+        
+        # If no url param, return original (might be direct link)
+        if not bing_url.startswith('http://www.bing.com'):
+            return bing_url
+            
+        return None
+    except Exception as e:
+        log.warning("Could not extract URL", bing_url=bing_url[:100], error=str(e))
+        return None
 
 
 def fetch_rss_feed(url: str) -> str | None:
@@ -68,7 +83,6 @@ def fetch_rss_feed(url: str) -> str | None:
             "User-Agent": USER_AGENT,
             "Accept": "application/rss+xml, application/xml, text/xml, */*",
             "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Cache-Control": "no-cache",
         }
         
         response = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
@@ -76,44 +90,46 @@ def fetch_rss_feed(url: str) -> str | None:
         
         return response.text
     
-    except httpx.HTTPStatusError as e:
-        log.error("HTTP error fetching RSS", url=url, status=e.response.status_code)
-        return None
     except Exception as e:
         log.error("Error fetching RSS", url=url, error=str(e))
         return None
 
 
-def parse_google_news_rss(xml_content: str, max_items: int = 3) -> list[dict]:
-    """Parse Google News RSS and extract top articles."""
+def parse_bing_news_rss(xml_content: str, max_items: int = 3) -> list[dict]:
+    """Parse Bing News RSS and extract articles with real URLs."""
     articles = []
     
     try:
         root = ET.fromstring(xml_content)
-        
-        # Find all items in the RSS feed
         items = root.findall(".//item")
         
-        for item in items[:max_items]:
+        for item in items:
+            if len(articles) >= max_items:
+                break
+                
             title_elem = item.find("title")
             link_elem = item.find("link")
             pub_date_elem = item.find("pubDate")
-            source_elem = item.find("source")
+            description_elem = item.find("description")
+            
+            # Get source from News:Source namespace
+            source_elem = item.find("{https://www.bing.com/news/search}Source")
+            source = source_elem.text if source_elem is not None else "Unknown"
             
             if title_elem is not None and link_elem is not None:
-                # Resolve Google News redirect URL to get real article URL
-                google_url = link_elem.text
-                real_url = decode_google_news_url(google_url)
+                bing_url = link_elem.text
+                real_url = extract_real_url(bing_url)
                 
                 if real_url:
                     article = {
                         "title": title_elem.text or "Untitled",
                         "url": real_url,
                         "pub_date": pub_date_elem.text if pub_date_elem is not None else None,
-                        "source": source_elem.text if source_elem is not None else "Unknown",
+                        "source": source,
+                        "description": description_elem.text[:200] if description_elem is not None and description_elem.text else None,
                     }
                     articles.append(article)
-                    log.info("Resolved article URL", title=article["title"][:50], url=real_url[:80])
+                    log.info("Found article", title=article["title"][:60], source=source)
         
         return articles
     
@@ -122,68 +138,18 @@ def parse_google_news_rss(xml_content: str, max_items: int = 3) -> list[dict]:
         return []
 
 
-def decode_google_news_url(google_url: str) -> str | None:
-    """
-    Decode Google News URL to get the real article URL.
-    Google News URLs contain base64-encoded article URLs.
-    """
-    import base64
-    import re
-    
-    try:
-        # Extract the encoded part from the URL
-        # Format: https://news.google.com/rss/articles/BASE64STRING?oc=5
-        match = re.search(r'/articles/([^?]+)', google_url)
-        if not match:
-            log.warning("Could not find article ID in URL", url=google_url)
-            return None
-        
-        encoded = match.group(1)
-        
-        # Add padding if needed
-        padding = 4 - (len(encoded) % 4)
-        if padding != 4:
-            encoded += '=' * padding
-        
-        # Try to decode
-        try:
-            decoded = base64.urlsafe_b64decode(encoded).decode('utf-8', errors='ignore')
-        except:
-            # Try standard base64
-            decoded = base64.b64decode(encoded).decode('utf-8', errors='ignore')
-        
-        # Find URLs in the decoded string
-        url_pattern = r'https?://[^\s<>"\'\\]+'
-        urls = re.findall(url_pattern, decoded)
-        
-        # Filter out Google URLs and get the real article URL
-        for url in urls:
-            if 'google.com' not in url and 'googleapis.com' not in url:
-                # Clean up the URL (remove trailing garbage)
-                clean_url = re.split(r'[<>\s"\']', url)[0]
-                if clean_url.startswith('http'):
-                    return clean_url
-        
-        log.warning("No valid URL found in decoded content", decoded_preview=decoded[:200])
-        return None
-        
-    except Exception as e:
-        log.error("Error decoding Google News URL", url=google_url, error=str(e))
-        return None
-
-
 def fetch_news_for_keyword(keyword: str) -> list[dict]:
-    """Fetch top news articles for a single keyword."""
+    """Fetch top news articles for a single keyword from Bing News."""
     log.info("Fetching news for keyword", keyword=keyword)
     
-    url = build_google_news_url(keyword)
+    url = build_bing_news_url(keyword)
     xml_content = fetch_rss_feed(url)
     
     if not xml_content:
         log.warning("No content received for keyword", keyword=keyword)
         return []
     
-    articles = parse_google_news_rss(xml_content, max_items=MAX_ARTICLES_PER_KEYWORD)
+    articles = parse_bing_news_rss(xml_content, max_items=MAX_ARTICLES_PER_KEYWORD)
     
     log.info("Fetched articles", keyword=keyword, count=len(articles))
     return articles
@@ -193,9 +159,6 @@ def run_fetcher(edition: str = "morning"):
     """
     Main fetcher function.
     Fetches news for all active user keywords and adds to content queue.
-    
-    Args:
-        edition: 'morning' or 'evening'
     """
     log.info("Starting news fetcher", edition=edition)
     start_time = datetime.now()
@@ -232,7 +195,7 @@ def run_fetcher(edition: str = "morning"):
                     title=article["title"],
                     keyword=keyword,
                     edition=edition,
-                    source="google_news"
+                    source=article.get("source", "bing_news")
                 )
                 
                 if result:
@@ -242,8 +205,7 @@ def run_fetcher(edition: str = "morning"):
                              keyword=keyword, 
                              title=article["title"][:50])
         
-        # Respectful delay between keywords
-        log.info("Waiting before next keyword", delay=REQUEST_DELAY_SECONDS)
+        # Delay between keywords
         time.sleep(REQUEST_DELAY_SECONDS)
     
     elapsed = (datetime.now() - start_time).total_seconds()
@@ -257,8 +219,7 @@ def run_fetcher(edition: str = "morning"):
 def cleanup_old_pending():
     """Remove pending items older than 48 hours to avoid stale content."""
     try:
-        from datetime import timedelta
-        cutoff = (datetime.utcnow() - timedelta(hours=48)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
         
         result = supabase.table("content_queue") \
             .delete() \
