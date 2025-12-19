@@ -1,23 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Rss, 
-  Clock, 
-  Headphones,
-  Plus
-} from "lucide-react";
-import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
-import { ContentQueue } from "@/components/dashboard/content-queue";
-import { TopicsManager } from "@/components/dashboard/topics-manager";
-import { GenerateButton } from "@/components/dashboard/generate-button";
-import { AddUrl } from "@/components/dashboard/add-url";
+import { MagicBar } from "@/components/dashboard/magic-bar";
+import { ActiveTopics } from "@/components/dashboard/active-topics";
+import { ManualAdds } from "@/components/dashboard/manual-adds";
 import { AudioPlayer } from "@/components/dashboard/audio-player";
 import { ShowNotes } from "@/components/dashboard/show-notes";
+import { GenerateButton } from "@/components/dashboard/generate-button";
+import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
 
-// Force dynamic rendering - requires Supabase auth
+// Force dynamic rendering
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
@@ -35,7 +27,7 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
 
-  // Fetch latest episode (for player)
+  // Fetch latest episode
   const { data: latestEpisode } = await supabase
     .from("episodes")
     .select("*")
@@ -44,161 +36,89 @@ export default async function DashboardPage() {
     .limit(1)
     .single();
 
-  // Fetch recent episodes count
-  const { count: episodesCount } = await supabase
-    .from("episodes")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
+  // Fetch user interests (topics)
+  const { data: interests } = await supabase
+    .from("user_interests")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
 
-  // Fetch pending content
-  const { data: pendingContent } = await supabase
+  // Fetch ONLY manual pending content (not auto-fetched news)
+  const { data: manualContent } = await supabase
     .from("content_queue")
     .select("*")
     .eq("user_id", user.id)
     .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(20);
+    .eq("source", "manual")
+    .order("created_at", { ascending: false });
+
+  // Count all pending (for generate button)
+  const { count: pendingCount } = await supabase
+    .from("content_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("status", "pending");
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://singular.daily";
-
-  // Parse sources_data safely
   const sourcesData = latestEpisode?.sources_data || [];
 
   return (
-    <div className="space-y-8">
-      {/* Welcome Header */}
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Welcome back{profile?.email ? `, ${profile.email.split("@")[0]}` : ""}
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Here&apos;s your personal podcast dashboard
-        </p>
-      </div>
-
-      {/* Audio Player Section */}
-      <section>
-        <AudioPlayer episode={latestEpisode} />
-        {latestEpisode && sourcesData.length > 0 && (
-          <div className="mt-4">
+    <div className="max-w-2xl mx-auto space-y-8">
+      {/* Latest Episode Player */}
+      {latestEpisode && (
+        <section className="space-y-4">
+          <AudioPlayer episode={latestEpisode} />
+          {sourcesData.length > 0 && (
             <ShowNotes 
               sources={sourcesData} 
               summary={latestEpisode.summary_text} 
             />
+          )}
+        </section>
+      )}
+
+      {/* Empty State - When no episode yet */}
+      {!latestEpisode && (
+        <div className="text-center py-16">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-secondary/50 flex items-center justify-center">
+            <span className="text-3xl">🎧</span>
           </div>
-        )}
-      </section>
-
-      <Separator />
-
-      {/* Input Section - Topics & URL */}
-      <section>
-        <h2 className="text-xl font-semibold mb-4">Add Content</h2>
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Topics Manager */}
-          <TopicsManager />
-          
-          {/* Add URL */}
-          <AddUrl />
+          <h2 className="text-xl font-medium mb-2">Your daily podcast awaits</h2>
+          <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+            Add topics you care about, and we&apos;ll create a personalized audio digest just for you.
+          </p>
         </div>
+      )}
+
+      <Separator className="opacity-50" />
+
+      {/* Magic Bar - Main Input */}
+      <section className="space-y-3">
+        <MagicBar />
+        
+        {/* Active Topics - Small pills under Magic Bar */}
+        <ActiveTopics topics={interests || []} />
       </section>
 
-      {/* Generate Button */}
-      <GenerateButton pendingCount={pendingContent?.length ?? 0} />
+      {/* Manual Adds - Only visible when there are manual items */}
+      <ManualAdds items={manualContent || []} />
 
-      <Separator />
-
-      {/* Content Queue */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold">Content Queue</h2>
-            <p className="text-sm text-muted-foreground">
-              {pendingContent?.length ?? 0} items waiting to be processed
-            </p>
-          </div>
+      {/* Generate Button - Subtle, only when there's content */}
+      {(pendingCount ?? 0) > 0 && (
+        <div className="pt-4">
+          <GenerateButton pendingCount={pendingCount ?? 0} />
         </div>
-        <ContentQueue items={pendingContent ?? []} />
-      </section>
+      )}
 
-      <Separator />
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard 
-          label="Episodes" 
-          value={episodesCount ?? 0} 
-          icon={<Headphones className="w-4 h-4" />}
-        />
-        <StatCard 
-          label="In Queue" 
-          value={pendingContent?.length ?? 0}
-          icon={<Plus className="w-4 h-4" />}
-        />
-        <StatCard 
-          label="Duration" 
-          value={`${profile?.default_duration ?? 15}min`}
-          icon={<Clock className="w-4 h-4" />}
-        />
-        <StatCard 
-          label="Plan" 
-          value={profile?.subscription_status ?? "Free"}
-          icon={<Badge variant="secondary" className="text-xs capitalize">{profile?.subscription_status ?? "free"}</Badge>}
-          valueIsComponent
-        />
-      </div>
-
-      <Separator />
-
-      {/* RSS Feed */}
-      <Card className="shadow-zen rounded-2xl border-border">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-              <Rss className="w-5 h-5 text-orange-500" />
-            </div>
-            <div>
-              <CardTitle className="text-lg">Your Podcast Feed</CardTitle>
-              <CardDescription>
-                Add to any podcast app
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+      {/* RSS Feed - Discreet at bottom */}
+      {profile?.rss_token && (
+        <div className="pt-8 opacity-60 hover:opacity-100 transition-opacity">
           <RssFeedLink 
-            feedUrl={`${appUrl}/api/feed/${profile?.rss_token}`} 
+            feedUrl={`${appUrl}/api/feed/${profile.rss_token}`} 
+            compact
           />
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function StatCard({ 
-  label, 
-  value, 
-  icon,
-  valueIsComponent = false
-}: { 
-  label: string; 
-  value: string | number | React.ReactNode;
-  icon: React.ReactNode;
-  valueIsComponent?: boolean;
-}) {
-  return (
-    <Card className="shadow-zen rounded-2xl border-border">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-muted-foreground">{label}</span>
-          <span className="text-muted-foreground">{icon}</span>
         </div>
-        {valueIsComponent ? (
-          value
-        ) : (
-          <p className="text-2xl font-semibold">{value}</p>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }

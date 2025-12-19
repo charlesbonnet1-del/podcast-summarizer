@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, ExternalLink } from "lucide-react";
+import { Copy, Check, ExternalLink, Rss } from "lucide-react";
 import { toast } from "sonner";
 
 interface RssFeedLinkProps {
   feedUrl: string;
+  compact?: boolean;
 }
 
-export function RssFeedLink({ feedUrl }: RssFeedLinkProps) {
+export function RssFeedLink({ feedUrl, compact = false }: RssFeedLinkProps) {
   const [copied, setCopied] = useState(false);
 
   const copyUrl = async () => {
@@ -19,6 +20,33 @@ export function RssFeedLink({ feedUrl }: RssFeedLinkProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Compact mode - single line
+  if (compact) {
+    return (
+      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <Rss className="w-3 h-3" />
+        <span>RSS Feed</span>
+        <button
+          onClick={copyUrl}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-secondary transition-colors"
+        >
+          {copied ? (
+            <>
+              <Check className="w-3 h-3 text-green-500" />
+              <span>Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3 h-3" />
+              <span>Copy URL</span>
+            </>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  // Full mode
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
