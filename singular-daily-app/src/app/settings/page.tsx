@@ -2,10 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Settings, Volume2, User } from "lucide-react";
+import { Settings, Volume2, User, Rss } from "lucide-react";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { DangerZone } from "@/components/settings/danger-zone";
+import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
 
 // Force dynamic rendering - requires Supabase auth
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,7 @@ export default async function SettingsPage() {
     .single();
 
   const settings = profile?.settings || {};
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://singular.daily";
 
   return (
     <div className="max-w-2xl space-y-8">
@@ -83,6 +85,29 @@ export default async function SettingsPage() {
             targetDuration={profile?.target_duration ?? 20}
             voiceId={settings.voice_id ?? "alloy"}
           />
+        </CardContent>
+      </Card>
+
+      {/* RSS Feed */}
+      <Card className="shadow-zen rounded-2xl border-border">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+              <Rss className="w-5 h-5 text-orange-500" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Podcast Feed</CardTitle>
+              <CardDescription>Subscribe in your favorite podcast app</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <RssFeedLink 
+            feedUrl={`${appUrl}/api/feed/${profile?.rss_token}`} 
+          />
+          <p className="text-xs text-muted-foreground mt-4">
+            Coming soon: Direct links for Spotify, Deezer, Apple Podcasts...
+          </p>
         </CardContent>
       </Card>
 

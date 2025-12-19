@@ -4,10 +4,9 @@ import { Separator } from "@/components/ui/separator";
 import { MagicBar } from "@/components/dashboard/magic-bar";
 import { ActiveTopics } from "@/components/dashboard/active-topics";
 import { ManualAdds } from "@/components/dashboard/manual-adds";
-import { AudioPlayer } from "@/components/dashboard/audio-player";
+import { StickyPlayer } from "@/components/dashboard/sticky-player";
 import { ShowNotes } from "@/components/dashboard/show-notes";
 import { GenerateButton } from "@/components/dashboard/generate-button";
-import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -59,66 +58,62 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .eq("status", "pending");
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://singular.daily";
   const sourcesData = latestEpisode?.sources_data || [];
+  const hasTopics = (interests?.length ?? 0) > 0;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
-      {/* Latest Episode Player */}
-      {latestEpisode && (
-        <section className="space-y-4">
-          <AudioPlayer episode={latestEpisode} />
-          {sourcesData.length > 0 && (
+    <>
+      {/* Main Content - with bottom padding for sticky player */}
+      <div className="max-w-2xl mx-auto space-y-8 pb-32">
+        {/* Empty State - When no episode yet */}
+        {!latestEpisode && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-secondary/50 flex items-center justify-center">
+              <span className="text-3xl">🎧</span>
+            </div>
+            <h2 className="text-xl font-medium mb-2">Your daily podcast awaits</h2>
+            <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+              Add topics you care about, and we&apos;ll create a personalized audio digest just for you.
+            </p>
+          </div>
+        )}
+
+        {/* Show Notes (when episode exists) */}
+        {latestEpisode && sourcesData.length > 0 && (
+          <section>
             <ShowNotes 
               sources={sourcesData} 
               summary={latestEpisode.summary_text} 
             />
-          )}
+          </section>
+        )}
+
+        <Separator className="opacity-50" />
+
+        {/* Magic Bar - Main Input */}
+        <section className="space-y-3">
+          <MagicBar />
+          
+          {/* Active Topics - Small pills under Magic Bar */}
+          <ActiveTopics topics={interests || []} />
         </section>
-      )}
 
-      {/* Empty State - When no episode yet */}
-      {!latestEpisode && (
-        <div className="text-center py-16">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-secondary/50 flex items-center justify-center">
-            <span className="text-3xl">🎧</span>
-          </div>
-          <h2 className="text-xl font-medium mb-2">Your daily podcast awaits</h2>
-          <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-            Add topics you care about, and we&apos;ll create a personalized audio digest just for you.
-          </p>
-        </div>
-      )}
+        {/* Manual Adds - Only visible when there are manual items */}
+        <ManualAdds items={manualContent || []} />
 
-      <Separator className="opacity-50" />
-
-      {/* Magic Bar - Main Input */}
-      <section className="space-y-3">
-        <MagicBar />
-        
-        {/* Active Topics - Small pills under Magic Bar */}
-        <ActiveTopics topics={interests || []} />
-      </section>
-
-      {/* Manual Adds - Only visible when there are manual items */}
-      <ManualAdds items={manualContent || []} />
-
-      {/* Generate Button - Subtle, only when there's content */}
-      {(pendingCount ?? 0) > 0 && (
+        {/* Generate Button - Always visible at bottom */}
         <div className="pt-4">
-          <GenerateButton pendingCount={pendingCount ?? 0} />
-        </div>
-      )}
-
-      {/* RSS Feed - Discreet at bottom */}
-      {profile?.rss_token && (
-        <div className="pt-8 opacity-60 hover:opacity-100 transition-opacity">
-          <RssFeedLink 
-            feedUrl={`${appUrl}/api/feed/${profile.rss_token}`} 
-            compact
+          <GenerateButton 
+            pendingCount={pendingCount ?? 0} 
+            hasTopics={hasTopics}
           />
         </div>
+      </div>
+
+      {/* Sticky Player - Fixed at bottom */}
+      {latestEpisode && (
+        <StickyPlayer episode={latestEpisode} />
       )}
-    </div>
+    </>
   );
 }
