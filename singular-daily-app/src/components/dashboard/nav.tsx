@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Headphones, LayoutDashboard, Settings, LogOut, User as UserIcon } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { User } from "@supabase/supabase-js";
 import type { User as UserProfile } from "@/lib/types/database";
 
@@ -35,18 +36,27 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
     { href: "/settings", label: "Settings", icon: Settings },
   ];
 
-  const initials = user.email?.slice(0, 2).toUpperCase() ?? "U";
+  // Get display name: first_name, or email prefix, or "U"
+  const displayName = profile?.first_name || user.email?.split("@")[0] || "User";
+  const initials = profile?.first_name 
+    ? profile.first_name.slice(0, 2).toUpperCase()
+    : user.email?.slice(0, 2).toUpperCase() ?? "U";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
-            <Headphones className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="font-semibold text-lg">Singular Daily</span>
-        </Link>
+        {/* Logo + Greeting */}
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
+              <Headphones className="w-4 h-4 text-primary-foreground" />
+            </div>
+            <span className="font-semibold text-lg hidden sm:inline">Singular Daily</span>
+          </Link>
+          <span className="text-muted-foreground text-sm hidden md:inline">
+            Bonjour, <span className="text-foreground font-medium">{displayName}</span>
+          </span>
+        </div>
 
         {/* Navigation */}
         <nav className="hidden md:flex items-center gap-1">
@@ -67,44 +77,53 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
           })}
         </nav>
 
-        {/* User Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="rounded-xl gap-2">
-              <Avatar className="w-8 h-8">
-                <AvatarFallback className="bg-secondary text-sm">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <span className="hidden sm:inline text-sm">
-                {user.email?.split("@")[0]}
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 rounded-xl">
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{user.email}</p>
-              <p className="text-xs text-muted-foreground capitalize">
-                {profile?.subscription_status ?? "free"} plan
-              </p>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
-              <Link href="/settings" className="flex items-center gap-2">
-                <UserIcon className="w-4 h-4" />
-                Account Settings
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleSignOut}
-              className="rounded-lg cursor-pointer text-destructive focus:text-destructive"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign Out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Right side: Theme toggle + User Menu */}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="rounded-xl gap-2">
+                <Avatar className="w-8 h-8">
+                  <AvatarFallback className="bg-secondary text-sm">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="hidden sm:inline text-sm">
+                  {displayName}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 rounded-xl">
+              <div className="px-2 py-1.5">
+                <p className="text-sm font-medium">
+                  {profile?.first_name && profile?.last_name 
+                    ? `${profile.first_name} ${profile.last_name}`
+                    : user.email
+                  }
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {profile?.subscription_status ?? "free"} plan
+                </p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="rounded-lg cursor-pointer">
+                <Link href="/settings" className="flex items-center gap-2">
+                  <UserIcon className="w-4 h-4" />
+                  Account Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="rounded-lg cursor-pointer text-destructive focus:text-destructive"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
   );

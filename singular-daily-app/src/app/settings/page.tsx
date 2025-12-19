@@ -60,6 +60,7 @@ export default async function SettingsPage() {
             lastName={profile?.last_name || ""}
             memberSince={profile?.created_at}
             plan={profile?.subscription_status || "free"}
+            includeInternational={profile?.include_international || false}
           />
         </CardContent>
       </Card>
@@ -79,7 +80,7 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <SettingsForm 
-            targetDuration={settings.target_duration ?? 15}
+            targetDuration={profile?.target_duration ?? 20}
             voiceId={settings.voice_id ?? "alloy"}
           />
         </CardContent>

@@ -30,7 +30,6 @@ const VOICES = [
 
 const DURATIONS = [
   { value: 5, label: "5 minutes", description: "Quick summary" },
-  { value: 15, label: "15 minutes", description: "Standard (recommended)" },
   { value: 20, label: "20 minutes", description: "Detailed overview" },
   { value: 30, label: "30 minutes", description: "In-depth coverage" },
 ];
@@ -54,7 +53,7 @@ export function SettingsForm({ targetDuration, voiceId }: SettingsFormProps) {
       return;
     }
 
-    // Get current settings
+    // Get current settings JSONB
     const { data: profile } = await supabase
       .from("users")
       .select("settings")
@@ -63,16 +62,16 @@ export function SettingsForm({ targetDuration, voiceId }: SettingsFormProps) {
 
     const currentSettings = profile?.settings || {};
 
-    // Merge new settings
-    const newSettings = {
-      ...currentSettings,
-      target_duration: parseInt(duration),
-      voice_id: voice,
-    };
-
+    // Update both: target_duration column AND voice_id in settings
     const { error } = await supabase
       .from("users")
-      .update({ settings: newSettings })
+      .update({
+        target_duration: parseInt(duration),
+        settings: {
+          ...currentSettings,
+          voice_id: voice,
+        }
+      })
       .eq("id", user.id);
 
     if (error) {

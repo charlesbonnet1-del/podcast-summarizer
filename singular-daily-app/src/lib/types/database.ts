@@ -13,10 +13,11 @@ export interface Database {
         Row: {
           id: string
           email: string
-          telegram_chat_id: number | null
-          connection_code: string | null
-          default_duration: number
-          voice_id: string
+          first_name: string | null
+          last_name: string | null
+          target_duration: number
+          include_international: boolean
+          settings: Json | null
           rss_token: string
           subscription_status: 'free' | 'pro'
           created_at: string
@@ -25,10 +26,11 @@ export interface Database {
         Insert: {
           id: string
           email: string
-          telegram_chat_id?: number | null
-          connection_code?: string | null
-          default_duration?: number
-          voice_id?: string
+          first_name?: string | null
+          last_name?: string | null
+          target_duration?: number
+          include_international?: boolean
+          settings?: Json | null
           rss_token?: string
           subscription_status?: 'free' | 'pro'
           created_at?: string
@@ -37,10 +39,11 @@ export interface Database {
         Update: {
           id?: string
           email?: string
-          telegram_chat_id?: number | null
-          connection_code?: string | null
-          default_duration?: number
-          voice_id?: string
+          first_name?: string | null
+          last_name?: string | null
+          target_duration?: number
+          include_international?: boolean
+          settings?: Json | null
           rss_token?: string
           subscription_status?: 'free' | 'pro'
           created_at?: string
@@ -54,6 +57,11 @@ export interface Database {
           url: string
           title: string | null
           source_type: 'youtube' | 'article' | 'podcast'
+          source: string | null
+          source_country: string
+          priority: 'high' | 'normal'
+          keyword: string | null
+          edition: string | null
           status: 'pending' | 'processing' | 'processed' | 'failed'
           error_message: string | null
           processed_content: string | null
@@ -66,6 +74,11 @@ export interface Database {
           url: string
           title?: string | null
           source_type: 'youtube' | 'article' | 'podcast'
+          source?: string | null
+          source_country?: string
+          priority?: 'high' | 'normal'
+          keyword?: string | null
+          edition?: string | null
           status?: 'pending' | 'processing' | 'processed' | 'failed'
           error_message?: string | null
           processed_content?: string | null
@@ -78,6 +91,11 @@ export interface Database {
           url?: string
           title?: string | null
           source_type?: 'youtube' | 'article' | 'podcast'
+          source?: string | null
+          source_country?: string
+          priority?: 'high' | 'normal'
+          keyword?: string | null
+          edition?: string | null
           status?: 'pending' | 'processing' | 'processed' | 'failed'
           error_message?: string | null
           processed_content?: string | null
@@ -93,7 +111,7 @@ export interface Database {
           summary_text: string | null
           audio_url: string
           audio_duration: number | null
-          sources: Json
+          sources_data: Json
           created_at: string
         }
         Insert: {
@@ -103,7 +121,7 @@ export interface Database {
           summary_text?: string | null
           audio_url: string
           audio_duration?: number | null
-          sources?: Json
+          sources_data?: Json
           created_at?: string
         }
         Update: {
@@ -113,8 +131,46 @@ export interface Database {
           summary_text?: string | null
           audio_url?: string
           audio_duration?: number | null
-          sources?: Json
+          sources_data?: Json
           created_at?: string
+        }
+      }
+      cached_intros: {
+        Row: {
+          id: string
+          first_name_normalized: string
+          audio_url: string
+          audio_duration: number
+          created_at: string
+          updated_at: string
+        }
+      }
+      daily_ephemeride: {
+        Row: {
+          id: string
+          date: string
+          script: string
+          audio_url: string | null
+          audio_duration: number
+          saint_of_day: string | null
+          historical_fact: string | null
+          created_at: string
+        }
+      }
+      processed_segments: {
+        Row: {
+          id: string
+          url: string
+          date: string
+          segment_type: string
+          title: string | null
+          script: string | null
+          audio_url: string | null
+          audio_duration: number
+          word_count: number
+          source_name: string | null
+          source_country: string
+          created_at: string
         }
       }
     }
@@ -122,10 +178,7 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      generate_connection_code: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never

@@ -184,7 +184,7 @@ def get_all_active_keywords() -> list:
         return []
 
 
-def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, edition: str, source: str = "google_news") -> dict | None:
+def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, edition: str, source: str = "bing_news", source_country: str = "FR") -> dict | None:
     """Add a news item to the content queue from automatic fetching.
     Checks for duplicates before inserting.
     """
@@ -207,8 +207,10 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
             "title": title,
             "source_type": "article",
             "source": source,
+            "source_country": source_country,
             "keyword": keyword,
             "edition": edition,
+            "priority": "normal",
             "status": "pending"
         }).execute()
         return result.data[0] if result.data else None

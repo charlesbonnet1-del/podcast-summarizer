@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Check } from "lucide-react";
+import { Loader2, Check, Globe } from "lucide-react";
 
 interface ProfileFormProps {
   email: string;
@@ -14,6 +14,7 @@ interface ProfileFormProps {
   lastName: string;
   memberSince?: string;
   plan: string;
+  includeInternational?: boolean;
 }
 
 export function ProfileForm({ 
@@ -21,14 +22,19 @@ export function ProfileForm({
   firstName: initialFirstName, 
   lastName: initialLastName,
   memberSince,
-  plan
+  plan,
+  includeInternational: initialInternational = false
 }: ProfileFormProps) {
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
+  const [includeInternational, setIncludeInternational] = useState(initialInternational);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const hasChanges = firstName !== initialFirstName || lastName !== initialLastName;
+  const hasChanges = 
+    firstName !== initialFirstName || 
+    lastName !== initialLastName ||
+    includeInternational !== initialInternational;
 
   const handleSave = async () => {
     setSaving(true);
@@ -44,7 +50,8 @@ export function ProfileForm({
         .from("users")
         .update({
           first_name: firstName.trim() || null,
-          last_name: lastName.trim() || null
+          last_name: lastName.trim() || null,
+          include_international: includeInternational
         })
         .eq("id", user.id);
 
@@ -87,6 +94,43 @@ export function ProfileForm({
           />
         </div>
       </div>
+
+      {/* International Sources Toggle */}
+      <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+            <Globe className="w-5 h-5 text-blue-500" />
+          </div>
+          <div>
+            <p className="font-medium">International Sources</p>
+            <p className="text-sm text-muted-foreground">
+              Include news from US, UK, Germany, Spain, Italy
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setIncludeInternational(!includeInternational)}
+          className={`relative w-12 h-6 rounded-full transition-colors ${
+            includeInternational ? 'bg-primary' : 'bg-muted'
+          }`}
+        >
+          <span
+            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+              includeInternational ? 'left-7' : 'left-1'
+            }`}
+          />
+        </button>
+      </div>
+
+      {includeInternational && (
+        <div className="flex flex-wrap gap-2 px-1">
+          {["🇫🇷 France", "🇺🇸 USA", "🇬🇧 UK", "🇩🇪 Germany", "🇪🇸 Spain", "🇮🇹 Italy"].map((country) => (
+            <Badge key={country} variant="secondary" className="text-xs">
+              {country}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {/* Save button */}
       {hasChanges && (
