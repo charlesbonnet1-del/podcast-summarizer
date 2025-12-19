@@ -3,66 +3,61 @@
 @tailwind utilities;
 
 /* ============================================
-   SINGULAR DAILY - "Productivity Zen" Design System
-   Inspired by Apple / Linear / Notion
+   KEERNEL - Dual Mode Design System
+   Light: Energetic Core (Glass + Gradients)
+   Dark: Premium Matte (Obsidian-like)
    ============================================ */
 
 @layer base {
   :root {
-    /* Apple Zen - Off-white background, dark gray text */
-    --background: 0 0% 98%;
-    --foreground: 0 0% 10%;
+    /* Keernel Brand Colors */
+    --keernel-cyan: 180 100% 48%;
+    --keernel-lime: 75 100% 50%;
+    
+    /* Light Mode - Airy, optimistic */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
+    --card-foreground: 0 0% 7%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    --primary: 0 0% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 0 0% 10%;
-    --muted: 240 5% 96%;
-    --muted-foreground: 0 0% 43%;
-    --accent: 240 5% 96%;
-    --accent-foreground: 0 0% 10%;
-    --destructive: 4 90% 58%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 211 100% 50%;
-    --chart-1: 211 100% 50%;
-    --chart-2: 142 71% 45%;
-    --chart-3: 32 95% 50%;
-    --chart-4: 280 68% 60%;
-    --chart-5: 349 100% 59%;
-    /* High border radius for zen aesthetic */
+    --popover-foreground: 0 0% 7%;
+    --primary: 180 100% 48%;
+    --primary-foreground: 0 0% 7%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 7%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 75 100% 50%;
+    --accent-foreground: 0 0% 7%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 180 100% 48%;
     --radius: 1rem;
   }
-  
+
   .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 11%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 10%;
-    --secondary: 0 0% 17%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 17%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 17%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 4 90% 58%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 22%;
-    --input: 0 0% 22%;
-    --ring: 211 100% 60%;
-    --chart-1: 211 100% 60%;
-    --chart-2: 142 71% 55%;
-    --chart-3: 32 95% 60%;
-    --chart-4: 280 68% 70%;
-    --chart-5: 349 100% 65%;
+    /* Dark Mode - Premium Matte Charcoal #121212 */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 180 100% 48%;
+    --primary-foreground: 0 0% 7%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 75 100% 50%;
+    --accent-foreground: 0 0% 7%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 95%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 180 100% 48%;
   }
 }
 
@@ -70,68 +65,199 @@
   * {
     @apply border-border;
   }
+  
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
   
-  /* Smooth scrolling */
   html {
     scroll-behavior: smooth;
   }
   
-  /* Selection color */
+  /* Light mode selection - Cyan tint */
   ::selection {
-    background-color: hsl(211 100% 50% / 0.2);
+    background-color: hsl(180 100% 48% / 0.2);
+  }
+  
+  .dark ::selection {
+    background-color: hsl(180 100% 48% / 0.3);
+  }
+}
+
+@layer components {
+  /* ============================================
+     GLASS CARD - Light mode only
+     ============================================ */
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-xl rounded-2xl;
+    box-shadow: 
+      0 0 0 1px rgba(0, 0, 0, 0.03),
+      0 8px 32px rgba(0, 245, 255, 0.06),
+      0 24px 48px rgba(0, 0, 0, 0.04);
+  }
+  
+  .dark .glass-card {
+    @apply bg-[#1E1E1E] backdrop-blur-none;
+    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  /* ============================================
+     MATTE CARD - Both modes
+     ============================================ */
+  .matte-card {
+    @apply bg-white rounded-2xl shadow-sm;
+  }
+  
+  .dark .matte-card {
+    @apply bg-[#1E1E1E] shadow-none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  /* ============================================
+     MAGIC INPUT CONTAINER
+     ============================================ */
+  .magic-input-container {
+    @apply bg-white/90 backdrop-blur-xl rounded-2xl;
+    box-shadow: 
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      0 4px 24px rgba(0, 245, 255, 0.08),
+      0 16px 48px rgba(0, 0, 0, 0.06);
+  }
+  
+  .dark .magic-input-container {
+    @apply bg-[#1E1E1E] backdrop-blur-none;
+    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  /* ============================================
+     STICKY PLAYER BAR
+     ============================================ */
+  .player-bar {
+    @apply bg-white/90 backdrop-blur-xl rounded-2xl;
+    box-shadow: 
+      0 -4px 24px rgba(0, 0, 0, 0.06),
+      0 0 0 1px rgba(0, 0, 0, 0.04);
+  }
+  
+  .dark .player-bar {
+    @apply bg-[#1E1E1E] backdrop-blur-none;
+    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  /* ============================================
+     ACTIVE TAG PILL
+     ============================================ */
+  .tag-pill {
+    @apply bg-white border border-[#00F5FF]/30 text-foreground/80;
+  }
+  
+  .dark .tag-pill {
+    @apply bg-[#1E1E1E] border-white/10 text-white/70;
+  }
+  
+  /* ============================================
+     BRAND BUTTON - Gradient
+     ============================================ */
+  .btn-brand {
+    @apply relative overflow-hidden rounded-full font-medium transition-all duration-300;
+    background: linear-gradient(135deg, #00F5FF 0%, #00D4E0 100%);
+    box-shadow: 0 4px 16px rgba(0, 245, 255, 0.3);
+  }
+  
+  .btn-brand:hover {
+    box-shadow: 0 6px 24px rgba(0, 245, 255, 0.4);
+    transform: translateY(-1px);
+  }
+  
+  .dark .btn-brand {
+    background: linear-gradient(135deg, #00F5FF 0%, #00D4E0 100%);
+    box-shadow: none;
+  }
+  
+  .dark .btn-brand:hover {
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.2);
+    transform: none;
   }
 }
 
 @layer utilities {
+  /* Gradient text with brand colors */
+  .gradient-text-brand {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #00F5FF 0%, #CCFF00 100%);
+  }
+  
+  /* Focus ring with brand color */
+  .focus-ring-brand {
+    @apply focus:outline-none focus:ring-2 focus:ring-[#00F5FF]/50 focus:ring-offset-2;
+  }
+  
+  .dark .focus-ring-brand {
+    @apply focus:ring-offset-[#121212];
+  }
+  
+  /* Text balance */
   .text-balance {
     text-wrap: balance;
   }
   
-  /* Ultra-diffuse shadow for Apple aesthetic */
-  .shadow-zen {
-    box-shadow: 
-      0 0 0 1px rgba(0, 0, 0, 0.03),
-      0 2px 4px rgba(0, 0, 0, 0.02),
-      0 12px 24px rgba(0, 0, 0, 0.04);
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
   
-  .shadow-zen-lg {
-    box-shadow: 
-      0 0 0 1px rgba(0, 0, 0, 0.03),
-      0 4px 8px rgba(0, 0, 0, 0.02),
-      0 24px 48px rgba(0, 0, 0, 0.06);
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
-  
-  /* Hover lift effect */
-  .hover-lift {
-    @apply transition-all duration-200 ease-out;
+}
+
+/* ============================================
+   FLOATING ORB ANIMATIONS - Light mode only
+   ============================================ */
+@keyframes float-slow {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
   }
-  
-  .hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 
-      0 0 0 1px rgba(0, 0, 0, 0.03),
-      0 8px 16px rgba(0, 0, 0, 0.06),
-      0 24px 48px rgba(0, 0, 0, 0.08);
+  33% {
+    transform: translate(30px, -30px) scale(1.05);
   }
-  
-  /* Glass effect */
-  .glass {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
   }
-  
-  .dark .glass {
-    background: rgba(28, 28, 30, 0.8);
+}
+
+@keyframes float-slower {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
   }
-  
-  /* Gradient text */
-  .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-foreground to-muted-foreground;
+  50% {
+    transform: translate(-40px, -20px) scale(1.1);
   }
+}
+
+.animate-float-slow {
+  animation: float-slow 20s ease-in-out infinite;
+}
+
+.animate-float-slower {
+  animation: float-slower 25s ease-in-out infinite;
+}
+
+/* Progress bar thin style */
+.progress-thin {
+  @apply h-1 rounded-full bg-secondary overflow-hidden;
+}
+
+.progress-thin-fill {
+  @apply h-full rounded-full;
+  background: linear-gradient(90deg, #00F5FF, #CCFF00);
+}
+
+.dark .progress-thin-fill {
+  background: #00F5FF;
 }

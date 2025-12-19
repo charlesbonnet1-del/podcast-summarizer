@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -44,23 +45,36 @@ export function ActiveTopics({ topics }: ActiveTopicsProps) {
   };
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {topics.map((topic) => (
-        <span
-          key={topic.id}
-          className="group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-secondary/50 text-muted-foreground hover:bg-secondary transition-colors"
-        >
-          <span className="opacity-50">#</span>
-          {topic.keyword}
-          <button
-            onClick={() => handleRemove(topic)}
-            disabled={removingId === topic.id}
-            className="opacity-0 group-hover:opacity-100 hover:text-foreground transition-opacity ml-0.5 -mr-1"
+    <motion.div 
+      className="flex flex-wrap gap-2"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <AnimatePresence mode="popLayout">
+        {topics.map((topic) => (
+          <motion.span
+            key={topic.id}
+            layout
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="tag-pill group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all"
           >
-            <X className="w-3 h-3" />
-          </button>
-        </span>
-      ))}
-    </div>
+            <span className="text-[#00F5FF] dark:text-[#00F5FF]/70">#</span>
+            <span>{topic.keyword}</span>
+            <motion.button
+              onClick={() => handleRemove(topic)}
+              disabled={removingId === topic.id}
+              className="opacity-0 group-hover:opacity-100 ml-0.5 -mr-1 p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-all"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <X className="w-3 h-3" />
+            </motion.button>
+          </motion.span>
+        ))}
+      </AnimatePresence>
+    </motion.div>
   );
 }

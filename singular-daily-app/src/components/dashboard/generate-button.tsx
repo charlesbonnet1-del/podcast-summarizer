@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import { Loader2, Sparkles, CheckCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -36,7 +36,6 @@ export function GenerateButton({ pendingCount, hasTopics = false }: GenerateButt
         setSuccess(true);
         toast.success("Your Keernel is brewing! ☕");
         
-        // Refresh to clear manual adds
         setTimeout(() => {
           setSuccess(false);
           router.refresh();
@@ -51,60 +50,63 @@ export function GenerateButton({ pendingCount, hasTopics = false }: GenerateButt
     }
   };
 
-  // No topics and no pending content - show "Add topics" state
+  // No topics and no pending content
   if (!hasTopics && pendingCount === 0) {
     return (
-      <Button
-        disabled
-        variant="outline"
-        className="w-full h-14 rounded-2xl text-sm font-medium border-dashed border-2 opacity-50"
-      >
-        <Plus className="w-4 h-4 mr-2" />
-        Add topics above to get started
-      </Button>
+      <div className="matte-card px-6 py-4 text-center">
+        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+          <Plus className="w-4 h-4" />
+          <span className="text-sm">Add topics above to get started</span>
+        </div>
+      </div>
     );
   }
 
-  // Has topics but no pending content yet (waiting for fetch)
+  // Has topics but no pending content yet
   if (pendingCount === 0) {
     return (
-      <Button
-        disabled
-        variant="outline"
-        className="w-full h-14 rounded-2xl text-sm font-medium border-dashed border-2 opacity-60"
-      >
-        <Sparkles className="w-4 h-4 mr-2" />
-        Waiting for news to arrive...
-      </Button>
+      <div className="matte-card px-6 py-4 text-center">
+        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+          >
+            <Sparkles className="w-4 h-4" />
+          </motion.div>
+          <span className="text-sm">Waiting for news to arrive...</span>
+        </div>
+      </div>
     );
   }
 
   // Ready to generate
   return (
-    <Button
+    <motion.button
       onClick={handleGenerate}
       disabled={generating}
-      className="w-full h-14 rounded-2xl text-base font-medium bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg shadow-purple-500/20"
+      className="btn-brand w-full py-4 px-6 text-base font-medium text-white dark:text-black disabled:opacity-70"
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
     >
       {generating ? (
-        <>
-          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+        <span className="flex items-center justify-center gap-2">
+          <Loader2 className="w-5 h-5 animate-spin" />
           Brewing your Keernel...
-        </>
+        </span>
       ) : success ? (
-        <>
-          <CheckCircle className="w-5 h-5 mr-2" />
+        <span className="flex items-center justify-center gap-2">
+          <CheckCircle className="w-5 h-5" />
           Queued! Check back soon
-        </>
+        </span>
       ) : (
-        <>
-          <Sparkles className="w-5 h-5 mr-2" />
+        <span className="flex items-center justify-center gap-2">
+          <Sparkles className="w-5 h-5" />
           Generate Keernel
-          <span className="ml-2 px-2 py-0.5 rounded-full bg-white/20 text-xs">
+          <span className="ml-1 px-2 py-0.5 rounded-full bg-white/20 dark:bg-black/20 text-xs">
             {pendingCount}
           </span>
-        </>
+        </span>
       )}
-    </Button>
+    </motion.button>
   );
 }
