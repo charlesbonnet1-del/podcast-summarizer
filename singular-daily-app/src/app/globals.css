@@ -172,6 +172,19 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
   
+  /* Source item type colors */
+  .source-video {
+    @apply bg-cyan-500/5 dark:bg-cyan-500/10 border-l-2 border-l-[#00F5FF];
+  }
+  
+  .source-podcast {
+    @apply bg-lime-500/5 dark:bg-lime-500/10 border-l-2 border-l-[#CCFF00];
+  }
+  
+  .source-article {
+    @apply bg-violet-500/5 dark:bg-violet-500/10 border-l-2 border-l-violet-500;
+  }
+  
   /* ============================================
      MATTE CARD - Both modes
      ============================================ */

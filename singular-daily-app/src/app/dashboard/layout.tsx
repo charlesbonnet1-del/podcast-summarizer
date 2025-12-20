@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { DashboardNav } from "@/components/dashboard/nav";
-import { FloatingOrbs } from "@/components/floating-orbs";
+import { Toaster } from "sonner";
 
 // Force dynamic rendering - requires Supabase auth
 export const dynamic = 'force-dynamic';
@@ -18,25 +17,21 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Fetch user profile
-  const { data: profile } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Floating Orbs Background - Light mode only */}
-      <FloatingOrbs />
+    <div className="min-h-screen bg-background">
+      {/* Main content - no navbar (Zero-UI) */}
+      <main>
+        {children}
+      </main>
       
-      {/* Content */}
-      <div className="relative z-10">
-        <DashboardNav user={user} profile={profile} />
-        <main className="pt-24 pb-32 px-6">
-          {children}
-        </main>
-      </div>
+      {/* Toaster */}
+      <Toaster 
+        position="top-center" 
+        richColors 
+        toastOptions={{
+          className: "font-sans",
+        }}
+      />
     </div>
   );
 }
