@@ -4,7 +4,7 @@ import { Separator } from "@/components/ui/separator";
 import { MagicBar } from "@/components/dashboard/magic-bar";
 import { ActiveTopics } from "@/components/dashboard/active-topics";
 import { ManualAdds } from "@/components/dashboard/manual-adds";
-import { StickyPlayer } from "@/components/dashboard/sticky-player";
+import { PlayerPod } from "@/components/dashboard/player-pod";
 import { ShowNotes } from "@/components/dashboard/show-notes";
 import { GenerateButton } from "@/components/dashboard/generate-button";
 
@@ -60,27 +60,49 @@ export default async function DashboardPage() {
 
   const sourcesData = latestEpisode?.sources_data || [];
   const hasTopics = (interests?.length ?? 0) > 0;
+  const firstName = profile?.first_name || "there";
 
   return (
     <>
-      {/* Main Content - with bottom padding for sticky player */}
+      {/* Main Content - with bottom padding for player pod */}
       <div className="max-w-2xl mx-auto space-y-8 pb-32">
-        {/* Empty State - When no episode yet */}
-        {!latestEpisode && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-secondary/50 flex items-center justify-center">
-              <span className="text-3xl">🎧</span>
-            </div>
-            <h2 className="text-xl font-medium mb-2">Your daily podcast awaits</h2>
-            <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-              Add topics you care about, and we&apos;ll create a personalized audio digest just for you.
-            </p>
-          </div>
-        )}
+        {/* Greeting */}
+        <div className="text-center pt-8">
+          <h1 className="font-serif text-3xl font-medium">
+            Bonjour, {firstName}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Votre podcast quotidien vous attend
+          </p>
+        </div>
+
+        {/* Magic Bar - Hero Input */}
+        <section className="pt-4">
+          <MagicBar />
+        </section>
+
+        {/* Active Topics */}
+        <section>
+          <ActiveTopics topics={interests || []} />
+        </section>
+
+        {/* Manual Adds - Only visible when there are manual items */}
+        <ManualAdds items={manualContent || []} />
+
+        {/* Generate Button */}
+        <div className="pt-4">
+          <GenerateButton 
+            pendingCount={pendingCount ?? 0} 
+            hasTopics={hasTopics}
+          />
+        </div>
+
+        <Separator className="opacity-30" />
 
         {/* Show Notes (when episode exists) */}
         {latestEpisode && sourcesData.length > 0 && (
           <section>
+            <h2 className="font-serif text-xl font-medium mb-4">Notes du jour</h2>
             <ShowNotes 
               sources={sourcesData} 
               summary={latestEpisode.summary_text} 
@@ -88,31 +110,25 @@ export default async function DashboardPage() {
           </section>
         )}
 
-        <Separator className="opacity-50" />
-
-        {/* Magic Bar - Main Input */}
-        <section className="space-y-3">
-          <MagicBar />
-          
-          {/* Active Topics - Small pills under Magic Bar */}
-          <ActiveTopics topics={interests || []} />
-        </section>
-
-        {/* Manual Adds - Only visible when there are manual items */}
-        <ManualAdds items={manualContent || []} />
-
-        {/* Generate Button - Always visible at bottom */}
-        <div className="pt-4">
-          <GenerateButton 
-            pendingCount={pendingCount ?? 0} 
-            hasTopics={hasTopics}
-          />
-        </div>
+        {/* Empty State - When no episode yet */}
+        {!latestEpisode && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-secondary/50 flex items-center justify-center">
+              <span className="text-3xl">🎧</span>
+            </div>
+            <h2 className="font-serif text-xl font-medium mb-2">
+              Votre premier Keernel
+            </h2>
+            <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+              Ajoutez des thèmes ou des liens, puis générez votre podcast personnalisé.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Sticky Player - Fixed at bottom */}
+      {/* Player Pod - Fixed at bottom */}
       {latestEpisode && (
-        <StickyPlayer episode={latestEpisode} />
+        <PlayerPod episode={latestEpisode} />
       )}
     </>
   );

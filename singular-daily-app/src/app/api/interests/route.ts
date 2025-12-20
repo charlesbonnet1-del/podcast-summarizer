@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+const MAX_TOPICS_FREE = 4;
+const MAX_TOPICS_PRO = 20;
+
 // GET - Récupérer les topics de l'utilisateur
 export async function GET() {
   const supabase = await createClient();
@@ -32,8 +35,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Get user plan
+  const { data: profile } = await supabase
+    .from("users")
+    .select("subscription_status")
+    .eq("id", user.id)
+    .single();
+
+  const plan = profile?.subscription_status || "free";
+  const maxTopics = plan === "pro" ? MAX_TOPICS_PRO : MAX_TOPICS_FREE;
+
+  // Count current topics
+  const { count } = await supabase
+    .from("user_interests")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  if ((count ?? 0) >= maxTopics) {
+    return NextResponse.json(
+      { error: `Limite de ${maxTopics} thèmes atteinte pour le plan ${plan}` },
+      { status: 403 }
+    );
+  }
+
   const body = await request.json();
   const keyword = body.keyword?.trim()?.toLowerCase();
+  const displayName = body.display_name || keyword;
+  const searchKeywords = body.search_keywords || [keyword];
 
   if (!keyword || keyword.length < 2) {
     return NextResponse.json(
@@ -54,13 +82,14 @@ export async function POST(request: Request) {
     .insert({
       user_id: user.id,
       keyword: keyword,
+      display_name: displayName,
+      search_keywords: searchKeywords,
     })
     .select()
     .single();
 
   if (error) {
     if (error.code === "23505") {
-      // Duplicate key error
       return NextResponse.json(
         { error: "You're already following this topic" },
         { status: 409 }
@@ -83,16 +112,25 @@ export async function DELETE(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
+  const keyword = searchParams.get("keyword");
 
-  if (!id) {
-    return NextResponse.json({ error: "Missing topic ID" }, { status: 400 });
+  // Support delete by ID or by keyword
+  if (!id && !keyword) {
+    return NextResponse.json({ error: "Missing topic ID or keyword" }, { status: 400 });
   }
 
-  const { error } = await supabase
+  let query = supabase
     .from("user_interests")
     .delete()
-    .eq("id", id)
     .eq("user_id", user.id);
+
+  if (id) {
+    query = query.eq("id", id);
+  } else if (keyword) {
+    query = query.eq("keyword", keyword);
+  }
+
+  const { error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

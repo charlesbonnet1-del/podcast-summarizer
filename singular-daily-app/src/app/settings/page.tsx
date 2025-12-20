@@ -2,9 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Settings, Volume2, User, Rss } from "lucide-react";
+import { Settings, Volume2, User, Rss, Hash } from "lucide-react";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { ProfileForm } from "@/components/settings/profile-form";
+import { TopicPicker } from "@/components/settings/topic-picker";
 import { DangerZone } from "@/components/settings/danger-zone";
 import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
 
@@ -26,6 +27,14 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .single();
 
+  // Fetch user topics
+  const { data: userTopics } = await supabase
+    .from("user_interests")
+    .select("keyword")
+    .eq("user_id", user.id);
+
+  const selectedTopicIds = userTopics?.map(t => t.keyword) || [];
+
   const settings = profile?.settings || {};
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://singular.daily";
 
@@ -33,17 +42,17 @@ export default async function SettingsPage() {
     <div className="max-w-2xl space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight flex items-center gap-3">
+        <h1 className="font-serif text-3xl font-semibold tracking-tight flex items-center gap-3">
           <Settings className="w-8 h-8" />
           Settings
         </h1>
         <p className="text-muted-foreground mt-1">
-          Customize your podcast experience
+          Customize your Keernel experience
         </p>
       </div>
 
       {/* Profile Info */}
-      <Card className="shadow-zen rounded-2xl border-border">
+      <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
@@ -63,19 +72,33 @@ export default async function SettingsPage() {
             memberSince={profile?.created_at}
             plan={profile?.subscription_status || "free"}
             includeInternational={profile?.include_international || false}
-            selectedVerticals={profile?.selected_verticals || {
-              ai_tech: true,
-              politics: true,
-              finance: true,
-              science: true,
-              culture: true
-            }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Topic Picker - Granular Selection */}
+      <Card className="matte-card border-0">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00F5FF]/10 flex items-center justify-center">
+              <Hash className="w-5 h-5 text-[#00F5FF]" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Topics</CardTitle>
+              <CardDescription>Choose your news categories</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <TopicPicker 
+            initialTopics={selectedTopicIds}
+            plan={profile?.subscription_status || "free"}
           />
         </CardContent>
       </Card>
 
       {/* Podcast Settings */}
-      <Card className="shadow-zen rounded-2xl border-border">
+      <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
@@ -96,7 +119,7 @@ export default async function SettingsPage() {
       </Card>
 
       {/* RSS Feed */}
-      <Card className="shadow-zen rounded-2xl border-border">
+      <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">

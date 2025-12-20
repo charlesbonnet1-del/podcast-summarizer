@@ -3,10 +3,12 @@
 @tailwind utilities;
 
 /* ============================================
-   KEERNEL - Dual Mode Design System
-   Light: Energetic Core (Glass + Gradients)
-   Dark: Premium Matte (Obsidian-like)
+   KEERNEL - Ultra-Premium Design System
+   Financial Times Authority + Linear Precision
    ============================================ */
+
+/* Import Serif font for authority */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap');
 
 @layer base {
   :root {
@@ -35,28 +37,33 @@
     --input: 0 0% 90%;
     --ring: 180 100% 48%;
     --radius: 1rem;
+    
+    /* Typography */
+    --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'Geist Mono', 'SF Mono', Consolas, monospace;
   }
 
   .dark {
     /* Dark Mode - Premium Matte Charcoal #121212 */
     --background: 0 0% 7%;
     --foreground: 0 0% 95%;
-    --card: 0 0% 12%;
+    --card: 0 0% 10%;
     --card-foreground: 0 0% 95%;
-    --popover: 0 0% 12%;
+    --popover: 0 0% 10%;
     --popover-foreground: 0 0% 95%;
     --primary: 180 100% 48%;
     --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 15%;
+    --secondary: 0 0% 14%;
     --secondary-foreground: 0 0% 95%;
-    --muted: 0 0% 15%;
+    --muted: 0 0% 14%;
     --muted-foreground: 0 0% 55%;
     --accent: 75 100% 50%;
     --accent-foreground: 0 0% 7%;
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 95%;
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
     --ring: 180 100% 48%;
   }
 }
@@ -68,6 +75,7 @@
   
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
   
@@ -75,7 +83,7 @@
     scroll-behavior: smooth;
   }
   
-  /* Light mode selection - Cyan tint */
+  /* Selection with Cyan */
   ::selection {
     background-color: hsl(180 100% 48% / 0.2);
   }
@@ -87,19 +95,80 @@
 
 @layer components {
   /* ============================================
+     TYPOGRAPHY - Serif for Authority
+     ============================================ */
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+  
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+  
+  /* ============================================
      GLASS CARD - Light mode only
      ============================================ */
   .glass-card {
     @apply bg-white/80 backdrop-blur-xl rounded-2xl;
     box-shadow: 
       0 0 0 1px rgba(0, 0, 0, 0.03),
-      0 8px 32px rgba(0, 245, 255, 0.06),
+      0 8px 32px rgba(0, 245, 255, 0.04),
       0 24px 48px rgba(0, 0, 0, 0.04);
   }
   
   .dark .glass-card {
-    @apply bg-[#1E1E1E] backdrop-blur-none;
+    @apply bg-[#1a1a1a] backdrop-blur-none;
     box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  
+  /* ============================================
+     MAGIC BAR - Premium Capsule Input
+     ============================================ */
+  .magic-bar {
+    @apply bg-white/90 backdrop-blur-xl rounded-full;
+    box-shadow: 
+      0 0 0 1px rgba(0, 0, 0, 0.04),
+      0 4px 24px rgba(0, 245, 255, 0.06),
+      0 20px 60px rgba(0, 0, 0, 0.08);
+  }
+  
+  .dark .magic-bar {
+    @apply bg-[#1a1a1a] backdrop-blur-none;
+    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  /* ============================================
+     PLAYER POD - Floating Capsule
+     ============================================ */
+  .player-pod {
+    @apply bg-white/95 backdrop-blur-xl rounded-full;
+    box-shadow: 
+      0 -4px 20px rgba(0, 0, 0, 0.04),
+      0 8px 40px rgba(0, 0, 0, 0.08),
+      0 0 0 1px rgba(0, 0, 0, 0.04);
+  }
+  
+  .dark .player-pod {
+    @apply bg-[#1a1a1a] backdrop-blur-none;
+    box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  /* ============================================
+     SOURCES PANEL - Slides from behind player
+     ============================================ */
+  .sources-panel {
+    @apply bg-white/95 backdrop-blur-xl rounded-3xl;
+    box-shadow: 
+      0 -8px 40px rgba(0, 0, 0, 0.08),
+      0 0 0 1px rgba(0, 0, 0, 0.04);
+  }
+  
+  .dark .sources-panel {
+    @apply bg-[#1a1a1a] backdrop-blur-none;
+    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
   
@@ -107,102 +176,68 @@
      MATTE CARD - Both modes
      ============================================ */
   .matte-card {
-    @apply bg-white rounded-2xl shadow-sm;
+    @apply bg-white rounded-2xl;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
   
   .dark .matte-card {
-    @apply bg-[#1E1E1E] shadow-none;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    @apply bg-[#1a1a1a] shadow-none;
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
   
   /* ============================================
-     MAGIC INPUT CONTAINER
-     ============================================ */
-  .magic-input-container {
-    @apply bg-white/90 backdrop-blur-xl rounded-2xl;
-    box-shadow: 
-      0 0 0 1px rgba(0, 0, 0, 0.04),
-      0 4px 24px rgba(0, 245, 255, 0.08),
-      0 16px 48px rgba(0, 0, 0, 0.06);
-  }
-  
-  .dark .magic-input-container {
-    @apply bg-[#1E1E1E] backdrop-blur-none;
-    box-shadow: none;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  
-  /* ============================================
-     STICKY PLAYER BAR
-     ============================================ */
-  .player-bar {
-    @apply bg-white/90 backdrop-blur-xl rounded-2xl;
-    box-shadow: 
-      0 -4px 24px rgba(0, 0, 0, 0.06),
-      0 0 0 1px rgba(0, 0, 0, 0.04);
-  }
-  
-  .dark .player-bar {
-    @apply bg-[#1E1E1E] backdrop-blur-none;
-    box-shadow: none;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  
-  /* ============================================
-     ACTIVE TAG PILL
+     TAG PILL
      ============================================ */
   .tag-pill {
-    @apply bg-white border border-[#00F5FF]/30 text-foreground/80;
+    @apply bg-white border border-[#00F5FF]/20 text-foreground/80 rounded-full;
   }
   
   .dark .tag-pill {
-    @apply bg-[#1E1E1E] border-white/10 text-white/70;
+    @apply bg-[#1a1a1a] border-white/10 text-white/70;
   }
   
   /* ============================================
-     BRAND BUTTON - Gradient
+     BRAND BUTTON
      ============================================ */
   .btn-brand {
     @apply relative overflow-hidden rounded-full font-medium transition-all duration-300;
     background: linear-gradient(135deg, #00F5FF 0%, #00D4E0 100%);
-    box-shadow: 0 4px 16px rgba(0, 245, 255, 0.3);
   }
   
   .btn-brand:hover {
-    box-shadow: 0 6px 24px rgba(0, 245, 255, 0.4);
+    box-shadow: 0 8px 30px rgba(0, 245, 255, 0.3);
     transform: translateY(-1px);
   }
   
   .dark .btn-brand {
-    background: linear-gradient(135deg, #00F5FF 0%, #00D4E0 100%);
     box-shadow: none;
   }
   
   .dark .btn-brand:hover {
-    box-shadow: 0 0 20px rgba(0, 245, 255, 0.2);
+    box-shadow: 0 0 30px rgba(0, 245, 255, 0.15);
     transform: none;
   }
 }
 
 @layer utilities {
-  /* Gradient text with brand colors */
+  /* Gradient text */
   .gradient-text-brand {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(135deg, #00F5FF 0%, #CCFF00 100%);
   }
   
-  /* Focus ring with brand color */
-  .focus-ring-brand {
-    @apply focus:outline-none focus:ring-2 focus:ring-[#00F5FF]/50 focus:ring-offset-2;
+  /* Progress bar thin */
+  .progress-thin {
+    @apply h-1 rounded-full bg-secondary/50 overflow-hidden;
   }
   
-  .dark .focus-ring-brand {
-    @apply focus:ring-offset-[#121212];
+  .progress-thin-fill {
+    @apply h-full rounded-full;
+    background: linear-gradient(90deg, #00F5FF, #00D4E0);
   }
   
-  /* Text balance */
-  .text-balance {
-    text-wrap: balance;
+  .dark .progress-thin-fill {
+    background: #00F5FF;
   }
   
   /* Hide scrollbar */
@@ -224,10 +259,10 @@
     transform: translate(0, 0) scale(1);
   }
   33% {
-    transform: translate(30px, -30px) scale(1.05);
+    transform: translate(40px, -40px) scale(1.05);
   }
   66% {
-    transform: translate(-20px, 20px) scale(0.95);
+    transform: translate(-30px, 30px) scale(0.95);
   }
 }
 
@@ -236,28 +271,14 @@
     transform: translate(0, 0) scale(1);
   }
   50% {
-    transform: translate(-40px, -20px) scale(1.1);
+    transform: translate(-50px, -25px) scale(1.1);
   }
 }
 
 .animate-float-slow {
-  animation: float-slow 20s ease-in-out infinite;
+  animation: float-slow 25s ease-in-out infinite;
 }
 
 .animate-float-slower {
-  animation: float-slower 25s ease-in-out infinite;
-}
-
-/* Progress bar thin style */
-.progress-thin {
-  @apply h-1 rounded-full bg-secondary overflow-hidden;
-}
-
-.progress-thin-fill {
-  @apply h-full rounded-full;
-  background: linear-gradient(90deg, #00F5FF, #CCFF00);
-}
-
-.dark .progress-thin-fill {
-  background: #00F5FF;
+  animation: float-slower 30s ease-in-out infinite;
 }
