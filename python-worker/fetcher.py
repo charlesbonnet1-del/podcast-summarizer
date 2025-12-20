@@ -1,11 +1,17 @@
 """
-Fetcher module for Bing News RSS.
-Fetches news based on user interests/keywords.
-Supports international sources (US, UK, DE, ES, IT).
+Keernel Fetcher - Multi-Vertical News Sourcing
 
-Usage:
-    python fetcher.py --edition morning
-    python fetcher.py --edition evening
+Fetches news based on:
+1. User's selected verticals (5 Alpha Verticals)
+2. User's custom keywords
+3. User's international preference
+
+The 5 Alpha Verticals:
+- V1: IA & Tech (LLM, Hardware, Robotique)
+- V2: Politique & Monde (France, USA, International)
+- V3: Finance & Marchés (Bourse, Crypto, Macro)
+- V4: Science & Santé (Espace, Biotech, Énergie)
+- V5: Culture & Divertissement (Cinéma, Gaming, Streaming)
 """
 import os
 import sys
@@ -14,17 +20,13 @@ import argparse
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus, unquote, parse_qs, urlparse
 import xml.etree.ElementTree as ET
-import re
+import random
 
 import httpx
 import structlog
 from dotenv import load_dotenv
 
-from db import (
-    get_all_active_keywords,
-    add_to_content_queue_auto,
-    supabase,
-)
+from db import add_to_content_queue_auto, supabase
 
 load_dotenv()
 log = structlog.get_logger()
@@ -39,299 +41,298 @@ USER_AGENT = (
     "Chrome/120.0.0.0 Safari/537.36"
 )
 
-REQUEST_DELAY_SECONDS = 2
-MAX_ARTICLES_PER_KEYWORD = 3
+REQUEST_DELAY = 1.5
+MAX_ARTICLES_PER_VERTICAL = 3
 
-# Bing News RSS endpoints by market
-BING_NEWS_MARKETS = {
-    "FR": {
-        "url": "https://www.bing.com/news/search?q={query}&format=rss&mkt=fr-FR",
-        "name": "France"
+# Markets configuration
+MARKETS = {
+    "FR": "https://www.bing.com/news/search?q={query}&format=rss&mkt=fr-FR",
+    "US": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-US",
+    "UK": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-GB",
+    "DE": "https://www.bing.com/news/search?q={query}&format=rss&mkt=de-DE",
+    "ES": "https://www.bing.com/news/search?q={query}&format=rss&mkt=es-ES",
+    "IT": "https://www.bing.com/news/search?q={query}&format=rss&mkt=it-IT",
+}
+
+# The 5 Alpha Verticals
+VERTICALS = {
+    "ai_tech": {
+        "name": "IA & Tech",
+        "queries": {
+            "FR": ["intelligence artificielle", "OpenAI GPT", "startup tech"],
+            "US": ["artificial intelligence", "OpenAI ChatGPT", "LLM AI news"],
+        }
     },
-    "US": {
-        "url": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-US",
-        "name": "United States"
+    "politics": {
+        "name": "Politique & Monde",
+        "queries": {
+            "FR": ["politique France", "Macron gouvernement", "géopolitique"],
+            "US": ["US politics", "White House news", "world politics"],
+        }
     },
-    "UK": {
-        "url": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-GB",
-        "name": "United Kingdom"
+    "finance": {
+        "name": "Finance & Marchés",
+        "queries": {
+            "FR": ["bourse CAC 40", "économie France", "crypto bitcoin"],
+            "US": ["Wall Street stocks", "Fed rates", "crypto market"],
+        }
     },
-    "DE": {
-        "url": "https://www.bing.com/news/search?q={query}&format=rss&mkt=de-DE",
-        "name": "Germany"
+    "science": {
+        "name": "Science & Santé",
+        "queries": {
+            "FR": ["espace NASA SpaceX", "biotech santé", "climat énergie"],
+            "US": ["NASA SpaceX", "biotech news", "climate science"],
+        }
     },
-    "ES": {
-        "url": "https://www.bing.com/news/search?q={query}&format=rss&mkt=es-ES",
-        "name": "Spain"
-    },
-    "IT": {
-        "url": "https://www.bing.com/news/search?q={query}&format=rss&mkt=it-IT",
-        "name": "Italy"
-    },
+    "culture": {
+        "name": "Culture & Divertissement",
+        "queries": {
+            "FR": ["cinéma films", "jeux vidéo", "streaming Netflix"],
+            "US": ["movies box office", "gaming news", "streaming"],
+        }
+    }
 }
 
 
 # ============================================
-# FETCHER FUNCTIONS
+# CORE FUNCTIONS
 # ============================================
 
-def build_bing_news_url(keyword: str, market: str = "FR") -> str:
-    """Build Bing News RSS URL for a keyword and market."""
-    encoded_keyword = quote_plus(keyword)
-    market_config = BING_NEWS_MARKETS.get(market, BING_NEWS_MARKETS["FR"])
-    return market_config["url"].format(query=encoded_keyword)
+def fetch_rss(url: str) -> str | None:
+    """Fetch RSS feed."""
+    try:
+        headers = {"User-Agent": USER_AGENT, "Accept": "application/rss+xml, */*"}
+        response = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
+        response.raise_for_status()
+        return response.text
+    except Exception as e:
+        log.error("RSS fetch failed", url=url[:80], error=str(e))
+        return None
 
 
 def extract_real_url(bing_url: str) -> str | None:
-    """Extract the real article URL from Bing's redirect URL."""
+    """Extract real URL from Bing redirect."""
     try:
         parsed = urlparse(bing_url)
         params = parse_qs(parsed.query)
-        
         if 'url' in params:
-            real_url = unquote(params['url'][0])
-            return real_url
-        
+            return unquote(params['url'][0])
         if not bing_url.startswith('http://www.bing.com'):
             return bing_url
-            
         return None
-    except Exception as e:
-        log.warning("Could not extract URL", bing_url=bing_url[:100], error=str(e))
+    except:
         return None
 
 
-def fetch_rss_feed(url: str) -> str | None:
-    """Fetch RSS feed content with proper headers."""
-    try:
-        headers = {
-            "User-Agent": USER_AGENT,
-            "Accept": "application/rss+xml, application/xml, text/xml, */*",
-            "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-        }
-        
-        response = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
-        response.raise_for_status()
-        
-        return response.text
-    
-    except Exception as e:
-        log.error("Error fetching RSS", url=url, error=str(e))
-        return None
-
-
-def parse_bing_news_rss(xml_content: str, max_items: int = 3, market: str = "FR") -> list[dict]:
-    """Parse Bing News RSS and extract articles with real URLs."""
+def parse_rss(xml_content: str, max_items: int, market: str) -> list[dict]:
+    """Parse Bing News RSS."""
     articles = []
-    
     try:
         root = ET.fromstring(xml_content)
         items = root.findall(".//item")
         
-        for item in items:
-            if len(articles) >= max_items:
-                break
-                
-            title_elem = item.find("title")
-            link_elem = item.find("link")
-            pub_date_elem = item.find("pubDate")
-            description_elem = item.find("description")
+        for item in items[:max_items]:
+            title = item.find("title")
+            link = item.find("link")
+            source = item.find("{https://www.bing.com/news/search}Source")
             
-            # Get source from News:Source namespace
-            source_elem = item.find("{https://www.bing.com/news/search}Source")
-            source = source_elem.text if source_elem is not None else "Unknown"
-            
-            if title_elem is not None and link_elem is not None:
-                bing_url = link_elem.text
-                real_url = extract_real_url(bing_url)
-                
+            if title is not None and link is not None:
+                real_url = extract_real_url(link.text)
                 if real_url:
-                    article = {
-                        "title": title_elem.text or "Untitled",
+                    articles.append({
+                        "title": title.text or "Untitled",
                         "url": real_url,
-                        "pub_date": pub_date_elem.text if pub_date_elem is not None else None,
-                        "source": source,
+                        "source": source.text if source is not None else "Unknown",
                         "source_country": market,
-                        "description": description_elem.text[:200] if description_elem is not None and description_elem.text else None,
-                    }
-                    articles.append(article)
-                    log.info("Found article", 
-                            title=article["title"][:60], 
-                            source=source,
-                            market=market)
-        
+                    })
         return articles
-    
-    except ET.ParseError as e:
-        log.error("Error parsing RSS XML", error=str(e))
+    except Exception as e:
+        log.error("RSS parse failed", error=str(e))
         return []
 
 
-def fetch_news_for_keyword(keyword: str, markets: list[str] = None) -> list[dict]:
-    """
-    Fetch top news articles for a keyword from Bing News.
+def fetch_for_query(query: str, market: str, max_items: int = 3) -> list[dict]:
+    """Fetch articles for a query in a market."""
+    url = MARKETS[market].format(query=quote_plus(query))
+    xml = fetch_rss(url)
+    if not xml:
+        return []
+    return parse_rss(xml, max_items, market)
+
+
+def fetch_for_vertical(vertical_id: str, include_international: bool = False) -> list[dict]:
+    """Fetch articles for a vertical."""
+    vertical = VERTICALS.get(vertical_id)
+    if not vertical:
+        return []
     
-    Args:
-        keyword: Search keyword
-        markets: List of market codes (FR, US, UK, DE, ES, IT). Defaults to FR only.
-    """
-    if markets is None:
-        markets = ["FR"]
-    
-    log.info("Fetching news for keyword", keyword=keyword, markets=markets)
-    
-    all_articles = []
+    articles = []
     seen_urls = set()
     
-    for market in markets:
-        url = build_bing_news_url(keyword, market)
-        xml_content = fetch_rss_feed(url)
-        
-        if not xml_content:
-            log.warning("No content received", keyword=keyword, market=market)
-            continue
-        
-        # Get fewer articles per market when fetching international
-        max_per_market = MAX_ARTICLES_PER_KEYWORD if len(markets) == 1 else 2
-        articles = parse_bing_news_rss(xml_content, max_items=max_per_market, market=market)
-        
-        # Deduplicate by URL
-        for article in articles:
+    # Always fetch FR
+    queries_fr = vertical["queries"].get("FR", [])
+    for query in queries_fr[:2]:  # Max 2 queries per market
+        for article in fetch_for_query(query, "FR", 2):
             if article["url"] not in seen_urls:
                 seen_urls.add(article["url"])
-                all_articles.append(article)
-        
-        time.sleep(0.5)  # Small delay between markets
+                article["vertical_id"] = vertical_id
+                articles.append(article)
+        time.sleep(REQUEST_DELAY)
     
-    log.info("Fetched articles", keyword=keyword, count=len(all_articles))
-    return all_articles[:MAX_ARTICLES_PER_KEYWORD * 2]  # Max 6 articles with international
+    # Fetch international if enabled
+    if include_international:
+        queries_us = vertical["queries"].get("US", [])
+        query = random.choice(queries_us) if queries_us else None
+        if query:
+            for article in fetch_for_query(query, "US", 2):
+                if article["url"] not in seen_urls:
+                    seen_urls.add(article["url"])
+                    article["vertical_id"] = vertical_id
+                    articles.append(article)
+            time.sleep(REQUEST_DELAY)
+    
+    return articles[:MAX_ARTICLES_PER_VERTICAL]
 
+
+def fetch_for_keyword(keyword: str, include_international: bool = False) -> list[dict]:
+    """Fetch articles for a user keyword."""
+    articles = []
+    seen_urls = set()
+    
+    # FR market
+    for article in fetch_for_query(keyword, "FR", 3):
+        if article["url"] not in seen_urls:
+            seen_urls.add(article["url"])
+            articles.append(article)
+    
+    # International
+    if include_international:
+        time.sleep(REQUEST_DELAY)
+        for market in ["US", "UK"]:
+            for article in fetch_for_query(keyword, market, 1):
+                if article["url"] not in seen_urls:
+                    seen_urls.add(article["url"])
+                    articles.append(article)
+    
+    return articles
+
+
+# ============================================
+# MAIN FETCHER
+# ============================================
 
 def run_fetcher(edition: str = "morning"):
-    """
-    Main fetcher function.
-    Fetches news for all active user keywords and adds to content queue.
-    Respects user's include_international setting.
-    """
-    log.info("Starting news fetcher", edition=edition)
-    start_time = datetime.now()
+    """Main fetcher: fetch news for all users based on their settings."""
+    log.info("Starting Keernel fetcher", edition=edition)
+    start = datetime.now()
     
-    # Get all active keywords with their user_ids
-    keyword_data = get_all_active_keywords()
-    
-    if not keyword_data:
-        log.info("No active keywords found")
+    # Get all users with their settings
+    try:
+        users_result = supabase.table("users") \
+            .select("id, first_name, include_international, selected_verticals") \
+            .execute()
+        users = users_result.data or []
+    except Exception as e:
+        log.error("Failed to get users", error=str(e))
         return
     
-    log.info("Active keywords found", count=len(keyword_data))
+    if not users:
+        log.info("No users found")
+        return
     
-    # Get user preferences for international sources
-    user_prefs = {}
+    # Get custom keywords (user_interests)
     try:
-        users_result = supabase.table("users").select("id, include_international").execute()
-        for user in users_result.data or []:
-            user_prefs[user["id"]] = user.get("include_international", False)
+        interests_result = supabase.table("user_interests") \
+            .select("user_id, keyword") \
+            .execute()
+        interests_by_user = {}
+        for item in (interests_result.data or []):
+            uid = item["user_id"]
+            if uid not in interests_by_user:
+                interests_by_user[uid] = []
+            interests_by_user[uid].append(item["keyword"])
     except Exception as e:
-        log.warning("Could not fetch user preferences", error=str(e))
+        log.warning("Failed to get interests", error=str(e))
+        interests_by_user = {}
     
-    total_articles_added = 0
+    total_added = 0
     
-    for kw_info in keyword_data:
-        keyword = kw_info["keyword"]
-        user_ids = kw_info["user_ids"]
+    for user in users:
+        user_id = user["id"]
+        include_intl = user.get("include_international", False)
+        selected_verticals = user.get("selected_verticals") or {
+            "ai_tech": True, "politics": True, "finance": True, "science": True, "culture": True
+        }
         
-        # Check if any user wants international sources
-        any_international = any(user_prefs.get(uid, False) for uid in user_ids)
+        log.info("Processing user", user_id=user_id[:8], intl=include_intl)
         
-        # Determine markets to fetch
-        if any_international:
-            markets = ["FR", "US", "UK", "DE", "ES", "IT"]
-        else:
-            markets = ["FR"]
+        # 1. Fetch from selected verticals
+        for v_id, enabled in selected_verticals.items():
+            if not enabled:
+                continue
+            
+            articles = fetch_for_vertical(v_id, include_intl)
+            for article in articles:
+                result = add_to_content_queue_auto(
+                    user_id=user_id,
+                    url=article["url"],
+                    title=article["title"],
+                    keyword=v_id,  # Use vertical ID as keyword
+                    edition=edition,
+                    source=article.get("source", "bing"),
+                    source_country=article.get("source_country", "FR"),
+                    vertical_id=v_id
+                )
+                if result:
+                    total_added += 1
         
-        # Fetch articles for this keyword
-        articles = fetch_news_for_keyword(keyword, markets)
-        
-        if not articles:
-            log.warning("No articles found for keyword", keyword=keyword)
-            time.sleep(REQUEST_DELAY_SECONDS)
-            continue
-        
-        # Add articles to content queue for each user following this keyword
-        for article in articles:
-            for user_id in user_ids:
-                # Only add international articles to users who want them
-                if article["source_country"] != "FR" and not user_prefs.get(user_id, False):
-                    continue
-                
+        # 2. Fetch from custom keywords
+        custom_keywords = interests_by_user.get(user_id, [])
+        for keyword in custom_keywords[:5]:  # Max 5 custom keywords
+            articles = fetch_for_keyword(keyword, include_intl)
+            for article in articles:
                 result = add_to_content_queue_auto(
                     user_id=user_id,
                     url=article["url"],
                     title=article["title"],
                     keyword=keyword,
                     edition=edition,
-                    source=article.get("source", "bing_news"),
+                    source=article.get("source", "bing"),
                     source_country=article.get("source_country", "FR")
                 )
-                
                 if result:
-                    total_articles_added += 1
-                    log.debug("Article added to queue", 
-                             user_id=user_id[:8], 
-                             keyword=keyword, 
-                             market=article["source_country"],
-                             title=article["title"][:50])
-        
-        # Delay between keywords
-        time.sleep(REQUEST_DELAY_SECONDS)
+                    total_added += 1
+            time.sleep(REQUEST_DELAY)
     
-    elapsed = (datetime.now() - start_time).total_seconds()
+    elapsed = (datetime.now() - start).total_seconds()
     log.info("Fetcher complete", 
-             edition=edition,
-             keywords_processed=len(keyword_data),
-             articles_added=total_articles_added,
-             elapsed_seconds=round(elapsed, 2))
+             users=len(users), 
+             articles_added=total_added, 
+             elapsed=round(elapsed, 1))
 
 
-def cleanup_old_pending():
-    """Remove pending items older than 48 hours to avoid stale content."""
+def cleanup_old():
+    """Remove pending items older than 48h."""
     try:
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
-        
-        result = supabase.table("content_queue") \
+        supabase.table("content_queue") \
             .delete() \
             .eq("status", "pending") \
             .lt("created_at", cutoff) \
             .execute()
-        
-        if result.data:
-            log.info("Cleaned up old pending items", count=len(result.data))
+        log.info("Cleanup complete")
     except Exception as e:
-        log.error("Error cleaning up old items", error=str(e))
+        log.error("Cleanup failed", error=str(e))
 
-
-# ============================================
-# MAIN
-# ============================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Fetch news for user interests")
-    parser.add_argument(
-        "--edition",
-        choices=["morning", "evening"],
-        default="morning",
-        help="Edition to fetch (morning or evening)"
-    )
-    parser.add_argument(
-        "--cleanup",
-        action="store_true",
-        help="Also cleanup old pending items"
-    )
-    
+    parser = argparse.ArgumentParser(description="Keernel News Fetcher")
+    parser.add_argument("--edition", choices=["morning", "evening"], default="morning")
+    parser.add_argument("--cleanup", action="store_true")
     args = parser.parse_args()
     
     if args.cleanup:
-        cleanup_old_pending()
+        cleanup_old()
     
     run_fetcher(edition=args.edition)
 

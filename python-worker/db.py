@@ -184,7 +184,7 @@ def get_all_active_keywords() -> list:
         return []
 
 
-def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, edition: str, source: str = "bing_news", source_country: str = "FR") -> dict | None:
+def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, edition: str, source: str = "bing_news", source_country: str = "FR", vertical_id: str = None) -> dict | None:
     """Add a news item to the content queue from automatic fetching.
     Checks for duplicates before inserting.
     """
@@ -200,8 +200,8 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
             # Already exists, skip silently
             return None
         
-        # Insert new item
-        result = supabase.table("content_queue").insert({
+        # Build insert data
+        insert_data = {
             "user_id": user_id,
             "url": url,
             "title": title,
@@ -212,7 +212,13 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
             "edition": edition,
             "priority": "normal",
             "status": "pending"
-        }).execute()
+        }
+        
+        # Add vertical_id if provided
+        if vertical_id:
+            insert_data["vertical_id"] = vertical_id
+        
+        result = supabase.table("content_queue").insert(insert_data).execute()
         return result.data[0] if result.data else None
     except Exception as e:
         print(f"Error adding auto content: {e}")

@@ -63,6 +63,13 @@ export default async function SettingsPage() {
             memberSince={profile?.created_at}
             plan={profile?.subscription_status || "free"}
             includeInternational={profile?.include_international || false}
+            selectedVerticals={profile?.selected_verticals || {
+              ai_tech: true,
+              politics: true,
+              finance: true,
+              science: true,
+              culture: true
+            }}
           />
         </CardContent>
       </Card>
