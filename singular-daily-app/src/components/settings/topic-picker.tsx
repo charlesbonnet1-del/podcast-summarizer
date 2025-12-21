@@ -63,9 +63,6 @@ const TOPIC_CATEGORIES = [
   }
 ];
 
-// Export for Python worker reference
-export { TOPIC_CATEGORIES };
-
 const MAX_TOPICS_FREE = 4;
 
 interface TopicPickerProps {
@@ -271,6 +268,3 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
     </div>
   );
 }
-
-// Export topics structure for use in Python worker
-export { TOPIC_CATEGORIES };
