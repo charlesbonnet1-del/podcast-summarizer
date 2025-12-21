@@ -119,20 +119,37 @@ def get_gsheet_client():
 # GSHEET SOURCE LIBRARY
 # ============================================
 
+# Official supported topics (exact slugs from GSheet column B)
+SUPPORTED_TOPICS = [
+    'ia', 'quantum', 'robotics',           # Tech
+    'France', 'USA',                        # Politics (case-sensitive!)
+    'crypto', 'macro', 'stocks',            # Finance
+    'space', 'health', 'energy',            # Science
+    'cinema', 'gaming', 'lifestyle'         # Culture
+]
+
 class GSheetSourceLibrary:
     """
     Read and manage RSS sources from Google Sheets.
     
-    Expected columns:
-    A: Verticale (ai_tech, politics, finance, science, culture)
-    B: Topic (llm, hardware, france, usa, etc.)
-    C: Origin (FR/INT)
-    D: Source_Name
-    E: Source_Type (rss, twitter, youtube)
-    F: Description
-    G: URL_RSS
-    H: Score (0-100, higher = more trusted)
+    Column mapping (0-indexed):
+    A (0): Vertical (ai_tech, politics, finance, science, culture)
+    B (1): Topic (must be in SUPPORTED_TOPICS)
+    C (2): Origin (FR/INT)
+    D (3): Source_Name
+    E (4): Type (rss, youtube, etc.)
+    F (5): URL_RSS
+    G (6): Score (0-100)
     """
+    
+    # Column indices
+    COL_VERTICAL = 0
+    COL_TOPIC = 1
+    COL_ORIGIN = 2
+    COL_SOURCE_NAME = 3
+    COL_TYPE = 4
+    COL_URL_RSS = 5
+    COL_SCORE = 6
     
     def __init__(self):
         self.client = get_gsheet_client()
@@ -143,12 +160,13 @@ class GSheetSourceLibrary:
     def _load_sheet(self):
         """Load the spreadsheet."""
         if not self.client or not self.spreadsheet_id:
+            log.warning("GSheet client or spreadsheet_id not available")
             return
         
         try:
             spreadsheet = self.client.open_by_key(self.spreadsheet_id)
             self.sheet = spreadsheet.sheet1  # First sheet
-            log.info("GSheet loaded", spreadsheet_id=self.spreadsheet_id)
+            log.info("GSheet loaded", spreadsheet_id=self.spreadsheet_id[:20] + "...")
         except Exception as e:
             log.error("Failed to load GSheet", error=str(e))
     
@@ -157,42 +175,84 @@ class GSheetSourceLibrary:
         Get RSS sources for given topics, sorted by score.
         
         Args:
-            topic_ids: List of topic IDs (e.g., ["llm", "france", "crypto"])
+            topic_ids: List of topic IDs (must be in SUPPORTED_TOPICS)
             origin: "FR" or "INT" for international
             
         Returns:
             List of sources with url, name, score, vertical, topic
         """
         if not self.sheet:
+            log.warning("GSheet not loaded, cannot get sources")
             return []
         
+        # Normalize topic_ids to match GSheet (case-sensitive for France, USA)
+        normalized_topics = []
+        for t in topic_ids:
+            # Check exact match first
+            if t in SUPPORTED_TOPICS:
+                normalized_topics.append(t)
+            # Check case-insensitive
+            elif t.lower() in [s.lower() for s in SUPPORTED_TOPICS]:
+                # Find the correct case
+                for supported in SUPPORTED_TOPICS:
+                    if t.lower() == supported.lower():
+                        normalized_topics.append(supported)
+                        break
+        
+        if not normalized_topics:
+            log.warning("No valid topics after normalization", 
+                       input=topic_ids, 
+                       supported=SUPPORTED_TOPICS)
+            return []
+        
+        log.info("Fetching sources for topics", topics=normalized_topics, origin=origin)
+        
         try:
-            # Get all records
-            records = self.sheet.get_all_records()
+            # Get all values (faster than get_all_records for large sheets)
+            all_values = self.sheet.get_all_values()
+            
+            if len(all_values) < 2:
+                log.warning("GSheet has no data rows")
+                return []
             
             sources = []
-            for row in records:
-                topic = str(row.get("Topic", "")).lower().strip()
-                row_origin = str(row.get("Origin", "FR")).upper().strip()
-                url = str(row.get("URL_RSS", "")).strip()
-                score = int(row.get("Score", 50))
+            
+            # Skip header row (index 0)
+            for row_idx, row in enumerate(all_values[1:], start=2):
+                # Ensure row has enough columns
+                if len(row) < 7:
+                    continue
                 
-                # Filter by topic and origin
-                if topic in topic_ids and row_origin == origin and url:
+                topic = row[self.COL_TOPIC].strip()
+                row_origin = row[self.COL_ORIGIN].strip().upper()
+                url = row[self.COL_URL_RSS].strip()
+                
+                # Parse score (default 50 if invalid)
+                try:
+                    score = int(row[self.COL_SCORE]) if row[self.COL_SCORE] else 50
+                except ValueError:
+                    score = 50
+                
+                # Filter by topic (exact match) and origin
+                if topic in normalized_topics and row_origin == origin.upper() and url:
                     sources.append({
                         "url": url,
-                        "name": row.get("Source_Name", "Unknown"),
+                        "name": row[self.COL_SOURCE_NAME].strip() or "Unknown",
                         "score": score,
-                        "vertical": row.get("Verticale", ""),
+                        "vertical": row[self.COL_VERTICAL].strip(),
                         "topic": topic,
-                        "source_type": row.get("Source_Type", "rss"),
-                        "row_index": records.index(row) + 2  # +2 for header and 0-index
+                        "source_type": row[self.COL_TYPE].strip() or "rss",
+                        "row_index": row_idx  # 1-indexed for gspread
                     })
             
             # Sort by score (highest first)
             sources.sort(key=lambda x: x["score"], reverse=True)
             
-            log.info("Found GSheet sources", count=len(sources), topics=topic_ids)
+            log.info("Found GSheet sources", 
+                    count=len(sources), 
+                    topics=normalized_topics,
+                    origin=origin)
+            
             return sources
             
         except Exception as e:
@@ -205,10 +265,11 @@ class GSheetSourceLibrary:
             return
         
         try:
-            # Column H is score (column 8)
-            current_score = self.sheet.cell(row_index, 8).value
+            # Column G is score (column index 7 in 1-indexed gspread)
+            score_col = self.COL_SCORE + 1  # Convert to 1-indexed
+            current_score = self.sheet.cell(row_index, score_col).value
             new_score = max(0, int(current_score or 50) - amount)
-            self.sheet.update_cell(row_index, 8, new_score)
+            self.sheet.update_cell(row_index, score_col, new_score)
             log.info("Decremented source score", row=row_index, new_score=new_score)
         except Exception as e:
             log.error("Failed to update score", error=str(e))

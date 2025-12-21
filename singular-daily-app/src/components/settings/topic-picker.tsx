@@ -7,15 +7,18 @@ import { Check, Lock, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
-// Granular topics structure
+/**
+ * Topic IDs MUST match exactly with GSheet column B values:
+ * ['ia', 'quantum', 'robotics', 'France', 'USA', 'crypto', 'macro', 'stocks', 'space', 'health', 'energy', 'cinema', 'gaming', 'lifestyle']
+ */
 const TOPIC_CATEGORIES = [
   {
     id: "ai_tech",
     name: "IA & Tech",
     icon: "🤖",
     topics: [
-      { id: "llm", label: "LLM & ChatGPT", keywords: ["LLM", "ChatGPT", "OpenAI", "Claude", "GPT"] },
-      { id: "hardware", label: "Hardware & Chips", keywords: ["GPU", "NVIDIA", "Apple Silicon", "semiconducteurs"] },
+      { id: "ia", label: "IA & LLM", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT"] },
+      { id: "quantum", label: "Quantum Computing", keywords: ["quantique", "quantum", "qubits", "IBM Quantum"] },
       { id: "robotics", label: "Robotique", keywords: ["robotique", "robots", "Tesla Bot", "Boston Dynamics"] },
     ]
   },
@@ -24,9 +27,8 @@ const TOPIC_CATEGORIES = [
     name: "Politique",
     icon: "🌍",
     topics: [
-      { id: "france", label: "France", keywords: ["politique France", "Macron", "Assemblée nationale"] },
-      { id: "usa", label: "USA", keywords: ["US politics", "White House", "Congress", "Trump", "Biden"] },
-      { id: "international", label: "International", keywords: ["géopolitique", "ONU", "diplomatie", "G20"] },
+      { id: "France", label: "France", keywords: ["politique France", "Macron", "Assemblée nationale"] },
+      { id: "USA", label: "USA", keywords: ["US politics", "White House", "Congress", "Trump", "Biden"] },
     ]
   },
   {
@@ -36,7 +38,7 @@ const TOPIC_CATEGORIES = [
     topics: [
       { id: "stocks", label: "Bourse", keywords: ["CAC 40", "Wall Street", "bourse", "actions"] },
       { id: "crypto", label: "Crypto", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain"] },
-      { id: "macro", label: "Géo-économie", keywords: ["BCE", "Fed", "inflation", "économie mondiale"] },
+      { id: "macro", label: "Macro-économie", keywords: ["BCE", "Fed", "inflation", "économie mondiale"] },
     ]
   },
   {
@@ -60,6 +62,9 @@ const TOPIC_CATEGORIES = [
     ]
   }
 ];
+
+// Export for Python worker reference
+export { TOPIC_CATEGORIES };
 
 const MAX_TOPICS_FREE = 4;
 

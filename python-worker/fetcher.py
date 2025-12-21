@@ -51,23 +51,38 @@ MARKETS = {
     "IT": "https://www.bing.com/news/search?q={query}&format=rss&mkt=it-IT",
 }
 
-# Topic to search query mapping (for Bing News fallback)
+# Official supported topics (must match GSheet column B exactly)
+SUPPORTED_TOPICS = [
+    'ia', 'quantum', 'robotics',           # Tech
+    'France', 'USA',                        # Politics (case-sensitive!)
+    'crypto', 'macro', 'stocks',            # Finance
+    'space', 'health', 'energy',            # Science
+    'cinema', 'gaming', 'lifestyle'         # Culture
+]
+
+# Topic to Bing search query mapping (for Level 3 backup)
 TOPIC_QUERIES = {
-    "llm": "intelligence artificielle LLM ChatGPT",
-    "hardware": "semiconducteurs GPU NVIDIA",
-    "robotics": "robotique",
-    "france": "politique France actualité",
-    "usa": "politique USA États-Unis",
-    "international": "géopolitique monde",
-    "stocks": "bourse CAC 40 marchés",
+    # Tech
+    "ia": "intelligence artificielle IA ChatGPT",
+    "quantum": "ordinateur quantique quantum computing",
+    "robotics": "robotique robots",
+    # Politics
+    "France": "politique France actualité",
+    "france": "politique France actualité",  # lowercase fallback
+    "USA": "politique USA États-Unis",
+    "usa": "politique USA États-Unis",  # lowercase fallback
+    # Finance
     "crypto": "bitcoin crypto ethereum",
-    "macro": "économie mondiale",
+    "macro": "économie mondiale macroéconomie",
+    "stocks": "bourse CAC 40 marchés actions",
+    # Science
     "space": "espace NASA SpaceX",
     "health": "santé médecine",
-    "energy": "énergie climat",
-    "cinema": "cinéma films",
-    "gaming": "jeux vidéo",
-    "lifestyle": "tendances mode"
+    "energy": "énergie climat transition",
+    # Culture
+    "cinema": "cinéma films séries",
+    "gaming": "jeux vidéo gaming",
+    "lifestyle": "tendances mode lifestyle"
 }
 
 
@@ -404,19 +419,34 @@ def main():
         # Test GSheet connection
         log.info("Testing GSheet connection...")
         try:
-            from sourcing import GSheetSourceLibrary
+            from sourcing import GSheetSourceLibrary, SUPPORTED_TOPICS
+            
+            log.info(f"Supported topics: {SUPPORTED_TOPICS}")
+            
             library = GSheetSourceLibrary()
             if library.sheet:
                 log.info("GSheet connected successfully!")
-                # Try to get some sources
-                sources = library.get_sources_for_topics(["llm", "france"], origin="FR")
-                log.info(f"Found {len(sources)} sources for test topics")
-                for s in sources[:3]:
-                    log.info(f"  - {s['name']}: {s['url'][:50]}...")
+                
+                # Try to get some sources with real topics
+                test_topics = ["ia", "France", "crypto"]
+                log.info(f"Testing with topics: {test_topics}")
+                
+                sources = library.get_sources_for_topics(test_topics, origin="FR")
+                log.info(f"Found {len(sources)} FR sources")
+                
+                for s in sources[:5]:
+                    log.info(f"  [{s['topic']}] {s['name']} (score={s['score']})")
+                    log.info(f"    URL: {s['url'][:60]}...")
+                
+                # Test INT sources
+                sources_int = library.get_sources_for_topics(test_topics, origin="INT")
+                log.info(f"Found {len(sources_int)} INT sources")
             else:
                 log.error("GSheet connection failed - sheet is None")
         except Exception as e:
             log.error("GSheet test failed", error=str(e))
+            import traceback
+            traceback.print_exc()
         return
     
     if args.cleanup:
