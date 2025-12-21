@@ -378,13 +378,17 @@ def run_fetcher(edition: str = "morning"):
         # ADD TO CONTENT QUEUE
         # ============================================
         for article in articles:
+            # Use source_type for categorization, source_name for display
+            source_type = article.get("source_type", "unknown")
+            source_name = article.get("source", "unknown")
+            
             result = add_to_content_queue_auto(
                 user_id=user_id,
                 url=article["url"],
                 title=article["title"],
                 keyword=article.get("topic", "general"),
                 edition=edition,
-                source=article.get("source", "unknown"),
+                source=source_type,  # gsheet_rss, bing_news, etc.
                 source_country=article.get("source_country", "FR"),
                 vertical_id=article.get("vertical_id")
             )

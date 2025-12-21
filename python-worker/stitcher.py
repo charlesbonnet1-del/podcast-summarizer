@@ -944,7 +944,6 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
             .select("url, priority, source, vertical_id") \
             .eq("user_id", user_id) \
             .eq("status", "pending") \
-            .order("priority", desc=True) \
             .order("created_at") \
             .execute()
         
@@ -952,10 +951,34 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
             log.warning("No pending content")
             return None
         
-        manual_urls = [item["url"] for item in queue_result.data 
-                      if item.get("priority") == "high" or item.get("source") == "manual"]
-        auto_urls = [item["url"] for item in queue_result.data 
-                    if item.get("priority") != "high" and item.get("source") != "manual"]
+        # Separate by priority:
+        # 1. Manual/high priority (user-added URLs)
+        # 2. GSheet RSS sources (curated library)
+        # 3. Bing News (backup/fallback)
+        manual_urls = []
+        gsheet_urls = []
+        bing_urls = []
+        
+        for item in queue_result.data:
+            url = item["url"]
+            priority = item.get("priority", "normal")
+            source = item.get("source", "")
+            
+            if priority == "high" or source == "manual":
+                manual_urls.append(url)
+            elif source in ("gsheet_rss", "gsheet", "library", "rss"):
+                gsheet_urls.append(url)
+            else:
+                # bing_news or any other source
+                bing_urls.append(url)
+        
+        # Combine auto_urls with GSheet first, then Bing
+        auto_urls = gsheet_urls + bing_urls
+        
+        log.info("Content queue breakdown", 
+                manual=len(manual_urls), 
+                gsheet=len(gsheet_urls), 
+                bing=len(bing_urls))
         
     except Exception as e:
         log.error("Failed to get queue", error=str(e))
