@@ -316,7 +316,10 @@ def get_or_create_intro(first_name: str) -> dict | None:
 # ============================================
 
 def get_or_create_ephemeride(target_date: date = None) -> dict | None:
-    """Generate ephemeride with historical fact linked to current trends."""
+    """
+    Generate ephemeride with VERIFIED historical fact from Wikimedia API.
+    No more LLM hallucinations on historical dates.
+    """
     if target_date is None:
         target_date = date.today()
     
@@ -355,7 +358,7 @@ def get_or_create_ephemeride(target_date: date = None) -> dict | None:
     if not groq_client:
         return None
     
-    # Format date
+    # Format date in French
     import locale
     try:
         locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
@@ -364,18 +367,48 @@ def get_or_create_ephemeride(target_date: date = None) -> dict | None:
     
     formatted_date = target_date.strftime("%A %d %B %Y").capitalize()
     
-    prompt = f"""Génère l'Écho du Temps pour le {formatted_date}.
+    # ============================================
+    # FETCH VERIFIED FACT FROM WIKIMEDIA API
+    # ============================================
+    from sourcing import get_best_ephemeride_fact
+    
+    wikimedia_fact = get_best_ephemeride_fact(
+        month=target_date.month, 
+        day=target_date.day
+    )
+    
+    if wikimedia_fact:
+        fact_year = wikimedia_fact["year"]
+        fact_text = wikimedia_fact["text"]
+        is_tech = wikimedia_fact.get("is_tech_relevant", False)
+        
+        log.info("Using Wikimedia fact", year=fact_year, tech_relevant=is_tech)
+        
+        prompt = f"""Génère l'Écho du Temps pour le {formatted_date}.
 
-Trouve UN fait historique MARQUANT qui s'est produit à cette date.
-Fais un lien (même ténu) avec une tendance actuelle : IA, espace, climat, tech...
+FAIT HISTORIQUE VÉRIFIÉ (SOURCE: WIKIMEDIA) :
+En {fact_year} : {fact_text}
 
-Exemple de structure :
-"Nous sommes le [date]. On fête les [saint]. 
-Ce jour, en [année], [fait historique percutant].
-[Lien avec l'actualité ou la tech moderne].
-Place maintenant à vos actualités du jour."
+Ta mission :
+1. Commence par "Nous sommes le {formatted_date}..."
+2. Mentionne un saint du jour plausible
+3. Reformule le fait historique de manière percutante
+4. {"Souligne le lien avec la tech actuelle (IA, espace, énergie...)" if is_tech else "Trouve un angle moderne ou une résonance avec l'actualité"}
+5. Termine par une transition vers les actualités
 
-Environ 60-80 mots. Ton dynamique et cultivé."""
+IMPORTANT : Utilise UNIQUEMENT le fait fourni ci-dessus, ne l'invente pas.
+Environ 70-90 mots. Ton dynamique et cultivé."""
+
+    else:
+        # Fallback: demander au LLM mais avec avertissement
+        log.warning("No Wikimedia fact available, using LLM generation")
+        prompt = f"""Génère l'Écho du Temps pour le {formatted_date}.
+
+Note : Pas de fait historique disponible, génère une éphéméride générique.
+Mentionne la date et un saint du jour plausible.
+Fais une transition vers les actualités.
+
+Environ 60 mots. Ton dynamique."""
 
     try:
         response = groq_client.chat.completions.create(
@@ -384,7 +417,7 @@ Environ 60-80 mots. Ton dynamique et cultivé."""
                 {"role": "system", "content": SYSTEM_PROMPT_EPHEMERIDE},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.8,
+            temperature=0.7,  # Lower temp for more factual
             max_tokens=250
         )
         

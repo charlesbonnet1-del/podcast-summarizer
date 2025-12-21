@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Play, Pause, Layers, X, ExternalLink, Link2, Loader2,
-  Settings, LogOut, Sun, Moon, Monitor, User
+  Settings, LogOut, Sun, Moon, Monitor, User, SkipBack, SkipForward
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -421,8 +421,12 @@ function PlayerPod({ episode }: { episode: Episode }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(episode.audio_duration || 0);
   const [showSources, setShowSources] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
 
   const sources = episode.sources_data || [];
+  
+  // Playback speed options
+  const SPEED_OPTIONS = [1, 1.25, 1.5, 2];
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -456,6 +460,24 @@ function PlayerPod({ episode }: { episode: Episode }) {
     if (isPlaying) audio.pause();
     else audio.play();
     setIsPlaying(!isPlaying);
+  };
+
+  const skip = (seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = Math.max(0, Math.min(duration, audio.currentTime + seconds));
+  };
+
+  const cyclePlaybackRate = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    const currentIndex = SPEED_OPTIONS.indexOf(playbackRate);
+    const nextIndex = (currentIndex + 1) % SPEED_OPTIONS.length;
+    const newRate = SPEED_OPTIONS[nextIndex];
+    
+    audio.playbackRate = newRate;
+    setPlaybackRate(newRate);
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
@@ -551,24 +573,44 @@ function PlayerPod({ episode }: { episode: Episode }) {
         animate={{ y: 0, opacity: 1 }}
         transition={springConfig}
       >
-        <div className="player-pod w-[90vw] max-w-[580px] px-5 py-3.5">
-          <div className="flex items-center gap-4">
+        <div className="player-pod w-[90vw] max-w-[620px] px-4 py-3">
+          <div className="flex items-center gap-3">
+            {/* Skip Back 15s */}
+            <motion.button
+              onClick={() => skip(-15)}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+              whileTap={{ scale: 0.9 }}
+              title="Reculer 15s"
+            >
+              <SkipBack className="w-4 h-4" />
+            </motion.button>
+
             {/* Play Button */}
             <motion.button
               onClick={togglePlay}
-              className="relative w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#00F5FF] to-[#00D4E0] dark:from-[#00F5FF] dark:to-[#00F5FF]"
+              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#00F5FF] to-[#00D4E0] dark:from-[#00F5FF] dark:to-[#00F5FF]"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
               <span className="text-black">
-                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
               </span>
+            </motion.button>
+
+            {/* Skip Forward 15s */}
+            <motion.button
+              onClick={() => skip(15)}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+              whileTap={{ scale: 0.9 }}
+              title="Avancer 15s"
+            >
+              <SkipForward className="w-4 h-4" />
             </motion.button>
 
             {/* Title + Progress */}
             <div className="flex-1 min-w-0">
               <p className="font-serif text-sm font-medium truncate">{episode.title}</p>
-              <div className="mt-1.5 flex items-center gap-2">
+              <div className="mt-1 flex items-center gap-2">
                 <div className="flex-1 h-1 rounded-full bg-secondary/50 overflow-hidden">
                   <motion.div
                     className="h-full rounded-full bg-gradient-to-r from-[#00F5FF] to-[#00D4E0] dark:bg-[#00F5FF]"
@@ -581,10 +623,20 @@ function PlayerPod({ episode }: { episode: Episode }) {
               </div>
             </div>
 
+            {/* Playback Speed */}
+            <motion.button
+              onClick={cyclePlaybackRate}
+              className="px-2 py-1 rounded-md text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              whileTap={{ scale: 0.95 }}
+              title="Vitesse de lecture"
+            >
+              {playbackRate}x
+            </motion.button>
+
             {/* Sources Button */}
             <motion.button
               onClick={() => setShowSources(!showSources)}
-              className={`p-2.5 rounded-full flex-shrink-0 ${
+              className={`p-2 rounded-full flex-shrink-0 ${
                 showSources
                   ? "bg-[#00F5FF]/20 text-[#00F5FF]"
                   : "hover:bg-secondary text-muted-foreground"
@@ -592,7 +644,7 @@ function PlayerPod({ episode }: { episode: Episode }) {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <Layers className="w-5 h-5" />
+              <Layers className="w-4 h-4" />
             </motion.button>
           </div>
         </div>

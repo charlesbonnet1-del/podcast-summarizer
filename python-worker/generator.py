@@ -35,39 +35,82 @@ azure_speech_region = os.getenv("AZURE_SPEECH_REGION", "westeurope")
 # PROMPTS
 # ============================================
 
-SCRIPT_SYSTEM_PROMPT = """Tu es un journaliste radio expert en synthèse d'informations. Tu crées des scripts audio engageants et informatifs à partir de contenus variés.
+SCRIPT_SYSTEM_PROMPT = """Tu es un journaliste radio expert. Tu crées des scripts audio percutants en français.
 
-RÈGLES DE STYLE :
-- Ton : Conversationnel, dynamique et professionnel. Comme un flash info moderne.
-- Structure : Accroche → Points clés → Conclusion avec perspective.
-- Langage : Simple et accessible. Évite le jargon technique.
-- Rythme : Phrases courtes et percutantes. Questions rhétoriques pour maintenir l'attention.
+## RÈGLES DE FER - ZÉRO MÉTA-DISCOURS
 
-RÈGLES DE FORMAT :
-- N'utilise JAMAIS de markdown, d'astérisques, de tirets ou de listes à puces.
-- Écris en paragraphes fluides, comme un vrai script radio.
-- Transitions naturelles : "Passons à...", "Ce qui est intéressant...", "Et maintenant..."
-- Conclus par un insight ou une perspective d'avenir.
+INTERDICTIONS ABSOLUES (ne JAMAIS utiliser) :
+- "Passons à..."
+- "Voici le résumé..."
+- "Le script traite de..."
+- "Dans cette rubrique..."
+- "Nous allons parler de..."
+- "Le sujet suivant est..."
+- "Commençons par..."
+- "Pour conclure..."
 
-RÈGLES DE CONTENU :
-- Sois factuel. Si une information est incertaine, dis-le.
-- Cite tes sources naturellement : "Selon cet article...", "Cette vidéo explique..."
-- Adapte la langue au contenu source (français si sources françaises).
+TRANSITIONS AUTORISÉES (logiques/thématiques) :
+- "Pendant ce temps, à Taïwan..."
+- "C'est justement ce que..."
+- "Dans les couloirs de..."
+- "Surprise à..."
+- "Et c'est là que..."
+- Enchaînement direct sans transition
+
+## STYLE RADIO PROFESSIONNEL
+
+ACCROCHES : Commence TOUJOURS par l'information, jamais par une introduction.
+✅ "Record historique à Wall Street hier soir..."
+✅ "Dans les laboratoires d'OpenAI, une révolution se prépare..."
+❌ "Bonjour et bienvenue dans votre podcast..."
+
+RYTHME :
+- Phrases COURTES (max 20 mots)
+- Structure : Sujet → Verbe → Complément
+- Questions rhétoriques pour relancer l'attention
+- Chiffres arrondis et contextualisés
+
+## PHONÉTIQUE POUR TTS (CRUCIAL)
+
+Pour une prononciation parfaite par la synthèse vocale Azure, écris les anglicismes phonétiquement :
+- "LLM" → "L-L-M" ou "elle-elle-aime"
+- "GPU" → "G-P-U" ou "jé-pé-u"
+- "CEO" → "C-E-O" ou "si-i-o"
+- "stablecoin" → "stébeul-coïne"
+- "blockchain" → "bloque-chaîne"
+- "startup" → "start-eupe"
+- "podcast" → "pod-caste"
+- "tweet" → "twitte"
+- "thread" → "thrède"
+- "hype" → "haïpe"
+- "NVIDIA" → "ène-vidia"
+- "OpenAI" → "Opène-A-I"
+
+## FORMAT
+
+- JAMAIS de markdown, astérisques, tirets ou listes à puces
+- Paragraphes fluides uniquement
+- Citations naturelles : "Selon TechCrunch...", "D'après Le Figaro..."
+- Conclure par un insight pratique ou une perspective
 """
 
-USER_PROMPT_TEMPLATE = """Crée un script de podcast de {duration} minutes basé sur ces contenus.
+USER_PROMPT_TEMPLATE = """Crée un script radio de {duration} minutes (~{word_count} mots).
 
-SOURCES :
+## SOURCES À SYNTHÉTISER :
 {sources}
 
-CONSIGNES :
-- Durée : {duration} min (~{word_count} mots)
-- Commence directement, pas de "Bienvenue..."
-- Synthétise les infos clés de manière engageante
-- Trouve les connexions entre les sources
-- Termine par un insight pratique
+## CONTRAINTES STRICTES :
+1. Durée : {duration} min = {word_count} mots (tolérance ±15%)
+2. ZÉRO méta-discours (pas de "passons à", "voici")
+3. Commence DIRECTEMENT par une accroche percutante
+4. Phonétique TTS pour les anglicismes
+5. Chaque source = 1-2 paragraphes max
+6. Transitions thématiques ou géographiques
 
-Script :"""
+## TON :
+Informatif, dynamique, accessible. Comme France Info ou Bloomberg Radio.
+
+Script (commence directement, pas d'introduction) :"""
 
 
 # ============================================

@@ -15,6 +15,10 @@ beautifulsoup4==4.12.3
 trafilatura==1.11.0
 feedparser==6.0.11
 
+# Google Sheets (RSS Library)
+gspread==6.1.0
+google-auth==2.29.0
+
 # Audio Processing
 pydub==0.25.1
 
