@@ -1,17 +1,13 @@
 """
-Keernel Fetcher - Multi-Vertical News Sourcing
+Keernel Fetcher - Multi-Level News Sourcing
 
-Fetches news based on:
-1. User's selected verticals (5 Alpha Verticals)
-2. User's custom keywords
-3. User's international preference
+3-Level Hierarchy:
+1. Manual URLs (from content_queue) - Highest priority
+2. GSheet RSS Library + Newsletters - Curated sources
+3. Bing News - Backup/fallback
 
-The 5 Alpha Verticals:
-- V1: IA & Tech (LLM, Hardware, Robotique)
-- V2: Politique & Monde (France, USA, International)
-- V3: Finance & Marchés (Bourse, Crypto, Macro)
-- V4: Science & Santé (Espace, Biotech, Énergie)
-- V5: Culture & Divertissement (Cinéma, Gaming, Streaming)
+The system prioritizes trusted sources from the GSheet library,
+falling back to Bing News only when necessary.
 """
 import os
 import sys
@@ -43,8 +39,9 @@ USER_AGENT = (
 
 REQUEST_DELAY = 1.5
 MAX_ARTICLES_PER_VERTICAL = 3
+MAX_ARTICLES_PER_TOPIC = 2
 
-# Markets configuration
+# Markets configuration (Bing News - Level 3 backup)
 MARKETS = {
     "FR": "https://www.bing.com/news/search?q={query}&format=rss&mkt=fr-FR",
     "US": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-US",
@@ -54,48 +51,100 @@ MARKETS = {
     "IT": "https://www.bing.com/news/search?q={query}&format=rss&mkt=it-IT",
 }
 
-# The 5 Alpha Verticals
-VERTICALS = {
-    "ai_tech": {
-        "name": "IA & Tech",
-        "queries": {
-            "FR": ["intelligence artificielle", "OpenAI GPT", "startup tech"],
-            "US": ["artificial intelligence", "OpenAI ChatGPT", "LLM AI news"],
-        }
-    },
-    "politics": {
-        "name": "Politique & Monde",
-        "queries": {
-            "FR": ["politique France", "Macron gouvernement", "géopolitique"],
-            "US": ["US politics", "White House news", "world politics"],
-        }
-    },
-    "finance": {
-        "name": "Finance & Marchés",
-        "queries": {
-            "FR": ["bourse CAC 40", "économie France", "crypto bitcoin"],
-            "US": ["Wall Street stocks", "Fed rates", "crypto market"],
-        }
-    },
-    "science": {
-        "name": "Science & Santé",
-        "queries": {
-            "FR": ["espace NASA SpaceX", "biotech santé", "climat énergie"],
-            "US": ["NASA SpaceX", "biotech news", "climate science"],
-        }
-    },
-    "culture": {
-        "name": "Culture & Divertissement",
-        "queries": {
-            "FR": ["cinéma films", "jeux vidéo", "streaming Netflix"],
-            "US": ["movies box office", "gaming news", "streaming"],
-        }
-    }
+# Topic to search query mapping (for Bing News fallback)
+TOPIC_QUERIES = {
+    "llm": "intelligence artificielle LLM ChatGPT",
+    "hardware": "semiconducteurs GPU NVIDIA",
+    "robotics": "robotique",
+    "france": "politique France actualité",
+    "usa": "politique USA États-Unis",
+    "international": "géopolitique monde",
+    "stocks": "bourse CAC 40 marchés",
+    "crypto": "bitcoin crypto ethereum",
+    "macro": "économie mondiale",
+    "space": "espace NASA SpaceX",
+    "health": "santé médecine",
+    "energy": "énergie climat",
+    "cinema": "cinéma films",
+    "gaming": "jeux vidéo",
+    "lifestyle": "tendances mode"
 }
 
 
 # ============================================
-# CORE FUNCTIONS
+# GSHEET SOURCING (Level 2)
+# ============================================
+
+def get_gsheet_sources_for_topics(topic_ids: list[str], include_international: bool = False) -> list[dict]:
+    """
+    Get articles from GSheet RSS library (Level 2 sourcing).
+    Returns list of articles fetched from trusted RSS sources.
+    """
+    try:
+        from sourcing import GSheetSourceLibrary, fetch_rss_feed
+        
+        library = GSheetSourceLibrary()
+        if not library.sheet:
+            log.warning("GSheet not available, skipping Level 2 sourcing")
+            return []
+        
+        articles = []
+        seen_urls = set()
+        
+        # Get FR sources
+        sources = library.get_sources_for_topics(topic_ids, origin="FR")
+        log.info("Found GSheet sources (FR)", count=len(sources))
+        
+        # Add international sources if enabled
+        if include_international:
+            intl_sources = library.get_sources_for_topics(topic_ids, origin="INT")
+            sources.extend(intl_sources)
+            log.info("Found GSheet sources (INT)", count=len(intl_sources))
+        
+        # Fetch from top sources (sorted by score)
+        for source in sources[:15]:  # Max 15 RSS feeds
+            feed_articles = fetch_rss_feed(source["url"], max_items=MAX_ARTICLES_PER_TOPIC)
+            
+            if not feed_articles:
+                # RSS failed - decrement score
+                library.decrement_score(source["row_index"], amount=5)
+                log.warning("RSS fetch failed, score decremented", 
+                           source=source["name"], 
+                           url=source["url"][:50])
+                continue
+            
+            for article in feed_articles:
+                if article["url"] not in seen_urls:
+                    seen_urls.add(article["url"])
+                    articles.append({
+                        "url": article["url"],
+                        "title": article["title"],
+                        "source": source["name"],
+                        "source_type": "gsheet_rss",
+                        "score": source["score"],
+                        "topic": source["topic"],
+                        "vertical_id": source["vertical"]
+                    })
+            
+            time.sleep(0.5)  # Rate limiting
+            
+            # Stop if we have enough
+            if len(articles) >= 20:
+                break
+        
+        log.info("GSheet sourcing complete", articles=len(articles))
+        return articles
+        
+    except ImportError as e:
+        log.warning("Sourcing module not available", error=str(e))
+        return []
+    except Exception as e:
+        log.error("GSheet sourcing failed", error=str(e))
+        return []
+
+
+# ============================================
+# BING NEWS (Level 3 - Backup)
 # ============================================
 
 def fetch_rss(url: str) -> str | None:
@@ -124,7 +173,7 @@ def extract_real_url(bing_url: str) -> str | None:
         return None
 
 
-def parse_rss(xml_content: str, max_items: int, market: str) -> list[dict]:
+def parse_bing_rss(xml_content: str, max_items: int, market: str) -> list[dict]:
     """Parse Bing News RSS."""
     articles = []
     try:
@@ -142,8 +191,9 @@ def parse_rss(xml_content: str, max_items: int, market: str) -> list[dict]:
                     articles.append({
                         "title": title.text or "Untitled",
                         "url": real_url,
-                        "source": source.text if source is not None else "Unknown",
+                        "source": source.text if source is not None else "Bing News",
                         "source_country": market,
+                        "source_type": "bing_news"
                     })
         return articles
     except Exception as e:
@@ -151,78 +201,63 @@ def parse_rss(xml_content: str, max_items: int, market: str) -> list[dict]:
         return []
 
 
-def fetch_for_query(query: str, market: str, max_items: int = 3) -> list[dict]:
-    """Fetch articles for a query in a market."""
+def fetch_bing_for_query(query: str, market: str, max_items: int = 3) -> list[dict]:
+    """Fetch articles from Bing News for a query."""
     url = MARKETS[market].format(query=quote_plus(query))
     xml = fetch_rss(url)
     if not xml:
         return []
-    return parse_rss(xml, max_items, market)
+    return parse_bing_rss(xml, max_items, market)
 
 
-def fetch_for_vertical(vertical_id: str, include_international: bool = False) -> list[dict]:
-    """Fetch articles for a vertical."""
-    vertical = VERTICALS.get(vertical_id)
-    if not vertical:
-        return []
-    
+def fetch_bing_for_topics(topic_ids: list[str], include_international: bool = False, 
+                          max_articles: int = 10) -> list[dict]:
+    """
+    Fetch articles from Bing News (Level 3 - Backup).
+    Used only when GSheet sources don't provide enough content.
+    """
     articles = []
     seen_urls = set()
     
-    # Always fetch FR
-    queries_fr = vertical["queries"].get("FR", [])
-    for query in queries_fr[:2]:  # Max 2 queries per market
-        for article in fetch_for_query(query, "FR", 2):
+    for topic_id in topic_ids:
+        query = TOPIC_QUERIES.get(topic_id, topic_id)
+        
+        # FR market
+        for article in fetch_bing_for_query(query, "FR", 2):
             if article["url"] not in seen_urls:
                 seen_urls.add(article["url"])
-                article["vertical_id"] = vertical_id
+                article["topic"] = topic_id
                 articles.append(article)
+        
         time.sleep(REQUEST_DELAY)
-    
-    # Fetch international if enabled
-    if include_international:
-        queries_us = vertical["queries"].get("US", [])
-        query = random.choice(queries_us) if queries_us else None
-        if query:
-            for article in fetch_for_query(query, "US", 2):
+        
+        # International
+        if include_international:
+            for article in fetch_bing_for_query(query, "US", 1):
                 if article["url"] not in seen_urls:
                     seen_urls.add(article["url"])
-                    article["vertical_id"] = vertical_id
+                    article["topic"] = topic_id
                     articles.append(article)
             time.sleep(REQUEST_DELAY)
+        
+        if len(articles) >= max_articles:
+            break
     
-    return articles[:MAX_ARTICLES_PER_VERTICAL]
-
-
-def fetch_for_keyword(keyword: str, include_international: bool = False) -> list[dict]:
-    """Fetch articles for a user keyword."""
-    articles = []
-    seen_urls = set()
-    
-    # FR market
-    for article in fetch_for_query(keyword, "FR", 3):
-        if article["url"] not in seen_urls:
-            seen_urls.add(article["url"])
-            articles.append(article)
-    
-    # International
-    if include_international:
-        time.sleep(REQUEST_DELAY)
-        for market in ["US", "UK"]:
-            for article in fetch_for_query(keyword, market, 1):
-                if article["url"] not in seen_urls:
-                    seen_urls.add(article["url"])
-                    articles.append(article)
-    
+    log.info("Bing backup sourcing complete", articles=len(articles))
     return articles
 
 
 # ============================================
-# MAIN FETCHER
+# MAIN FETCHER (3-Level Hierarchy)
 # ============================================
 
 def run_fetcher(edition: str = "morning"):
-    """Main fetcher: fetch news for all users based on their settings."""
+    """
+    Main fetcher with 3-level sourcing hierarchy:
+    1. Manual URLs (already in queue) - Skip, handled separately
+    2. GSheet RSS Library - Trusted curated sources
+    3. Bing News - Backup when Level 2 insufficient
+    """
     log.info("Starting Keernel fetcher", edition=edition)
     start = datetime.now()
     
@@ -240,17 +275,21 @@ def run_fetcher(edition: str = "morning"):
         log.info("No users found")
         return
     
-    # Get custom keywords (user_interests)
+    # Get custom keywords (user_interests) - these are the granular topics
     try:
         interests_result = supabase.table("user_interests") \
-            .select("user_id, keyword") \
+            .select("user_id, keyword, display_name, search_keywords") \
             .execute()
         interests_by_user = {}
         for item in (interests_result.data or []):
             uid = item["user_id"]
             if uid not in interests_by_user:
                 interests_by_user[uid] = []
-            interests_by_user[uid].append(item["keyword"])
+            interests_by_user[uid].append({
+                "keyword": item["keyword"],
+                "display_name": item.get("display_name"),
+                "search_keywords": item.get("search_keywords")
+            })
     except Exception as e:
         log.warning("Failed to get interests", error=str(e))
         interests_by_user = {}
@@ -260,49 +299,78 @@ def run_fetcher(edition: str = "morning"):
     for user in users:
         user_id = user["id"]
         include_intl = user.get("include_international", False)
-        selected_verticals = user.get("selected_verticals") or {
-            "ai_tech": True, "politics": True, "finance": True, "science": True, "culture": True
-        }
         
         log.info("Processing user", user_id=user_id[:8], intl=include_intl)
         
-        # 1. Fetch from selected verticals
-        for v_id, enabled in selected_verticals.items():
-            if not enabled:
-                continue
-            
-            articles = fetch_for_vertical(v_id, include_intl)
-            for article in articles:
-                result = add_to_content_queue_auto(
-                    user_id=user_id,
-                    url=article["url"],
-                    title=article["title"],
-                    keyword=v_id,  # Use vertical ID as keyword
-                    edition=edition,
-                    source=article.get("source", "bing"),
-                    source_country=article.get("source_country", "FR"),
-                    vertical_id=v_id
-                )
-                if result:
-                    total_added += 1
+        # Get user's topics (keywords from user_interests)
+        user_topics = interests_by_user.get(user_id, [])
+        topic_ids = [t["keyword"] for t in user_topics]
         
-        # 2. Fetch from custom keywords
-        custom_keywords = interests_by_user.get(user_id, [])
-        for keyword in custom_keywords[:5]:  # Max 5 custom keywords
-            articles = fetch_for_keyword(keyword, include_intl)
-            for article in articles:
-                result = add_to_content_queue_auto(
-                    user_id=user_id,
-                    url=article["url"],
-                    title=article["title"],
-                    keyword=keyword,
-                    edition=edition,
-                    source=article.get("source", "bing"),
-                    source_country=article.get("source_country", "FR")
-                )
-                if result:
-                    total_added += 1
-            time.sleep(REQUEST_DELAY)
+        if not topic_ids:
+            log.info("No topics for user, skipping", user_id=user_id[:8])
+            continue
+        
+        # Limit to 4 topics for free plan (enforced here too)
+        topic_ids = topic_ids[:4]
+        
+        articles = []
+        seen_urls = set()
+        
+        # ============================================
+        # LEVEL 2: GSheet RSS Library
+        # ============================================
+        gsheet_articles = get_gsheet_sources_for_topics(topic_ids, include_intl)
+        
+        for article in gsheet_articles:
+            if article["url"] not in seen_urls:
+                seen_urls.add(article["url"])
+                articles.append(article)
+        
+        log.info("Level 2 (GSheet) articles", count=len(articles), user=user_id[:8])
+        
+        # ============================================
+        # LEVEL 3: Bing News (Backup)
+        # ============================================
+        # Only fetch from Bing if we don't have enough articles
+        target_articles = len(topic_ids) * 3  # ~3 articles per topic
+        
+        if len(articles) < target_articles:
+            remaining = target_articles - len(articles)
+            log.info("Fetching backup from Bing", 
+                    need=remaining, 
+                    user=user_id[:8])
+            
+            bing_articles = fetch_bing_for_topics(
+                topic_ids, 
+                include_intl, 
+                max_articles=remaining
+            )
+            
+            for article in bing_articles:
+                if article["url"] not in seen_urls:
+                    seen_urls.add(article["url"])
+                    articles.append(article)
+        
+        log.info("Total articles for user", 
+                count=len(articles), 
+                user=user_id[:8])
+        
+        # ============================================
+        # ADD TO CONTENT QUEUE
+        # ============================================
+        for article in articles:
+            result = add_to_content_queue_auto(
+                user_id=user_id,
+                url=article["url"],
+                title=article["title"],
+                keyword=article.get("topic", "general"),
+                edition=edition,
+                source=article.get("source", "unknown"),
+                source_country=article.get("source_country", "FR"),
+                vertical_id=article.get("vertical_id")
+            )
+            if result:
+                total_added += 1
     
     elapsed = (datetime.now() - start).total_seconds()
     log.info("Fetcher complete", 
@@ -329,7 +397,27 @@ def main():
     parser = argparse.ArgumentParser(description="Keernel News Fetcher")
     parser.add_argument("--edition", choices=["morning", "evening"], default="morning")
     parser.add_argument("--cleanup", action="store_true")
+    parser.add_argument("--test-gsheet", action="store_true", help="Test GSheet connection")
     args = parser.parse_args()
+    
+    if args.test_gsheet:
+        # Test GSheet connection
+        log.info("Testing GSheet connection...")
+        try:
+            from sourcing import GSheetSourceLibrary
+            library = GSheetSourceLibrary()
+            if library.sheet:
+                log.info("GSheet connected successfully!")
+                # Try to get some sources
+                sources = library.get_sources_for_topics(["llm", "france"], origin="FR")
+                log.info(f"Found {len(sources)} sources for test topics")
+                for s in sources[:3]:
+                    log.info(f"  - {s['name']}: {s['url'][:50]}...")
+            else:
+                log.error("GSheet connection failed - sheet is None")
+        except Exception as e:
+            log.error("GSheet test failed", error=str(e))
+        return
     
     if args.cleanup:
         cleanup_old()

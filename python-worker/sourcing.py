@@ -30,7 +30,6 @@ log = structlog.get_logger()
 def get_gsheet_credentials() -> dict | None:
     """Build Google Service Account credentials from environment variables."""
     required_vars = [
-        "GOOGLE_SERVICE_ACCOUNT_TYPE",
         "GOOGLE_PROJECT_ID", 
         "GOOGLE_PRIVATE_KEY_ID",
         "GOOGLE_PRIVATE_KEY",
@@ -39,17 +38,37 @@ def get_gsheet_credentials() -> dict | None:
     ]
     
     # Check all required vars exist
+    missing = []
     for var in required_vars:
         if not os.getenv(var):
-            log.warning(f"Missing Google credential: {var}")
-            return None
+            missing.append(var)
+    
+    if missing:
+        log.warning(f"Missing Google credentials: {', '.join(missing)}")
+        return None
+    
+    # Get and fix private key (handle escaped newlines)
+    private_key = os.getenv("GOOGLE_PRIVATE_KEY", "")
+    # Replace literal \n with actual newlines
+    private_key = private_key.replace("\\n", "\n")
+    # Remove surrounding quotes if present
+    if private_key.startswith('"') and private_key.endswith('"'):
+        private_key = private_key[1:-1]
+    if private_key.startswith("'") and private_key.endswith("'"):
+        private_key = private_key[1:-1]
+    
+    # Validate private key format
+    if not private_key.startswith("-----BEGIN"):
+        log.error("GOOGLE_PRIVATE_KEY does not start with '-----BEGIN'. Check format.")
+        log.error(f"Key starts with: {private_key[:50]}...")
+        return None
     
     # Build credentials dict
     credentials = {
         "type": os.getenv("GOOGLE_SERVICE_ACCOUNT_TYPE", "service_account"),
         "project_id": os.getenv("GOOGLE_PROJECT_ID"),
         "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID"),
-        "private_key": os.getenv("GOOGLE_PRIVATE_KEY", "").replace("\\n", "\n"),
+        "private_key": private_key,
         "client_email": os.getenv("GOOGLE_CLIENT_EMAIL"),
         "client_id": os.getenv("GOOGLE_CLIENT_ID"),
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -58,6 +77,10 @@ def get_gsheet_credentials() -> dict | None:
         "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{os.getenv('GOOGLE_CLIENT_EMAIL', '').replace('@', '%40')}",
         "universe_domain": "googleapis.com"
     }
+    
+    log.info("Google credentials loaded", 
+             project=credentials["project_id"], 
+             email=credentials["client_email"])
     
     return credentials
 
