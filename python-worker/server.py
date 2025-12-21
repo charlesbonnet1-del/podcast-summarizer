@@ -1,6 +1,8 @@
 """
 HTTP Server for triggering podcast generation from the Dashboard.
 Also handles Cloudmailin webhooks for newsletter ingestion.
+
+V2: Support for Flash/Digest formats and on-demand generation
 """
 import os
 import hmac
@@ -10,7 +12,8 @@ from flask import Flask, request, jsonify
 import structlog
 from dotenv import load_dotenv
 
-from worker import process_user_queue
+# V2 imports
+from worker_v2 import generate_on_demand, process_user_queue_v2
 from db import supabase
 from sourcing import parse_cloudmailin_webhook
 
@@ -58,35 +61,43 @@ def verify_cloudmailin_signature():
 @app.route("/", methods=["GET"])
 def root():
     """Root endpoint."""
-    return jsonify({"service": "keernel-worker", "status": "running"})
+    return jsonify({"service": "keernel-worker", "version": "2.0", "status": "running"})
 
 
 @app.route("/health", methods=["GET"])
 def health():
     """Health check endpoint."""
-    return jsonify({"status": "ok", "service": "keernel-worker"})
+    return jsonify({"status": "ok", "service": "keernel-worker", "version": "2.0"})
 
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    """Trigger podcast generation for a user."""
+    """
+    Trigger podcast generation for a user (V2).
+    
+    Body params:
+    - user_id: Required
+    - format: Optional, "flash" (4min) or "digest" (15min)
+    """
     if not verify_auth():
         return jsonify({"error": "Unauthorized"}), 401
     
     data = request.get_json() or {}
     user_id = data.get("user_id")
+    format_type = data.get("format")  # flash or digest
     
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
     
-    log.info("Generation request received", user_id=user_id)
+    log.info("Generation request received (V2)", user_id=user_id, format=format_type)
     
     # Run generation in background thread
     def run_generation():
         try:
-            episode = process_user_queue(user_id)
+            # Use on-demand generation (bypasses phantom check, updates last_listened)
+            episode = generate_on_demand(user_id, format_type=format_type)
             if episode:
-                log.info("Episode generated via HTTP", episode_id=episode["id"])
+                log.info("Episode generated via HTTP (V2)", episode_id=episode["id"])
             else:
                 log.warning("Generation failed via HTTP", user_id=user_id)
         except Exception as e:
@@ -97,8 +108,9 @@ def generate():
     
     return jsonify({
         "success": True,
-        "message": "Generation started",
-        "user_id": user_id
+        "message": "Generation started (V2 Lego)",
+        "user_id": user_id,
+        "format": format_type or "default"
     })
 
 
