@@ -132,17 +132,20 @@ class GSheetSourceLibrary:
     """
     Read and manage RSS sources from Google Sheets.
     
+    The spreadsheet has multiple worksheets (tabs):
+    - IA&TECH, Politique, Finance, Science, Culture
+    
     Column mapping (0-indexed):
-    A (0): Vertical (ai_tech, politics, finance, science, culture)
-    B (1): Topic (must be in SUPPORTED_TOPICS)
-    C (2): Origin (FR/INT)
-    D (3): Source_Name
-    E (4): Type (rss, youtube, etc.)
-    F (5): URL_RSS
-    G (6): Score (0-100)
+    A (0): vertical
+    B (1): topic (must be in SUPPORTED_TOPICS)
+    C (2): origin (FR/INT)
+    D (3): source_name
+    E (4): type (Flux RSS, etc.)
+    F (5): url_rss
+    G (6): score (optional, default 50)
     """
     
-    # Column indices
+    # Column indices (0-indexed)
     COL_VERTICAL = 0
     COL_TOPIC = 1
     COL_ORIGIN = 2
@@ -154,25 +157,30 @@ class GSheetSourceLibrary:
     def __init__(self):
         self.client = get_gsheet_client()
         self.spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID")
-        self.sheet = None
-        self._load_sheet()
+        self.spreadsheet = None
+        self.sheet = True  # Flag for compatibility check
+        self._load_spreadsheet()
     
-    def _load_sheet(self):
-        """Load the spreadsheet."""
+    def _load_spreadsheet(self):
+        """Load the spreadsheet (all worksheets)."""
         if not self.client or not self.spreadsheet_id:
             log.warning("GSheet client or spreadsheet_id not available")
+            self.sheet = None
             return
         
         try:
-            spreadsheet = self.client.open_by_key(self.spreadsheet_id)
-            self.sheet = spreadsheet.sheet1  # First sheet
-            log.info("GSheet loaded", spreadsheet_id=self.spreadsheet_id[:20] + "...")
+            self.spreadsheet = self.client.open_by_key(self.spreadsheet_id)
+            worksheets = self.spreadsheet.worksheets()
+            log.info("GSheet loaded", 
+                    spreadsheet_id=self.spreadsheet_id[:20] + "...",
+                    worksheets=[ws.title for ws in worksheets])
         except Exception as e:
             log.error("Failed to load GSheet", error=str(e))
+            self.sheet = None
     
     def get_sources_for_topics(self, topic_ids: list[str], origin: str = "FR") -> list[dict]:
         """
-        Get RSS sources for given topics, sorted by score.
+        Get RSS sources for given topics from ALL worksheets, sorted by score.
         
         Args:
             topic_ids: List of topic IDs (must be in SUPPORTED_TOPICS)
@@ -181,7 +189,7 @@ class GSheetSourceLibrary:
         Returns:
             List of sources with url, name, score, vertical, topic
         """
-        if not self.sheet:
+        if not self.spreadsheet:
             log.warning("GSheet not loaded, cannot get sources")
             return []
         
@@ -207,43 +215,49 @@ class GSheetSourceLibrary:
         
         log.info("Fetching sources for topics", topics=normalized_topics, origin=origin)
         
+        sources = []
+        
         try:
-            # Get all values (faster than get_all_records for large sheets)
-            all_values = self.sheet.get_all_values()
-            
-            if len(all_values) < 2:
-                log.warning("GSheet has no data rows")
-                return []
-            
-            sources = []
-            
-            # Skip header row (index 0)
-            for row_idx, row in enumerate(all_values[1:], start=2):
-                # Ensure row has enough columns
-                if len(row) < 7:
-                    continue
-                
-                topic = row[self.COL_TOPIC].strip()
-                row_origin = row[self.COL_ORIGIN].strip().upper()
-                url = row[self.COL_URL_RSS].strip()
-                
-                # Parse score (default 50 if invalid)
+            # Iterate through ALL worksheets (tabs)
+            for worksheet in self.spreadsheet.worksheets():
                 try:
-                    score = int(row[self.COL_SCORE]) if row[self.COL_SCORE] else 50
-                except ValueError:
-                    score = 50
-                
-                # Filter by topic (exact match) and origin
-                if topic in normalized_topics and row_origin == origin.upper() and url:
-                    sources.append({
-                        "url": url,
-                        "name": row[self.COL_SOURCE_NAME].strip() or "Unknown",
-                        "score": score,
-                        "vertical": row[self.COL_VERTICAL].strip(),
-                        "topic": topic,
-                        "source_type": row[self.COL_TYPE].strip() or "rss",
-                        "row_index": row_idx  # 1-indexed for gspread
-                    })
+                    all_values = worksheet.get_all_values()
+                    
+                    if len(all_values) < 2:
+                        continue
+                    
+                    # Skip header row (index 0)
+                    for row_idx, row in enumerate(all_values[1:], start=2):
+                        # Ensure row has enough columns
+                        if len(row) < 6:
+                            continue
+                        
+                        topic = row[self.COL_TOPIC].strip()
+                        row_origin = row[self.COL_ORIGIN].strip().upper()
+                        url = row[self.COL_URL_RSS].strip()
+                        
+                        # Parse score (default 50 if empty or invalid)
+                        try:
+                            score = int(row[self.COL_SCORE]) if len(row) > self.COL_SCORE and row[self.COL_SCORE].strip() else 50
+                        except (ValueError, IndexError):
+                            score = 50
+                        
+                        # Filter by topic (exact match) and origin
+                        if topic in normalized_topics and row_origin == origin.upper() and url:
+                            sources.append({
+                                "url": url,
+                                "name": row[self.COL_SOURCE_NAME].strip() or "Unknown",
+                                "score": score,
+                                "vertical": row[self.COL_VERTICAL].strip(),
+                                "topic": topic,
+                                "source_type": row[self.COL_TYPE].strip() or "rss",
+                                "row_index": row_idx,
+                                "worksheet": worksheet.title
+                            })
+                            
+                except Exception as e:
+                    log.warning("Error reading worksheet", worksheet=worksheet.title, error=str(e))
+                    continue
             
             # Sort by score (highest first)
             sources.sort(key=lambda x: x["score"], reverse=True)
@@ -259,18 +273,24 @@ class GSheetSourceLibrary:
             log.error("Failed to get GSheet sources", error=str(e))
             return []
     
-    def decrement_score(self, row_index: int, amount: int = 5):
+    def decrement_score(self, row_index: int, amount: int = 5, worksheet_name: str = None):
         """Decrement score for a source (e.g., after RSS fetch error)."""
-        if not self.sheet:
+        if not self.spreadsheet:
             return
         
         try:
+            # Find the worksheet
+            if worksheet_name:
+                worksheet = self.spreadsheet.worksheet(worksheet_name)
+            else:
+                worksheet = self.spreadsheet.sheet1
+            
             # Column G is score (column index 7 in 1-indexed gspread)
             score_col = self.COL_SCORE + 1  # Convert to 1-indexed
-            current_score = self.sheet.cell(row_index, score_col).value
+            current_score = worksheet.cell(row_index, score_col).value
             new_score = max(0, int(current_score or 50) - amount)
-            self.sheet.update_cell(row_index, score_col, new_score)
-            log.info("Decremented source score", row=row_index, new_score=new_score)
+            worksheet.update_cell(row_index, score_col, new_score)
+            log.info("Decremented source score", row=row_index, worksheet=worksheet_name, new_score=new_score)
         except Exception as e:
             log.error("Failed to update score", error=str(e))
 
