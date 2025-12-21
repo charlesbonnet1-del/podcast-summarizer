@@ -184,6 +184,21 @@ def get_all_active_keywords() -> list:
         return []
 
 
+# Mapping from GSheet vertical names to Supabase vertical IDs
+VERTICAL_MAPPING = {
+    # GSheet values (case-insensitive) -> Supabase IDs
+    "tech": "ai_tech",
+    "ia&tech": "ai_tech",
+    "ia tech": "ai_tech",
+    "ai_tech": "ai_tech",
+    "politique": "politics",
+    "politics": "politics",
+    "finance": "finance",
+    "science": "science",
+    "culture": "culture",
+}
+
+
 def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, edition: str, source: str = "bing_news", source_country: str = "FR", vertical_id: str = None) -> dict | None:
     """Add a news item to the content queue from automatic fetching.
     Checks for duplicates before inserting.
@@ -214,9 +229,15 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
             "status": "pending"
         }
         
-        # Add vertical_id if provided
+        # Normalize and map vertical_id
         if vertical_id:
-            insert_data["vertical_id"] = vertical_id
+            # Normalize: lowercase, strip
+            normalized = vertical_id.lower().strip()
+            # Map to Supabase ID
+            mapped_id = VERTICAL_MAPPING.get(normalized)
+            if mapped_id:
+                insert_data["vertical_id"] = mapped_id
+            # If not in mapping, don't include vertical_id (let it be NULL)
         
         result = supabase.table("content_queue").insert(insert_data).execute()
         return result.data[0] if result.data else None
