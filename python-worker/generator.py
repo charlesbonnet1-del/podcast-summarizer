@@ -1,5 +1,5 @@
 """
-Keernel Generator V3 - Dual Voice Dialogue
+Keernel Generator V3.1 - Dual Voice Dialogue (Fixed)
 
 Architecture:
 - Groq (Llama 3.3 70B) for script generation
@@ -9,6 +9,8 @@ Architecture:
 Dialogue Format:
 - [VOICE_A] Breeze: L'expert pédagogue (voix: "nova")
 - [VOICE_B] Vale: Le challenger pragmatique (voix: "onyx")
+
+FIX: Improved parsing to handle LLM output variations
 """
 import os
 import re
@@ -97,9 +99,11 @@ AUTORISÉ :
 - "OpenAI" → "Opène-A-I"
 - "ChatGPT" → "Tchatte-G-P-T"
 
-### Format du Script
-Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B] sur sa propre ligne :
+### Format du Script - CRITIQUE
+Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B] sur sa propre ligne.
+ALTERNE OBLIGATOIREMENT entre [VOICE_A] et [VOICE_B].
 
+EXEMPLE CORRECT :
 [VOICE_A]
 Breeze expose un fait ou une information.
 
@@ -109,15 +113,18 @@ Vale réagit, questionne ou nuance.
 [VOICE_A]
 Breeze répond ou approfondit.
 
+[VOICE_B]
+Vale conclut avec une perspective pratique.
+
 ### Structure Narrative
-1. ACCROCHE : Vale pose une question intrigante ou Breeze balance un fait percutant
-2. DÉVELOPPEMENT : Ping-pong naturel entre les deux voix
-3. CONCLUSION : Insight pratique ou perspective (pas de "merci d'avoir écouté")
+1. ACCROCHE : Breeze ou Vale lance le sujet
+2. DÉVELOPPEMENT : Ping-pong OBLIGATOIRE entre les deux voix
+3. CONCLUSION : Insight pratique ou perspective
 
 ### Rythme
 - Répliques de 2-4 phrases maximum
-- Alternance fréquente (pas de monologue)
-- Questions de Vale pour relancer l'attention
+- ALTERNANCE OBLIGATOIRE (jamais deux [VOICE_A] ou deux [VOICE_B] consécutifs)
+- Minimum 4 répliques au total (2 de chaque voix)
 """
 
 DIALOGUE_USER_PROMPT = """Crée un script de dialogue podcast de {duration} minutes (~{word_count} mots au total).
@@ -125,18 +132,52 @@ DIALOGUE_USER_PROMPT = """Crée un script de dialogue podcast de {duration} minu
 ## SOURCES À COUVRIR :
 {sources}
 
-## CONTRAINTES :
-1. Format STRICT : Chaque réplique commence par [VOICE_A] ou [VOICE_B]
-2. Durée : ~{word_count} mots total (tolérance ±15%)
-3. Style : Factuel, analytique, ZÉRO superlatif
-4. Phonétique TTS pour tous les anglicismes
-5. Alternance fréquente entre les voix
+## CONTRAINTES STRICTES :
+1. Format : Chaque réplique commence par [VOICE_A] ou [VOICE_B]
+2. ALTERNANCE OBLIGATOIRE entre les voix (jamais deux [VOICE_A] ou [VOICE_B] consécutifs)
+3. Minimum 6 répliques (3 de chaque voix)
+4. Durée : ~{word_count} mots total
+5. Style : Factuel, analytique, ZÉRO superlatif
 
 ## STRUCTURE :
 - Breeze ([VOICE_A]) : Faits, contexte, chiffres
 - Vale ([VOICE_B]) : Questions, limites, implications concrètes
 
-Script (commence directement par une réplique) :"""
+Script (commence directement par [VOICE_A] ou [VOICE_B]) :"""
+
+
+# ============================================
+# SCRIPT NORMALIZATION
+# ============================================
+
+def normalize_voice_tags(script: str) -> str:
+    """
+    Normalize voice tags to ensure consistent format.
+    Handles variations like [VOICE A], [voice_a], [Voice_A], etc.
+    """
+    # Pattern to catch various formats
+    patterns = [
+        (r'\[VOICE[\s_-]*A\]', '[VOICE_A]'),
+        (r'\[VOICE[\s_-]*B\]', '[VOICE_B]'),
+        (r'\[voice[\s_-]*a\]', '[VOICE_A]'),
+        (r'\[voice[\s_-]*b\]', '[VOICE_B]'),
+        (r'\[Voice[\s_-]*A\]', '[VOICE_A]'),
+        (r'\[Voice[\s_-]*B\]', '[VOICE_B]'),
+        (r'\*\*\[VOICE_A\]\*\*', '[VOICE_A]'),
+        (r'\*\*\[VOICE_B\]\*\*', '[VOICE_B]'),
+        (r'VOICE_A:', '[VOICE_A]'),
+        (r'VOICE_B:', '[VOICE_B]'),
+        (r'Breeze\s*:', '[VOICE_A]'),
+        (r'Vale\s*:', '[VOICE_B]'),
+        (r'\[Breeze\]', '[VOICE_A]'),
+        (r'\[Vale\]', '[VOICE_B]'),
+    ]
+    
+    normalized = script
+    for pattern, replacement in patterns:
+        normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
+    
+    return normalized
 
 
 # ============================================
@@ -175,52 +216,65 @@ def generate_dialogue_script(
         sources=sources_text
     )
     
-    try:
-        log.info("Generating dialogue script", num_sources=len(sources), target_duration=target_duration)
-        
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": DIALOGUE_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=4000
-        )
-        
-        script = response.choices[0].message.content
-        word_count = len(script.split())
-        
-        # Validate script has voice tags
-        if VOICE_TAG_A not in script or VOICE_TAG_B not in script:
-            log.warning("Script missing voice tags, regenerating...")
-            # Try once more with explicit instruction
+    max_attempts = 3
+    
+    for attempt in range(max_attempts):
+        try:
+            log.info("Generating dialogue script", 
+                    num_sources=len(sources), 
+                    target_duration=target_duration,
+                    attempt=attempt + 1)
+            
+            extra_instruction = ""
+            if attempt > 0:
+                extra_instruction = "\n\nATTENTION CRITIQUE: Tu DOIS alterner entre [VOICE_A] et [VOICE_B]. Minimum 3 répliques de chaque voix!"
+            
             response = groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": DIALOGUE_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt + "\n\nATTENTION: Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B] !"}
+                    {"role": "user", "content": user_prompt + extra_instruction}
                 ],
                 temperature=0.7,
                 max_tokens=4000
             )
+            
             script = response.choices[0].message.content
-        
-        log.info("Dialogue script generated", 
-                word_count=word_count, 
-                est_duration_min=round(word_count/150, 1),
-                voice_a_count=script.count(VOICE_TAG_A),
-                voice_b_count=script.count(VOICE_TAG_B))
-        
-        return script
+            
+            # Normalize the script
+            script = normalize_voice_tags(script)
+            
+            # Count voice tags
+            voice_a_count = script.count(VOICE_TAG_A)
+            voice_b_count = script.count(VOICE_TAG_B)
+            word_count = len(script.split())
+            
+            log.info("Script generated", 
+                    attempt=attempt + 1,
+                    word_count=word_count, 
+                    voice_a_count=voice_a_count,
+                    voice_b_count=voice_b_count)
+            
+            # Validate both voices are present
+            if voice_a_count >= 2 and voice_b_count >= 2:
+                log.info("Dialogue script validated successfully")
+                return script
+            
+            log.warning("Script missing sufficient voice tags", 
+                       voice_a=voice_a_count, 
+                       voice_b=voice_b_count)
+            
+        except Exception as e:
+            log.error("Failed to generate dialogue script", 
+                     attempt=attempt + 1, 
+                     error=str(e))
     
-    except Exception as e:
-        log.error("Failed to generate dialogue script", error=str(e))
-        return None
+    log.error("All attempts failed to generate valid dialogue script")
+    return None
 
 
 # ============================================
-# SCRIPT PARSING
+# SCRIPT PARSING (IMPROVED)
 # ============================================
 
 def parse_dialogue_script(script: str) -> list[dict]:
@@ -229,29 +283,68 @@ def parse_dialogue_script(script: str) -> list[dict]:
     
     Returns list of {"voice": "A"|"B", "text": "..."}
     """
+    if not script:
+        log.error("Empty script provided to parser")
+        return []
+    
+    # First normalize the tags
+    script = normalize_voice_tags(script)
+    
     segments = []
     
-    # Split by voice tags
+    # Split by voice tags (case insensitive, flexible spacing)
     pattern = r'\[VOICE_([AB])\]'
-    parts = re.split(pattern, script)
+    parts = re.split(pattern, script, flags=re.IGNORECASE)
     
-    # parts[0] is before first tag (usually empty)
+    log.debug("Script parsing", 
+             script_length=len(script),
+             parts_count=len(parts),
+             first_100_chars=script[:100])
+    
+    # parts[0] is before first tag (usually empty or preamble)
     # Then alternates: voice_letter, text, voice_letter, text...
     
     i = 1
     while i < len(parts):
-        voice = parts[i]  # "A" or "B"
+        voice = parts[i].upper()  # Ensure uppercase "A" or "B"
+        
+        if voice not in ("A", "B"):
+            log.warning("Invalid voice identifier", voice=voice)
+            i += 1
+            continue
         
         if i + 1 < len(parts):
             text = parts[i + 1].strip()
+            # Clean up the text
+            text = re.sub(r'^\s*\n+', '', text)  # Remove leading newlines
+            text = re.sub(r'\n+\s*$', '', text)  # Remove trailing newlines
+            text = text.strip()
+            
             if text:
                 segments.append({
                     "voice": voice,
                     "text": text
                 })
+                log.debug("Parsed segment", 
+                         index=len(segments),
+                         voice=voice, 
+                         text_length=len(text),
+                         preview=text[:50] + "..." if len(text) > 50 else text)
         i += 2
     
-    log.info("Parsed dialogue", segments=len(segments))
+    # Log summary
+    voice_a_segments = sum(1 for s in segments if s["voice"] == "A")
+    voice_b_segments = sum(1 for s in segments if s["voice"] == "B")
+    
+    log.info("Dialogue parsed", 
+            total_segments=len(segments),
+            voice_a_segments=voice_a_segments,
+            voice_b_segments=voice_b_segments)
+    
+    if voice_b_segments == 0:
+        log.error("NO VOICE_B SEGMENTS FOUND - Script may not be dialogue format")
+        log.debug("Full script for debugging", script=script[:500])
+    
     return segments
 
 
@@ -286,8 +379,18 @@ def generate_dialogue_audio(
     segments = parse_dialogue_script(script)
     
     if not segments:
-        log.error("No segments parsed from script")
-        return None
+        log.error("No segments parsed from script - falling back to single voice")
+        # Fallback: generate as single voice
+        return generate_single_voice_audio(script, VOICE_BREEZE, output_path)
+    
+    # Check if we have both voices
+    voices_used = set(s["voice"] for s in segments)
+    log.info("Generating dialogue audio", 
+            segments=len(segments),
+            voices_used=list(voices_used))
+    
+    if "B" not in voices_used:
+        log.warning("Only VOICE_A found - no dialogue detected")
     
     # Generate audio for each segment
     audio_files = []
@@ -295,6 +398,11 @@ def generate_dialogue_audio(
     for i, segment in enumerate(segments):
         voice = VOICE_BREEZE if segment["voice"] == "A" else VOICE_VALE
         text = segment["text"]
+        
+        log.info(f"Generating segment {i+1}/{len(segments)}", 
+                voice=voice, 
+                voice_id=segment["voice"],
+                chars=len(text))
         
         try:
             segment_path = output_path.replace(".mp3", f"_seg{i:03d}.mp3")
@@ -308,7 +416,7 @@ def generate_dialogue_audio(
                 for j, chunk in enumerate(chunks):
                     chunk_path = output_path.replace(".mp3", f"_seg{i:03d}_chunk{j}.mp3")
                     response = openai_client.audio.speech.create(
-                        model="tts-1-hd",  # Higher quality for dialogue
+                        model="tts-1-hd",
                         voice=voice,
                         input=chunk
                     )
@@ -358,12 +466,47 @@ def generate_dialogue_audio(
         log.info("Dialogue audio generated", 
                 output_path=output_path, 
                 duration_sec=duration,
-                segments=len(audio_files))
+                segments=len(audio_files),
+                voices_used=list(voices_used))
         
         return output_path
         
     except Exception as e:
         log.error("Failed to combine dialogue audio", error=str(e))
+        return None
+
+
+def generate_single_voice_audio(text: str, voice: str, output_path: str) -> str | None:
+    """Fallback single voice generation."""
+    try:
+        if len(text) <= 4000:
+            response = openai_client.audio.speech.create(
+                model="tts-1-hd",
+                voice=voice,
+                input=text
+            )
+            response.stream_to_file(output_path)
+        else:
+            chunks = split_text_for_tts(text, 3800)
+            audio_files = []
+            for i, chunk in enumerate(chunks):
+                chunk_path = output_path.replace(".mp3", f"_part{i}.mp3")
+                response = openai_client.audio.speech.create(
+                    model="tts-1-hd",
+                    voice=voice,
+                    input=chunk
+                )
+                response.stream_to_file(chunk_path)
+                audio_files.append(chunk_path)
+            combine_audio_files(audio_files, output_path)
+            for f in audio_files:
+                try:
+                    os.remove(f)
+                except:
+                    pass
+        return output_path
+    except Exception as e:
+        log.error("Single voice generation failed", error=str(e))
         return None
 
 
@@ -419,8 +562,15 @@ def generate_audio(
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(tempfile.gettempdir(), f"audio_{timestamp}.mp3")
     
+    # Normalize script first
+    script = normalize_voice_tags(script)
+    
     # Check if this is a dialogue script
-    if VOICE_TAG_A in script or VOICE_TAG_B in script:
+    if VOICE_TAG_A in script and VOICE_TAG_B in script:
+        log.info("Dialogue detected, using dual-voice generation")
+        return generate_dialogue_audio(script, output_path)
+    elif VOICE_TAG_A in script or VOICE_TAG_B in script:
+        log.warning("Only one voice tag found - attempting dialogue anyway")
         return generate_dialogue_audio(script, output_path)
     
     # Single voice generation
