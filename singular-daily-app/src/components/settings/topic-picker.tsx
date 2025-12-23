@@ -164,7 +164,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
         <div className={`px-3 py-1 rounded-full text-sm font-medium ${
           isAtLimit 
             ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" 
-            : "bg-[#00F5FF]/10 text-[#00F5FF]"
+            : "bg-[#C5B358]/10 text-[#C5B358]"
         }`}>
           {selectedTopics.length}/{maxTopics}
         </div>
@@ -192,7 +192,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                   <span className="text-xl">{category.icon}</span>
                   <span className="font-medium">{category.name}</span>
                   {selectedInCategory > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-[#00F5FF]/20 text-[#00F5FF] text-xs font-medium">
+                    <span className="px-2 py-0.5 rounded-full bg-[#C5B358]/20 text-[#C5B358] text-xs font-medium">
                       {selectedInCategory}
                     </span>
                   )}
@@ -227,7 +227,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                             disabled={saving || isDisabled}
                             className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
                               isSelected
-                                ? "bg-[#00F5FF]/10 border border-[#00F5FF]/30"
+                                ? "bg-[#C5B358]/10 border border-[#C5B358]/30"
                                 : isDisabled
                                   ? "bg-secondary/30 opacity-50 cursor-not-allowed"
                                   : "bg-secondary/50 hover:bg-secondary border border-transparent"
@@ -240,7 +240,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                             </span>
                             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
                               isSelected
-                                ? "border-[#00F5FF] bg-[#00F5FF]"
+                                ? "border-[#C5B358] bg-[#C5B358]"
                                 : isDisabled
                                   ? "border-muted-foreground/20"
                                   : "border-muted-foreground/40"

@@ -136,14 +136,14 @@ export function StickyPlayer({ episode }: StickyPlayerProps) {
               <div 
                 className="absolute inset-0 rounded-full dark:hidden"
                 style={{
-                  background: "linear-gradient(135deg, #00F5FF 0%, #00D4E0 100%)",
+                  background: "linear-gradient(135deg, #C5B358 0%, #A89A48 100%)",
                   boxShadow: "0 4px 16px rgba(0, 245, 255, 0.3)",
                 }}
               />
               {/* Solid background for dark mode */}
               <div className="absolute inset-0 rounded-full hidden dark:block bg-[#1E1E1E] border border-white/10" />
               
-              <span className="relative z-10 text-white dark:text-[#00F5FF]">
+              <span className="relative z-10 text-white dark:text-[#C5B358]">
                 {isPlaying ? (
                   <Pause className="w-5 h-5" />
                 ) : (

@@ -62,7 +62,7 @@ export function ManualAdds({ items }: ManualAddsProps) {
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
-        <LinkIcon className="w-3.5 h-3.5 text-[#00F5FF]" />
+        <LinkIcon className="w-3.5 h-3.5 text-[#C5B358]" />
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Added for next Keernel
         </span>

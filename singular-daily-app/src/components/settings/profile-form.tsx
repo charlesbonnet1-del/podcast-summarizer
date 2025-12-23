@@ -112,7 +112,7 @@ export function ProfileForm({
           type="button"
           onClick={() => setIncludeInternational(!includeInternational)}
           className={`relative w-12 h-6 rounded-full transition-colors ${
-            includeInternational ? 'bg-[#00F5FF]' : 'bg-muted'
+            includeInternational ? 'bg-[#C5B358]' : 'bg-muted'
           }`}
         >
           <span
@@ -138,7 +138,7 @@ export function ProfileForm({
         <Button 
           onClick={handleSave} 
           disabled={saving}
-          className="w-full h-11 bg-[#00F5FF] hover:bg-[#00D4E0] text-black"
+          className="w-full h-11 bg-[#C5B358] hover:bg-[#A89A48] text-black"
         >
           {saving ? (
             <>

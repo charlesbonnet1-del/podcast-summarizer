@@ -77,7 +77,7 @@ export function FormatToggle({ initialFormat = "digest", onFormatChange }: Forma
           disabled={saving}
           className={`relative p-6 rounded-2xl border-2 transition-all duration-300 text-left ${
             format === "flash"
-              ? "border-[#00F5FF] bg-[#00F5FF]/10 shadow-lg shadow-[#00F5FF]/20"
+              ? "border-[#C5B358] bg-[#C5B358]/10 shadow-lg shadow-[#C5B358]/20"
               : "border-border hover:border-muted-foreground/50 bg-card"
           }`}
         >
@@ -87,21 +87,21 @@ export function FormatToggle({ initialFormat = "digest", onFormatChange }: Forma
               animate={{ scale: 1 }}
               className="absolute top-3 right-3"
             >
-              <Check className="w-5 h-5 text-[#00F5FF]" />
+              <Check className="w-5 h-5 text-[#C5B358]" />
             </motion.div>
           )}
           
           <div className="flex items-center gap-3 mb-3">
             <div className={`p-2 rounded-xl ${
-              format === "flash" ? "bg-[#00F5FF]/20" : "bg-muted"
+              format === "flash" ? "bg-[#C5B358]/20" : "bg-muted"
             }`}>
               <Zap className={`w-6 h-6 ${
-                format === "flash" ? "text-[#00F5FF]" : "text-muted-foreground"
+                format === "flash" ? "text-[#C5B358]" : "text-muted-foreground"
               }`} />
             </div>
             <div>
               <div className="font-semibold text-lg">Flash</div>
-              <div className="text-2xl font-bold text-[#00F5FF]">~4 min</div>
+              <div className="text-2xl font-bold text-[#C5B358]">~4 min</div>
             </div>
           </div>
           
@@ -123,7 +123,7 @@ export function FormatToggle({ initialFormat = "digest", onFormatChange }: Forma
           disabled={saving}
           className={`relative p-6 rounded-2xl border-2 transition-all duration-300 text-left ${
             format === "digest"
-              ? "border-[#00F5FF] bg-[#00F5FF]/10 shadow-lg shadow-[#00F5FF]/20"
+              ? "border-[#C5B358] bg-[#C5B358]/10 shadow-lg shadow-[#C5B358]/20"
               : "border-border hover:border-muted-foreground/50 bg-card"
           }`}
         >
@@ -133,21 +133,21 @@ export function FormatToggle({ initialFormat = "digest", onFormatChange }: Forma
               animate={{ scale: 1 }}
               className="absolute top-3 right-3"
             >
-              <Check className="w-5 h-5 text-[#00F5FF]" />
+              <Check className="w-5 h-5 text-[#C5B358]" />
             </motion.div>
           )}
           
           <div className="flex items-center gap-3 mb-3">
             <div className={`p-2 rounded-xl ${
-              format === "digest" ? "bg-[#00F5FF]/20" : "bg-muted"
+              format === "digest" ? "bg-[#C5B358]/20" : "bg-muted"
             }`}>
               <BookOpen className={`w-6 h-6 ${
-                format === "digest" ? "text-[#00F5FF]" : "text-muted-foreground"
+                format === "digest" ? "text-[#C5B358]" : "text-muted-foreground"
               }`} />
             </div>
             <div>
               <div className="font-semibold text-lg">Digest</div>
-              <div className="text-2xl font-bold text-[#00F5FF]">~15 min</div>
+              <div className="text-2xl font-bold text-[#C5B358]">~15 min</div>
             </div>
           </div>
           

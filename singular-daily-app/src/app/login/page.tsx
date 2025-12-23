@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Headphones, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -15,6 +17,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [supabase, setSupabase] = useState<ReturnType<typeof import("@/lib/supabase/client").createClient> | null>(null);
+  const { resolvedTheme } = useTheme();
+  
+  const logoSrc = resolvedTheme === "dark" ? "/logo-sable.svg" : "/logo-charcoal.svg";
 
   // Initialize Supabase client on mount (client-side only)
   useEffect(() => {
@@ -86,31 +91,35 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
       {/* Logo */}
-      <Link href="/" className="flex items-center gap-2 mb-8">
-        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-          <Headphones className="w-5 h-5 text-primary-foreground" />
-        </div>
-        <span className="font-semibold text-xl">Singular Daily</span>
+      <Link href="/" className="flex items-center gap-3 mb-8">
+        <Image 
+          src={logoSrc}
+          alt="Keernel"
+          width={40}
+          height={40}
+          className="w-10 h-10"
+        />
+        <span className="title-keernel text-xl">Keernel</span>
       </Link>
 
-      <Card className="w-full max-w-md shadow-zen-lg rounded-2xl border-border">
+      <Card className="w-full max-w-md matte-card rounded-2xl border-brass/20">
         <CardHeader className="text-center pb-2">
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-2xl font-display">Welcome back</CardTitle>
+          <CardDescription className="font-body">
             Sign in to access your personal audio digest
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl">
-              <TabsTrigger value="signin" className="rounded-lg">Sign In</TabsTrigger>
-              <TabsTrigger value="signup" className="rounded-lg">Sign Up</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl bg-card">
+              <TabsTrigger value="signin" className="rounded-lg font-mono">Sign In</TabsTrigger>
+              <TabsTrigger value="signup" className="rounded-lg font-mono">Sign Up</TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email-signin">Email</Label>
+                  <Label htmlFor="email-signin" className="font-mono text-sm">Email</Label>
                   <Input
                     id="email-signin"
                     type="email"
@@ -118,11 +127,11 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="rounded-xl h-12"
+                    className="rounded-xl h-12 bg-card border-brass/20 font-mono"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password-signin">Password</Label>
+                  <Label htmlFor="password-signin" className="font-mono text-sm">Password</Label>
                   <Input
                     id="password-signin"
                     type="password"
@@ -130,12 +139,12 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="rounded-xl h-12"
+                    className="rounded-xl h-12 bg-card border-brass/20 font-mono"
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full rounded-xl h-12 text-base"
+                  className="w-full btn-generate rounded-xl h-12 text-base"
                   disabled={loading}
                 >
                   {loading ? (
@@ -149,7 +158,7 @@ export default function LoginPage() {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email-signup">Email</Label>
+                  <Label htmlFor="email-signup" className="font-mono text-sm">Email</Label>
                   <Input
                     id="email-signup"
                     type="email"
@@ -157,11 +166,11 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="rounded-xl h-12"
+                    className="rounded-xl h-12 bg-card border-brass/20 font-mono"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password-signup">Password</Label>
+                  <Label htmlFor="password-signup" className="font-mono text-sm">Password</Label>
                   <Input
                     id="password-signup"
                     type="password"
@@ -170,12 +179,12 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={6}
-                    className="rounded-xl h-12"
+                    className="rounded-xl h-12 bg-card border-brass/20 font-mono"
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full rounded-xl h-12 text-base"
+                  className="w-full btn-generate rounded-xl h-12 text-base"
                   disabled={loading}
                 >
                   {loading ? (
@@ -189,10 +198,10 @@ export default function LoginPage() {
 
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
+              <span className="w-full border-t border-brass/20" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">
+              <span className="bg-background px-2 text-muted-foreground font-mono">
                 Or continue with
               </span>
             </div>
@@ -200,7 +209,7 @@ export default function LoginPage() {
 
           <Button
             variant="outline"
-            className="w-full rounded-xl h-12"
+            className="w-full rounded-xl h-12 border-brass/30 hover:bg-brass/10 font-mono"
             onClick={handleGoogleSignIn}
             disabled={loading}
           >
@@ -227,13 +236,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
 
-      <p className="mt-8 text-sm text-muted-foreground">
+      <p className="mt-8 text-sm text-muted-foreground font-mono">
         By continuing, you agree to our{" "}
-        <Link href="/terms" className="underline hover:text-foreground">
+        <Link href="/terms" className="underline hover:text-brass">
           Terms of Service
         </Link>{" "}
         and{" "}
-        <Link href="/privacy" className="underline hover:text-foreground">
+        <Link href="/privacy" className="underline hover:text-brass">
           Privacy Policy
         </Link>
       </p>

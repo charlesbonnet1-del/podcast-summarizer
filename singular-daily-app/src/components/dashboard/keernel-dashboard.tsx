@@ -66,14 +66,14 @@ function getSourceMeta(url: string): { type: "video" | "podcast" | "article"; co
   // Video sources
   if (domain.includes("youtube.com") || domain.includes("youtu.be") || 
       domain.includes("vimeo.com") || domain.includes("twitch.tv")) {
-    return { type: "video", color: "#00F5FF", bgClass: "bg-cyan-500/5 dark:bg-cyan-500/10" };
+    return { type: "video", color: "#C5B358", bgClass: "bg-brass/5 dark:bg-brass/10" };
   }
   
   // Podcast sources
   if (domain.includes("spotify.com") || domain.includes("podcasts.apple.com") ||
       domain.includes("podcasts.google.com") || domain.includes("soundcloud.com") ||
       domain.includes("anchor.fm") || domain.includes("overcast.fm")) {
-    return { type: "podcast", color: "#CCFF00", bgClass: "bg-lime-500/5 dark:bg-lime-500/10" };
+    return { type: "podcast", color: "#C5B358", bgClass: "bg-brass/5 dark:bg-brass/10" };
   }
   
   // Articles (default)
@@ -393,7 +393,7 @@ function TopicPills({ topics }: { topics: Topic[] }) {
             exit={{ opacity: 0, scale: 0.8 }}
             className="group tag-pill inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm"
           >
-            <span className="text-[#00F5FF]">#</span>
+            <span className="text-[#C5B358]">#</span>
             <span>{topic.display_name || topic.keyword}</span>
             <motion.button
               onClick={() => removeTopic(topic)}
@@ -588,7 +588,7 @@ function PlayerPod({ episode }: { episode: Episode }) {
             {/* Play Button */}
             <motion.button
               onClick={togglePlay}
-              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#00F5FF] to-[#00D4E0] dark:from-[#00F5FF] dark:to-[#00F5FF]"
+              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#C5B358] to-[#A89A48] dark:from-[#C5B358] dark:to-[#C5B358]"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -613,7 +613,7 @@ function PlayerPod({ episode }: { episode: Episode }) {
               <div className="mt-1 flex items-center gap-2">
                 <div className="flex-1 h-1 rounded-full bg-secondary/50 overflow-hidden">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-[#00F5FF] to-[#00D4E0] dark:bg-[#00F5FF]"
+                    className="h-full rounded-full bg-gradient-to-r from-[#C5B358] to-[#A89A48] dark:bg-[#C5B358]"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -638,7 +638,7 @@ function PlayerPod({ episode }: { episode: Episode }) {
               onClick={() => setShowSources(!showSources)}
               className={`p-2 rounded-full flex-shrink-0 ${
                 showSources
-                  ? "bg-[#00F5FF]/20 text-[#00F5FF]"
+                  ? "bg-[#C5B358]/20 text-[#C5B358]"
                   : "hover:bg-secondary text-muted-foreground"
               }`}
               whileHover={{ scale: 1.05 }}
@@ -736,7 +736,7 @@ export function KernelDashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#00F5FF] to-[#CCFF00] flex items-center justify-center">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#C5B358] to-[#C5B358] flex items-center justify-center">
             <span className="text-2xl font-bold text-black">K</span>
           </div>
         </motion.div>

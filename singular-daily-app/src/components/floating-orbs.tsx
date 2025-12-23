@@ -23,7 +23,7 @@ export function FloatingOrbs() {
       <motion.div
         className="absolute -top-32 -right-32 w-[600px] h-[600px] rounded-full opacity-30"
         style={{
-          background: "radial-gradient(circle, #00F5FF 0%, transparent 70%)",
+          background: "radial-gradient(circle, #C5B358 0%, transparent 70%)",
           filter: "blur(60px)",
         }}
         animate={{
@@ -42,7 +42,7 @@ export function FloatingOrbs() {
       <motion.div
         className="absolute -bottom-48 -left-48 w-[500px] h-[500px] rounded-full opacity-25"
         style={{
-          background: "radial-gradient(circle, #CCFF00 0%, transparent 70%)",
+          background: "radial-gradient(circle, #C5B358 0%, transparent 70%)",
           filter: "blur(80px)",
         }}
         animate={{
@@ -62,7 +62,7 @@ export function FloatingOrbs() {
       <motion.div
         className="absolute top-1/3 -left-20 w-[300px] h-[300px] rounded-full opacity-20"
         style={{
-          background: "radial-gradient(circle, #00F5FF 0%, transparent 70%)",
+          background: "radial-gradient(circle, #C5B358 0%, transparent 70%)",
           filter: "blur(50px)",
         }}
         animate={{
@@ -81,7 +81,7 @@ export function FloatingOrbs() {
       <motion.div
         className="absolute -top-20 left-1/2 w-[250px] h-[250px] rounded-full opacity-15"
         style={{
-          background: "radial-gradient(circle, #CCFF00 0%, transparent 70%)",
+          background: "radial-gradient(circle, #C5B358 0%, transparent 70%)",
           filter: "blur(40px)",
         }}
         animate={{

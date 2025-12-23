@@ -61,7 +61,7 @@ export function ActiveTopics({ topics }: ActiveTopicsProps) {
             exit={{ opacity: 0, scale: 0.8 }}
             className="tag-pill group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all"
           >
-            <span className="text-[#00F5FF] dark:text-[#00F5FF]/70">#</span>
+            <span className="text-[#C5B358] dark:text-[#C5B358]/70">#</span>
             <span>{topic.keyword}</span>
             <motion.button
               onClick={() => handleRemove(topic)}
