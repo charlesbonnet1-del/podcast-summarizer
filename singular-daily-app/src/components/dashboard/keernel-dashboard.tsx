@@ -393,7 +393,7 @@ function TopicPills({ topics }: { topics: Topic[] }) {
             exit={{ opacity: 0, scale: 0.8 }}
             className="group tag-pill inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm"
           >
-            <span className="text-[#C5B358]">#</span>
+            <span className="text-[hsl(0_0%_10%)] opacity-60">#</span>
             <span>{topic.display_name || topic.keyword}</span>
             <motion.button
               onClick={() => removeTopic(topic)}
@@ -585,14 +585,14 @@ function PlayerPod({ episode }: { episode: Episode }) {
               <SkipBack className="w-4 h-4" />
             </motion.button>
 
-            {/* Play Button */}
+            {/* Play Button - CREAM background */}
             <motion.button
               onClick={togglePlay}
-              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#C5B358] to-[#A89A48] dark:from-[#C5B358] dark:to-[#C5B358]"
+              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[hsl(36_40%_95%)] dark:bg-[hsl(36_40%_95%)]"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <span className="text-black">
+              <span className="text-[hsl(0_0%_10%)]">
                 {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
               </span>
             </motion.button>
@@ -613,7 +613,7 @@ function PlayerPod({ episode }: { episode: Episode }) {
               <div className="mt-1 flex items-center gap-2">
                 <div className="flex-1 h-1 rounded-full bg-secondary/50 overflow-hidden">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-[#C5B358] to-[#A89A48] dark:bg-[#C5B358]"
+                    className="h-full rounded-full bg-[hsl(36_40%_95%)]"
                     style={{ width: `${progress}%` }}
                   />
                 </div>

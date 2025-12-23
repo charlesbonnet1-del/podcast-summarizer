@@ -207,34 +207,34 @@
   }
 
   /* ============================================
-     TAG PILL - Topics (V3: fond charcoal, typo crème)
+     TAG PILL - Topics (V4: fond SABLE, typo CHARCOAL)
      ============================================ */
   .tag-pill {
     @apply rounded-full px-4 py-2;
     font-family: var(--font-display);  /* Wittgenstein */
     font-weight: 500;
     font-size: 0.9rem;
-    background: hsl(0 0% 10%);         /* Charcoal */
-    color: hsl(36 40% 95%);            /* Crème */
-    border: 1px solid hsl(0 0% 20%);
-    box-shadow: 0 0 15px rgba(26, 26, 26, 0.25);
+    background: hsl(36 50% 92%);       /* SABLE */
+    color: hsl(0 0% 10%);              /* CHARCOAL */
+    border: 1px solid hsl(36 30% 85%);
+    box-shadow: 0 0 12px rgba(247, 238, 221, 0.3);
     transition: all 0.2s ease;
   }
   
   .tag-pill:hover {
-    box-shadow: 0 0 25px rgba(26, 26, 26, 0.4);
+    box-shadow: 0 0 20px rgba(247, 238, 221, 0.5);
     transform: translateY(-1px);
   }
   
   .dark .tag-pill {
-    background: hsl(36 40% 95%);       /* Crème */
-    color: hsl(0 0% 10%);              /* Charcoal */
-    border: 1px solid hsl(36 30% 88%);
-    box-shadow: 0 0 15px rgba(250, 245, 235, 0.15);
+    background: hsl(36 50% 92%);       /* SABLE (same in dark) */
+    color: hsl(0 0% 10%);              /* CHARCOAL */
+    border: 1px solid hsl(36 30% 85%);
+    box-shadow: 0 0 15px rgba(247, 238, 221, 0.2);
   }
   
   .dark .tag-pill:hover {
-    box-shadow: 0 0 25px rgba(250, 245, 235, 0.25);
+    box-shadow: 0 0 25px rgba(247, 238, 221, 0.35);
   }
   
   /* Tag selected state */
