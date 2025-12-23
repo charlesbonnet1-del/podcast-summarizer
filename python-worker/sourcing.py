@@ -122,10 +122,10 @@ def get_gsheet_client():
 # Official supported topics (exact slugs from GSheet column B)
 SUPPORTED_TOPICS = [
     'ia', 'quantum', 'robotics',           # Tech
-    'France', 'USA',                        # Politics (case-sensitive!)
-    'crypto', 'macro', 'stocks',            # Finance
-    'space', 'health', 'energy',            # Science
-    'cinema', 'gaming', 'lifestyle'         # Culture
+    'asia', 'resources', 'regulation',     # World (replaces politics)
+    'crypto', 'macro', 'stocks',           # Finance
+    'space', 'health', 'energy',           # Science
+    'cinema', 'gaming', 'lifestyle'        # Culture
 ]
 
 class GSheetSourceLibrary:

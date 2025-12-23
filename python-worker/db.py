@@ -191,8 +191,10 @@ VERTICAL_MAPPING = {
     "ia&tech": "ai_tech",
     "ia tech": "ai_tech",
     "ai_tech": "ai_tech",
-    "politique": "politics",
-    "politics": "politics",
+    "world": "world",
+    "monde": "world",
+    "politique": "world",  # Legacy mapping
+    "politics": "world",   # Legacy mapping
     "finance": "finance",
     "science": "science",
     "culture": "culture",

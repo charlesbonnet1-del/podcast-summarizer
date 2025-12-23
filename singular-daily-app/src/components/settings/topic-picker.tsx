@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import { Check, Lock, ChevronDown } from "lucide-react";
+import { Check, Lock, ChevronDown, Zap, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 /**
  * Topic IDs MUST match exactly with GSheet column B values:
- * ['ia', 'quantum', 'robotics', 'France', 'USA', 'crypto', 'macro', 'stocks', 'space', 'health', 'energy', 'cinema', 'gaming', 'lifestyle']
+ * ['ia', 'quantum', 'robotics', 'asia', 'resources', 'regulation', 'crypto', 'macro', 'stocks', 'space', 'health', 'energy', 'cinema', 'gaming', 'lifestyle']
  */
 const TOPIC_CATEGORIES = [
   {
@@ -23,12 +23,13 @@ const TOPIC_CATEGORIES = [
     ]
   },
   {
-    id: "politics",
-    name: "Politique",
+    id: "world",
+    name: "Monde",
     icon: "🌍",
     topics: [
-      { id: "France", label: "France", keywords: ["politique France", "Macron", "Assemblée nationale"] },
-      { id: "USA", label: "USA", keywords: ["US politics", "White House", "Congress", "Trump", "Biden"] },
+      { id: "asia", label: "Asie", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie"] },
+      { id: "resources", label: "Ressources", keywords: ["pétrole", "gaz", "matières premières", "minerais"] },
+      { id: "regulation", label: "Régulation", keywords: ["régulation", "lois", "RGPD", "antitrust", "gouvernance"] },
     ]
   },
   {
@@ -62,6 +63,9 @@ const TOPIC_CATEGORIES = [
     ]
   }
 ];
+
+// Export for use in other components
+export { TOPIC_CATEGORIES };
 
 const MAX_TOPICS_FREE = 4;
 

@@ -219,10 +219,20 @@ def get_or_create_segment(
     log.info("Processing segment", url=url[:50])
     
     # 1. Extract content
-    content = extract_content(url, source_type="article")
-    if not content or len(content) < 100:
+    extraction_result = extract_content(url)
+    if not extraction_result:
         log.warning("Failed to extract content", url=url[:50])
         return None
+    
+    source_type, extracted_title, content = extraction_result
+    
+    if not content or len(content) < 100:
+        log.warning("Content too short", url=url[:50], length=len(content) if content else 0)
+        return None
+    
+    # Use extracted title if original is empty
+    if not title and extracted_title:
+        title = extracted_title
     
     # 2. Generate hash and check cache
     content_hash = get_content_hash(url, content)
