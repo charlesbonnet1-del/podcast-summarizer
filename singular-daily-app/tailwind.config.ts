@@ -43,6 +43,22 @@ const config: Config = {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
+  			// Keernel Authority Brand Colors
+  			brass: {
+  				DEFAULT: '#C5B358',
+  				light: '#D4C678',
+  				dark: '#A89A48',
+  			},
+  			charcoal: {
+  				DEFAULT: '#1A1A1A',
+  				light: '#222222',
+  				dark: '#121212',
+  			},
+  			sand: {
+  				DEFAULT: '#F7EEDD',
+  				light: '#FAF5EB',
+  				dark: '#EDE4D3',
+  			},
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
@@ -55,6 +71,14 @@ const config: Config = {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
+  		},
+  		fontFamily: {
+  			serif: ['Playfair Display', 'Georgia', 'Times New Roman', 'serif'],
+  			mono: ['IBM Plex Mono', 'SF Mono', 'Consolas', 'monospace'],
+  		},
+  		boxShadow: {
+  			'glow-brass': '0 0 20px rgba(197, 179, 88, 0.3)',
+  			'glow-brass-lg': '0 0 30px rgba(197, 179, 88, 0.5)',
   		}
   	}
   },

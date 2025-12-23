@@ -3,68 +3,97 @@
 @tailwind utilities;
 
 /* ============================================
-   KEERNEL - Ultra-Premium Design System
-   Financial Times Authority + Linear Precision
+   KEERNEL AUTHORITY - Design System
+   Organic Tech + Financial Times Authority
    ============================================ */
 
-/* Import Serif font for authority */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap');
+/* Typography Imports */
+/* Editorial: Elegant Serif for brand voice */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+/* Technical: Clean Monospace for UI elements */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @layer base {
   :root {
-    /* Keernel Brand Colors */
-    --keernel-cyan: 180 100% 48%;
-    --keernel-lime: 75 100% 50%;
+    /* ==========================================
+       LIGHT MODE - Organic, Warm, Premium
+       Ambiance: Papier texturé, sable chaud
+       ========================================== */
     
-    /* Light Mode - Airy, optimistic */
-    --background: 0 0% 100%;
-    --foreground: 0 0% 7%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 7%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 7%;
-    --primary: 180 100% 48%;
-    --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 7%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 75 100% 50%;
-    --accent-foreground: 0 0% 7%;
-    --destructive: 0 84% 60%;
+    /* Brand Colors */
+    --keernel-brass: 48 53% 55%;          /* #C5B358 - Or Laiton */
+    --keernel-charcoal: 0 0% 10%;         /* #1A1A1A - Charbon Profond */
+    --keernel-sand: 36 50% 92%;           /* #F7EEDD - Sable/Coquille d'œuf */
+    --keernel-cream: 36 40% 95%;          /* #FAF5EB - Crème légère */
+    
+    /* Semantic Colors - Light Mode */
+    --background: 36 50% 92%;             /* Sand */
+    --foreground: 0 0% 10%;               /* Charcoal */
+    --card: 36 40% 95%;                   /* Cream */
+    --card-foreground: 0 0% 10%;          /* Charcoal */
+    --popover: 36 40% 95%;
+    --popover-foreground: 0 0% 10%;
+    
+    /* UI Elements - Dark containers on light bg */
+    --primary: 48 53% 55%;                /* Brass accent */
+    --primary-foreground: 0 0% 10%;       /* Charcoal text */
+    --secondary: 0 0% 10%;                /* Charcoal containers */
+    --secondary-foreground: 36 50% 92%;   /* Sand text on charcoal */
+    --muted: 36 30% 88%;                  /* Muted sand */
+    --muted-foreground: 0 0% 40%;         /* Gray text */
+    --accent: 48 53% 55%;                 /* Brass */
+    --accent-foreground: 0 0% 10%;
+    
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 180 100% 48%;
+    --border: 36 20% 85%;                 /* Soft sand border */
+    --input: 36 30% 88%;
+    --ring: 48 53% 55%;                   /* Brass ring */
     --radius: 1rem;
     
-    /* Typography */
+    /* Typography Variables */
     --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
-    --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'Geist Mono', 'SF Mono', Consolas, monospace;
+    --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+    --font-sans: 'IBM Plex Mono', -apple-system, BlinkMacSystemFont, sans-serif;
+    
+    /* Glow Effects - Light Mode */
+    --glow-brass: 0 0 20px rgba(197, 179, 88, 0.3);
+    --glow-brass-intense: 0 0 30px rgba(197, 179, 88, 0.5);
   }
 
   .dark {
-    /* Dark Mode - Premium Matte Charcoal #121212 */
-    --background: 0 0% 7%;
-    --foreground: 0 0% 95%;
-    --card: 0 0% 10%;
-    --card-foreground: 0 0% 95%;
-    --popover: 0 0% 10%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 180 100% 48%;
-    --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 0 0% 14%;
+    /* ==========================================
+       DARK MODE - Authoritative, Immersive, Luxe
+       Ambiance: Nocturne luxueux
+       ========================================== */
+    
+    /* Semantic Colors - Dark Mode */
+    --background: 0 0% 10%;               /* #1A1A1A Charcoal */
+    --foreground: 40 20% 92%;             /* #EAEAEA Cream/Warm white */
+    --card: 0 0% 13%;                     /* #222222 Lighter charcoal */
+    --card-foreground: 40 20% 92%;
+    --popover: 0 0% 13%;
+    --popover-foreground: 40 20% 92%;
+    
+    /* UI Elements */
+    --primary: 48 53% 55%;                /* Brass - same as light */
+    --primary-foreground: 0 0% 10%;
+    --secondary: 0 0% 13%;                /* Slightly lighter charcoal */
+    --secondary-foreground: 40 20% 92%;
+    --muted: 0 0% 16%;
     --muted-foreground: 0 0% 55%;
-    --accent: 75 100% 50%;
-    --accent-foreground: 0 0% 7%;
+    --accent: 48 53% 55%;                 /* Brass */
+    --accent-foreground: 0 0% 10%;
+    
     --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 95%;
+    --destructive-foreground: 40 20% 92%;
     --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 180 100% 48%;
+    --input: 0 0% 16%;
+    --ring: 48 53% 55%;                   /* Brass ring */
+    
+    /* Glow Effects - Dark Mode (more visible) */
+    --glow-brass: 0 0 25px rgba(197, 179, 88, 0.25);
+    --glow-brass-intense: 0 0 40px rgba(197, 179, 88, 0.4);
   }
 }
 
@@ -73,184 +102,320 @@
     @apply border-border;
   }
   
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-family: var(--font-sans);
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  }
-  
   html {
     scroll-behavior: smooth;
   }
   
-  /* Selection with Cyan */
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-mono);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  
+  /* Selection with Brass */
   ::selection {
-    background-color: hsl(180 100% 48% / 0.2);
+    background-color: hsl(48 53% 55% / 0.25);
+    color: hsl(0 0% 10%);
   }
   
   .dark ::selection {
-    background-color: hsl(180 100% 48% / 0.3);
+    background-color: hsl(48 53% 55% / 0.35);
+    color: hsl(40 20% 92%);
   }
 }
 
 @layer components {
   /* ============================================
-     TYPOGRAPHY - Serif for Authority
+     TYPOGRAPHY - Dichotomie Éditoriale
      ============================================ */
-  .font-serif {
+  
+  /* Editorial Voice - Serif élégante et statutaire */
+  .font-serif,
+  .font-editorial {
     font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
   }
   
-  .font-mono {
+  /* Technical/UI Voice - Monospace technique */
+  .font-mono,
+  .font-technical {
     font-family: var(--font-mono);
+    font-weight: 400;
+    letter-spacing: 0;
   }
   
+  /* Hero Titles */
+  .title-hero {
+    font-family: var(--font-serif);
+    @apply text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight;
+  }
+  
+  /* Section Titles */
+  .title-section {
+    font-family: var(--font-serif);
+    @apply text-2xl md:text-3xl font-medium;
+  }
+  
+  /* UI Text */
+  .text-ui {
+    font-family: var(--font-mono);
+    @apply text-sm tracking-wide;
+  }
+
   /* ============================================
-     GLASS CARD - Light mode only
+     GLASS CARD - Organic containers
      ============================================ */
   .glass-card {
-    @apply bg-white/80 backdrop-blur-xl rounded-2xl;
-    box-shadow: 
-      0 0 0 1px rgba(0, 0, 0, 0.03),
-      0 8px 32px rgba(0, 245, 255, 0.04),
-      0 24px 48px rgba(0, 0, 0, 0.04);
+    @apply rounded-2xl;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
   }
   
   .dark .glass-card {
-    @apply bg-[#1a1a1a] backdrop-blur-none;
-    box-shadow: none;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.1);
+    box-shadow: var(--glow-brass);
   }
   
   /* ============================================
      MAGIC BAR - Premium Capsule Input
      ============================================ */
   .magic-bar {
-    @apply bg-white/90 backdrop-blur-xl rounded-full;
-    box-shadow: 
-      0 0 0 1px rgba(0, 0, 0, 0.04),
-      0 4px 24px rgba(0, 245, 255, 0.06),
-      0 20px 60px rgba(0, 0, 0, 0.08);
+    @apply rounded-full;
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(48 53% 55% / 0.3);
+    box-shadow: var(--glow-brass);
+    transition: all 0.3s ease;
+  }
+  
+  .magic-bar:focus-within {
+    border-color: hsl(48 53% 55% / 0.6);
+    box-shadow: var(--glow-brass-intense);
+  }
+  
+  .magic-bar input,
+  .magic-bar input::placeholder {
+    font-family: var(--font-mono);
+    color: hsl(var(--secondary-foreground));
+  }
+  
+  .magic-bar input::placeholder {
+    opacity: 0.6;
   }
   
   .dark .magic-bar {
-    @apply bg-[#1a1a1a] backdrop-blur-none;
-    box-shadow: none;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.25);
   }
   
+  .dark .magic-bar:focus-within {
+    border-color: hsl(48 53% 55% / 0.5);
+  }
+
   /* ============================================
      PLAYER POD - Floating Capsule
      ============================================ */
   .player-pod {
-    @apply bg-white/95 backdrop-blur-xl rounded-full;
+    @apply rounded-full;
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(48 53% 55% / 0.3);
     box-shadow: 
-      0 -4px 20px rgba(0, 0, 0, 0.04),
-      0 8px 40px rgba(0, 0, 0, 0.08),
-      0 0 0 1px rgba(0, 0, 0, 0.04);
+      var(--glow-brass),
+      0 -4px 20px rgba(0, 0, 0, 0.1);
+  }
+  
+  .player-pod * {
+    font-family: var(--font-mono);
   }
   
   .dark .player-pod {
-    @apply bg-[#1a1a1a] backdrop-blur-none;
-    box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.25);
+    box-shadow: 
+      var(--glow-brass),
+      0 -2px 30px rgba(0, 0, 0, 0.4);
   }
   
   /* ============================================
-     SOURCES PANEL - Slides from behind player
+     SOURCES PANEL
      ============================================ */
   .sources-panel {
-    @apply bg-white/95 backdrop-blur-xl rounded-3xl;
-    box-shadow: 
-      0 -8px 40px rgba(0, 0, 0, 0.08),
-      0 0 0 1px rgba(0, 0, 0, 0.04);
+    @apply rounded-3xl;
+    background: hsl(var(--secondary));
+    border: 1px solid hsl(48 53% 55% / 0.2);
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.1);
   }
   
   .dark .sources-panel {
-    @apply bg-[#1a1a1a] backdrop-blur-none;
-    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.15);
+    box-shadow: 
+      var(--glow-brass),
+      0 -4px 30px rgba(0, 0, 0, 0.5);
   }
   
-  /* Source item type colors */
-  .source-video {
-    @apply bg-cyan-500/5 dark:bg-cyan-500/10 border-l-2 border-l-[#00F5FF];
+  /* Source item styling */
+  .source-item {
+    @apply rounded-xl;
+    font-family: var(--font-mono);
+    border-left: 2px solid hsl(48 53% 55%);
+    background: hsl(48 53% 55% / 0.05);
   }
   
-  .source-podcast {
-    @apply bg-lime-500/5 dark:bg-lime-500/10 border-l-2 border-l-[#CCFF00];
+  .dark .source-item {
+    background: hsl(48 53% 55% / 0.08);
   }
-  
-  .source-article {
-    @apply bg-violet-500/5 dark:bg-violet-500/10 border-l-2 border-l-violet-500;
-  }
-  
+
   /* ============================================
      MATTE CARD - Both modes
      ============================================ */
   .matte-card {
-    @apply bg-white rounded-2xl;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    @apply rounded-2xl;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
   }
   
   .dark .matte-card {
-    @apply bg-[#1a1a1a] shadow-none;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.1);
   }
   
   /* ============================================
-     TAG PILL
+     TAG PILL - Capsule tags
      ============================================ */
   .tag-pill {
-    @apply bg-white border border-[#00F5FF]/20 text-foreground/80 rounded-full;
+    @apply rounded-full;
+    font-family: var(--font-mono);
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    border: 1px solid hsl(48 53% 55% / 0.3);
+    box-shadow: var(--glow-brass);
+    transition: all 0.2s ease;
+  }
+  
+  .tag-pill:hover {
+    border-color: hsl(48 53% 55% / 0.6);
+    box-shadow: var(--glow-brass-intense);
   }
   
   .dark .tag-pill {
-    @apply bg-[#1a1a1a] border-white/10 text-white/70;
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.2);
   }
   
+  .dark .tag-pill:hover {
+    border-color: hsl(48 53% 55% / 0.4);
+  }
+  
+  /* Tag pill selected state */
+  .tag-pill-selected {
+    background: hsl(48 53% 55%);
+    color: hsl(0 0% 10%);
+    border-color: hsl(48 53% 55%);
+  }
+  
+  .dark .tag-pill-selected {
+    background: hsl(48 53% 55%);
+    color: hsl(0 0% 10%);
+  }
+
   /* ============================================
-     BRAND BUTTON
+     BRAND BUTTON - Brass accent
      ============================================ */
   .btn-brand {
     @apply relative overflow-hidden rounded-full font-medium transition-all duration-300;
-    background: linear-gradient(135deg, #00F5FF 0%, #00D4E0 100%);
+    font-family: var(--font-mono);
+    background: hsl(48 53% 55%);
+    color: hsl(0 0% 10%);
+    box-shadow: var(--glow-brass);
   }
   
   .btn-brand:hover {
-    box-shadow: 0 8px 30px rgba(0, 245, 255, 0.3);
+    box-shadow: var(--glow-brass-intense);
     transform: translateY(-1px);
   }
   
-  .dark .btn-brand {
-    box-shadow: none;
+  .dark .btn-brand:hover {
+    transform: none;
   }
   
-  .dark .btn-brand:hover {
-    box-shadow: 0 0 30px rgba(0, 245, 255, 0.15);
-    transform: none;
+  /* Secondary button - outlined */
+  .btn-outline {
+    @apply rounded-full font-medium transition-all duration-300;
+    font-family: var(--font-mono);
+    background: transparent;
+    color: hsl(48 53% 55%);
+    border: 1px solid hsl(48 53% 55% / 0.5);
+  }
+  
+  .btn-outline:hover {
+    background: hsl(48 53% 55% / 0.1);
+    border-color: hsl(48 53% 55%);
+  }
+
+  /* ============================================
+     ICONS - Brass colored in UI
+     ============================================ */
+  .icon-brass {
+    color: hsl(48 53% 55%);
+  }
+  
+  /* ============================================
+     NAVIGATION - Editorial serif titles
+     ============================================ */
+  .nav-brand {
+    font-family: var(--font-serif);
+    @apply text-xl font-semibold tracking-tight;
+  }
+  
+  .nav-link {
+    font-family: var(--font-mono);
+    @apply text-sm;
+    color: hsl(var(--muted-foreground));
+    transition: color 0.2s ease;
+  }
+  
+  .nav-link:hover {
+    color: hsl(48 53% 55%);
   }
 }
 
 @layer utilities {
-  /* Gradient text */
+  /* Gradient text - Brass */
   .gradient-text-brand {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #00F5FF 0%, #CCFF00 100%);
+    background-image: linear-gradient(135deg, hsl(48 53% 55%) 0%, hsl(48 53% 70%) 100%);
   }
   
-  /* Progress bar thin */
+  /* Progress bar */
   .progress-thin {
-    @apply h-1 rounded-full bg-secondary/50 overflow-hidden;
+    @apply h-1 rounded-full overflow-hidden;
+    background: hsl(var(--muted));
   }
   
   .progress-thin-fill {
     @apply h-full rounded-full;
-    background: linear-gradient(90deg, #00F5FF, #00D4E0);
+    background: hsl(48 53% 55%);
   }
   
-  .dark .progress-thin-fill {
-    background: #00F5FF;
+  /* Brass text color utility */
+  .text-brass {
+    color: hsl(48 53% 55%);
+  }
+  
+  /* Brass border utility */
+  .border-brass {
+    border-color: hsl(48 53% 55%);
+  }
+  
+  /* Brass glow utility */
+  .glow-brass {
+    box-shadow: var(--glow-brass);
+  }
+  
+  .glow-brass-intense {
+    box-shadow: var(--glow-brass-intense);
   }
   
   /* Hide scrollbar */
@@ -265,7 +430,7 @@
 }
 
 /* ============================================
-   FLOATING ORB ANIMATIONS - Light mode only
+   FLOATING ORB ANIMATIONS
    ============================================ */
 @keyframes float-slow {
   0%, 100% {
@@ -288,10 +453,23 @@
   }
 }
 
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
 .animate-float-slow {
   animation: float-slow 25s ease-in-out infinite;
 }
 
 .animate-float-slower {
   animation: float-slower 30s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
 }
