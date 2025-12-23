@@ -54,7 +54,7 @@ export function GenerateButton({ pendingCount, hasTopics = false }: GenerateButt
   if (!hasTopics && pendingCount === 0) {
     return (
       <div className="matte-card px-6 py-4 text-center">
-        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 text-muted-foreground font-mono">
           <Plus className="w-4 h-4" />
           <span className="text-sm">Add topics above to get started</span>
         </div>
@@ -66,7 +66,7 @@ export function GenerateButton({ pendingCount, hasTopics = false }: GenerateButt
   if (pendingCount === 0) {
     return (
       <div className="matte-card px-6 py-4 text-center">
-        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 text-muted-foreground font-mono">
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
@@ -79,12 +79,12 @@ export function GenerateButton({ pendingCount, hasTopics = false }: GenerateButt
     );
   }
 
-  // Ready to generate
+  // Ready to generate - btn-generate: bg charcoal, text brass, halo charcoal
   return (
     <motion.button
       onClick={handleGenerate}
       disabled={generating}
-      className="btn-brand w-full py-4 px-6 text-base font-medium text-white dark:text-black disabled:opacity-70"
+      className="btn-generate w-full py-4 px-6 text-base disabled:opacity-70"
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
     >
@@ -102,7 +102,7 @@ export function GenerateButton({ pendingCount, hasTopics = false }: GenerateButt
         <span className="flex items-center justify-center gap-2">
           <Sparkles className="w-5 h-5" />
           Generate Keernel
-          <span className="ml-1 px-2 py-0.5 rounded-full bg-white/20 dark:bg-black/20 text-xs">
+          <span className="ml-1 px-2 py-0.5 rounded-full bg-brass/20 text-xs">
             {pendingCount}
           </span>
         </span>

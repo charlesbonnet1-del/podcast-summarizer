@@ -59,6 +59,9 @@ const config: Config = {
   				light: '#FAF5EB',
   				dark: '#EDE4D3',
   			},
+  			cream: {
+  				DEFAULT: '#FAF5EB',
+  			},
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
@@ -73,12 +76,15 @@ const config: Config = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		fontFamily: {
-  			serif: ['Playfair Display', 'Georgia', 'Times New Roman', 'serif'],
-  			mono: ['IBM Plex Mono', 'SF Mono', 'Consolas', 'monospace'],
+  			display: ['Cormorant Garamond', 'Georgia', 'serif'],
+  			serif: ['Cormorant Garamond', 'Georgia', 'serif'],
+  			body: ['Inter', '-apple-system', 'sans-serif'],
+  			mono: ['Roboto Mono', 'monospace'],
   		},
   		boxShadow: {
   			'glow-brass': '0 0 20px rgba(197, 179, 88, 0.3)',
   			'glow-brass-lg': '0 0 30px rgba(197, 179, 88, 0.5)',
+  			'glow-charcoal': '0 0 20px rgba(26, 26, 26, 0.2)',
   		}
   	}
   },

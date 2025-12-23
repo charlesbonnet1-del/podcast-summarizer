@@ -3,97 +3,103 @@
 @tailwind utilities;
 
 /* ============================================
-   KEERNEL AUTHORITY - Design System
-   Organic Tech + Financial Times Authority
+   KEERNEL AUTHORITY V2 - Design System
+   Philosophical Rigor + Tech Innovation
    ============================================ */
 
 /* Typography Imports */
-/* Editorial: Elegant Serif for brand voice */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-/* Technical: Clean Monospace for UI elements */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* Wittgenstein: Titres & Identité */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+/* Inter: Corps de texte, Data */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+/* Roboto Mono: Code, chiffres */
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
 
 @layer base {
   :root {
     /* ==========================================
        LIGHT MODE - Organic, Warm, Premium
-       Ambiance: Papier texturé, sable chaud
        ========================================== */
     
-    /* Brand Colors */
+    /* Core Colors */
     --keernel-brass: 48 53% 55%;          /* #C5B358 - Or Laiton */
     --keernel-charcoal: 0 0% 10%;         /* #1A1A1A - Charbon Profond */
-    --keernel-sand: 36 50% 92%;           /* #F7EEDD - Sable/Coquille d'œuf */
-    --keernel-cream: 36 40% 95%;          /* #FAF5EB - Crème légère */
+    --keernel-sand: 36 50% 92%;           /* #F7EEDD - Sable */
+    --keernel-cream: 36 40% 95%;          /* #FAF5EB - Crème */
     
     /* Semantic Colors - Light Mode */
     --background: 36 50% 92%;             /* Sand */
     --foreground: 0 0% 10%;               /* Charcoal */
     --card: 36 40% 95%;                   /* Cream */
-    --card-foreground: 0 0% 10%;          /* Charcoal */
+    --card-foreground: 0 0% 10%;
     --popover: 36 40% 95%;
     --popover-foreground: 0 0% 10%;
     
-    /* UI Elements - Dark containers on light bg */
-    --primary: 48 53% 55%;                /* Brass accent */
-    --primary-foreground: 0 0% 10%;       /* Charcoal text */
-    --secondary: 0 0% 10%;                /* Charcoal containers */
-    --secondary-foreground: 36 50% 92%;   /* Sand text on charcoal */
-    --muted: 36 30% 88%;                  /* Muted sand */
-    --muted-foreground: 0 0% 40%;         /* Gray text */
-    --accent: 48 53% 55%;                 /* Brass */
+    /* Primary = Brass (accent) */
+    --primary: 48 53% 55%;
+    --primary-foreground: 0 0% 10%;
+    
+    /* Secondary = Cream (containers in light mode) */
+    --secondary: 36 40% 95%;
+    --secondary-foreground: 0 0% 10%;
+    
+    --muted: 36 30% 88%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 48 53% 55%;
     --accent-foreground: 0 0% 10%;
     
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 36 20% 85%;                 /* Soft sand border */
-    --input: 36 30% 88%;
-    --ring: 48 53% 55%;                   /* Brass ring */
+    --border: 36 20% 85%;
+    --input: 36 40% 95%;
+    --ring: 48 53% 55%;
     --radius: 1rem;
     
     /* Typography Variables */
-    --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
-    --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
-    --font-sans: 'IBM Plex Mono', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'Roboto Mono', monospace;
     
-    /* Glow Effects - Light Mode */
+    /* Glow Effects - Brass */
     --glow-brass: 0 0 20px rgba(197, 179, 88, 0.3);
     --glow-brass-intense: 0 0 30px rgba(197, 179, 88, 0.5);
+    --glow-charcoal: 0 0 20px rgba(26, 26, 26, 0.2);
   }
 
   .dark {
     /* ==========================================
-       DARK MODE - Authoritative, Immersive, Luxe
-       Ambiance: Nocturne luxueux
+       DARK MODE - Authoritative, Immersive
        ========================================== */
     
-    /* Semantic Colors - Dark Mode */
-    --background: 0 0% 10%;               /* #1A1A1A Charcoal */
-    --foreground: 40 20% 92%;             /* #EAEAEA Cream/Warm white */
-    --card: 0 0% 13%;                     /* #222222 Lighter charcoal */
-    --card-foreground: 40 20% 92%;
+    --background: 0 0% 10%;               /* Charcoal */
+    --foreground: 36 40% 95%;             /* Cream */
+    --card: 0 0% 13%;                     /* Slightly lighter */
+    --card-foreground: 36 40% 95%;
     --popover: 0 0% 13%;
-    --popover-foreground: 40 20% 92%;
+    --popover-foreground: 36 40% 95%;
     
-    /* UI Elements */
-    --primary: 48 53% 55%;                /* Brass - same as light */
+    --primary: 48 53% 55%;                /* Brass - same */
     --primary-foreground: 0 0% 10%;
-    --secondary: 0 0% 13%;                /* Slightly lighter charcoal */
-    --secondary-foreground: 40 20% 92%;
+    
+    /* Secondary = Charcoal lighter */
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 36 40% 95%;
+    
     --muted: 0 0% 16%;
     --muted-foreground: 0 0% 55%;
-    --accent: 48 53% 55%;                 /* Brass */
+    --accent: 48 53% 55%;
     --accent-foreground: 0 0% 10%;
     
     --destructive: 0 62% 50%;
-    --destructive-foreground: 40 20% 92%;
-    --border: 0 0% 18%;
+    --destructive-foreground: 36 40% 95%;
+    --border: 0 0% 20%;
     --input: 0 0% 16%;
-    --ring: 48 53% 55%;                   /* Brass ring */
+    --ring: 48 53% 55%;
     
-    /* Glow Effects - Dark Mode (more visible) */
-    --glow-brass: 0 0 25px rgba(197, 179, 88, 0.25);
-    --glow-brass-intense: 0 0 40px rgba(197, 179, 88, 0.4);
+    /* Glow Effects - Dark Mode */
+    --glow-brass: 0 0 25px rgba(197, 179, 88, 0.2);
+    --glow-brass-intense: 0 0 40px rgba(197, 179, 88, 0.35);
+    --glow-charcoal: 0 0 20px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -108,8 +114,7 @@
   
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-mono);
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-family: var(--font-body);
   }
   
   /* Selection with Brass */
@@ -120,70 +125,60 @@
   
   .dark ::selection {
     background-color: hsl(48 53% 55% / 0.35);
-    color: hsl(40 20% 92%);
+    color: hsl(36 40% 95%);
   }
 }
 
 @layer components {
   /* ============================================
-     TYPOGRAPHY - Dichotomie Éditoriale
+     TYPOGRAPHY - Wittgenstein + Inter
      ============================================ */
   
-  /* Editorial Voice - Serif élégante et statutaire */
-  .font-serif,
-  .font-editorial {
-    font-family: var(--font-serif);
-    font-weight: 500;
-    letter-spacing: -0.01em;
+  /* Display/Titles - Cormorant Garamond (Wittgenstein style) */
+  .font-display {
+    font-family: var(--font-display);
   }
   
-  /* Technical/UI Voice - Monospace technique */
-  .font-mono,
-  .font-technical {
+  .font-serif {
+    font-family: var(--font-display);
+  }
+  
+  /* Body text - Inter */
+  .font-body {
+    font-family: var(--font-body);
+  }
+  
+  /* Mono/Data - Roboto Mono */
+  .font-mono {
     font-family: var(--font-mono);
-    font-weight: 400;
-    letter-spacing: 0;
   }
   
-  /* Hero Titles */
-  .title-hero {
-    font-family: var(--font-serif);
-    @apply text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight;
+  /* Keernel Logo Title */
+  .title-keernel {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
   }
   
   /* Section Titles */
   .title-section {
-    font-family: var(--font-serif);
+    font-family: var(--font-display);
     @apply text-2xl md:text-3xl font-medium;
   }
   
-  /* UI Text */
-  .text-ui {
+  /* Data/Numbers */
+  .text-data {
     font-family: var(--font-mono);
     @apply text-sm tracking-wide;
   }
 
   /* ============================================
-     GLASS CARD - Organic containers
-     ============================================ */
-  .glass-card {
-    @apply rounded-2xl;
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-  }
-  
-  .dark .glass-card {
-    background: hsl(0 0% 13%);
-    border: 1px solid hsl(48 53% 55% / 0.1);
-    box-shadow: var(--glow-brass);
-  }
-  
-  /* ============================================
-     MAGIC BAR - Premium Capsule Input
+     MAGIC BAR - Input Field
+     Light: fond crème, halo laiton, texte charcoal
      ============================================ */
   .magic-bar {
     @apply rounded-full;
-    background: hsl(var(--secondary));
+    background: hsl(var(--card));
     border: 1px solid hsl(48 53% 55% / 0.3);
     box-shadow: var(--glow-brass);
     transition: all 0.3s ease;
@@ -194,101 +189,33 @@
     box-shadow: var(--glow-brass-intense);
   }
   
-  .magic-bar input,
-  .magic-bar input::placeholder {
+  .magic-bar input {
     font-family: var(--font-mono);
-    color: hsl(var(--secondary-foreground));
+    color: hsl(var(--foreground));
+    text-align: left !important;
   }
   
   .magic-bar input::placeholder {
-    opacity: 0.6;
+    font-family: var(--font-mono);
+    color: hsl(var(--muted-foreground));
+    opacity: 0.7;
   }
   
   .dark .magic-bar {
     background: hsl(0 0% 13%);
     border: 1px solid hsl(48 53% 55% / 0.25);
   }
-  
-  .dark .magic-bar:focus-within {
-    border-color: hsl(48 53% 55% / 0.5);
-  }
 
   /* ============================================
-     PLAYER POD - Floating Capsule
-     ============================================ */
-  .player-pod {
-    @apply rounded-full;
-    background: hsl(var(--secondary));
-    border: 1px solid hsl(48 53% 55% / 0.3);
-    box-shadow: 
-      var(--glow-brass),
-      0 -4px 20px rgba(0, 0, 0, 0.1);
-  }
-  
-  .player-pod * {
-    font-family: var(--font-mono);
-  }
-  
-  .dark .player-pod {
-    background: hsl(0 0% 13%);
-    border: 1px solid hsl(48 53% 55% / 0.25);
-    box-shadow: 
-      var(--glow-brass),
-      0 -2px 30px rgba(0, 0, 0, 0.4);
-  }
-  
-  /* ============================================
-     SOURCES PANEL
-     ============================================ */
-  .sources-panel {
-    @apply rounded-3xl;
-    background: hsl(var(--secondary));
-    border: 1px solid hsl(48 53% 55% / 0.2);
-    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.1);
-  }
-  
-  .dark .sources-panel {
-    background: hsl(0 0% 13%);
-    border: 1px solid hsl(48 53% 55% / 0.15);
-    box-shadow: 
-      var(--glow-brass),
-      0 -4px 30px rgba(0, 0, 0, 0.5);
-  }
-  
-  /* Source item styling */
-  .source-item {
-    @apply rounded-xl;
-    font-family: var(--font-mono);
-    border-left: 2px solid hsl(48 53% 55%);
-    background: hsl(48 53% 55% / 0.05);
-  }
-  
-  .dark .source-item {
-    background: hsl(48 53% 55% / 0.08);
-  }
-
-  /* ============================================
-     MATTE CARD - Both modes
-     ============================================ */
-  .matte-card {
-    @apply rounded-2xl;
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-  }
-  
-  .dark .matte-card {
-    background: hsl(0 0% 13%);
-    border: 1px solid hsl(48 53% 55% / 0.1);
-  }
-  
-  /* ============================================
-     TAG PILL - Capsule tags
+     TAG PILL - Topics
+     Light: crème, halo laiton, texte charcoal
      ============================================ */
   .tag-pill {
-    @apply rounded-full;
+    @apply rounded-full px-4 py-2;
     font-family: var(--font-mono);
-    background: hsl(var(--secondary));
-    color: hsl(var(--secondary-foreground));
+    font-size: 0.875rem;
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
     border: 1px solid hsl(48 53% 55% / 0.3);
     box-shadow: var(--glow-brass);
     transition: all 0.2s ease;
@@ -301,23 +228,84 @@
   
   .dark .tag-pill {
     background: hsl(0 0% 13%);
+    color: hsl(36 40% 95%);
     border: 1px solid hsl(48 53% 55% / 0.2);
   }
   
-  .dark .tag-pill:hover {
-    border-color: hsl(48 53% 55% / 0.4);
-  }
-  
-  /* Tag pill selected state */
-  .tag-pill-selected {
+  /* Tag selected state */
+  .tag-pill-selected,
+  .tag-pill[data-selected="true"] {
     background: hsl(48 53% 55%);
     color: hsl(0 0% 10%);
     border-color: hsl(48 53% 55%);
   }
+
+  /* ============================================
+     PLAYER POD - Audio Player
+     Light: fond crème, bouton charcoal
+     ============================================ */
+  .player-pod {
+    @apply rounded-full;
+    background: hsl(var(--card));
+    border: 1px solid hsl(48 53% 55% / 0.2);
+    box-shadow: var(--glow-brass), 0 -4px 20px rgba(0, 0, 0, 0.05);
+  }
   
-  .dark .tag-pill-selected {
-    background: hsl(48 53% 55%);
+  .player-pod * {
+    font-family: var(--font-mono);
+  }
+  
+  /* Player controls - charcoal buttons */
+  .player-pod .player-btn-main {
+    background: hsl(0 0% 10%);
+    color: hsl(36 40% 95%);
+  }
+  
+  .player-pod .player-btn-secondary {
+    color: hsl(var(--muted-foreground));
+  }
+  
+  .player-pod .player-time {
+    font-family: var(--font-mono);
+    color: hsl(var(--muted-foreground));
+  }
+  
+  .dark .player-pod {
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.15);
+    box-shadow: var(--glow-brass), 0 -2px 30px rgba(0, 0, 0, 0.4);
+  }
+  
+  .dark .player-pod .player-btn-main {
+    background: hsl(36 40% 95%);
     color: hsl(0 0% 10%);
+  }
+
+  /* ============================================
+     GENERATE BUTTON
+     Light: bg charcoal, texte laiton, halo charcoal
+     ============================================ */
+  .btn-generate {
+    @apply relative overflow-hidden rounded-full font-medium transition-all duration-300;
+    font-family: var(--font-mono);
+    background: hsl(0 0% 10%);
+    color: hsl(48 53% 55%);
+    box-shadow: var(--glow-charcoal);
+  }
+  
+  .btn-generate:hover {
+    box-shadow: 0 0 30px rgba(26, 26, 26, 0.4);
+    transform: translateY(-1px);
+  }
+  
+  .dark .btn-generate {
+    background: hsl(36 40% 95%);
+    color: hsl(0 0% 10%);
+    box-shadow: 0 0 20px rgba(250, 245, 235, 0.1);
+  }
+  
+  .dark .btn-generate:hover {
+    box-shadow: 0 0 30px rgba(250, 245, 235, 0.2);
   }
 
   /* ============================================
@@ -335,38 +323,58 @@
     box-shadow: var(--glow-brass-intense);
     transform: translateY(-1px);
   }
-  
-  .dark .btn-brand:hover {
-    transform: none;
+
+  /* ============================================
+     GLASS CARD
+     ============================================ */
+  .glass-card {
+    @apply rounded-2xl;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
   }
   
-  /* Secondary button - outlined */
-  .btn-outline {
-    @apply rounded-full font-medium transition-all duration-300;
-    font-family: var(--font-mono);
-    background: transparent;
-    color: hsl(48 53% 55%);
-    border: 1px solid hsl(48 53% 55% / 0.5);
-  }
-  
-  .btn-outline:hover {
-    background: hsl(48 53% 55% / 0.1);
-    border-color: hsl(48 53% 55%);
+  .dark .glass-card {
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.1);
   }
 
   /* ============================================
-     ICONS - Brass colored in UI
+     MATTE CARD
      ============================================ */
-  .icon-brass {
-    color: hsl(48 53% 55%);
+  .matte-card {
+    @apply rounded-2xl;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
   }
   
+  .dark .matte-card {
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.1);
+  }
+
   /* ============================================
-     NAVIGATION - Editorial serif titles
+     SOURCES PANEL
+     ============================================ */
+  .sources-panel {
+    @apply rounded-3xl;
+    background: hsl(var(--card));
+    border: 1px solid hsl(48 53% 55% / 0.2);
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.05);
+  }
+  
+  .dark .sources-panel {
+    background: hsl(0 0% 13%);
+    border: 1px solid hsl(48 53% 55% / 0.15);
+    box-shadow: var(--glow-brass), 0 -4px 30px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ============================================
+     NAVIGATION
      ============================================ */
   .nav-brand {
-    font-family: var(--font-serif);
-    @apply text-xl font-semibold tracking-tight;
+    font-family: var(--font-display);
+    font-weight: 600;
+    @apply text-xl tracking-tight;
   }
   
   .nav-link {
@@ -382,10 +390,33 @@
 }
 
 @layer utilities {
-  /* Gradient text - Brass */
-  .gradient-text-brand {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(48 53% 55%) 0%, hsl(48 53% 70%) 100%);
+  /* Brass text color */
+  .text-brass {
+    color: hsl(48 53% 55%);
+  }
+  
+  /* Brass border */
+  .border-brass {
+    border-color: hsl(48 53% 55%);
+  }
+  
+  /* Charcoal text */
+  .text-charcoal {
+    color: hsl(0 0% 10%);
+  }
+  
+  /* Cream text */
+  .text-cream {
+    color: hsl(36 40% 95%);
+  }
+  
+  /* Glow utilities */
+  .glow-brass {
+    box-shadow: var(--glow-brass);
+  }
+  
+  .glow-brass-intense {
+    box-shadow: var(--glow-brass-intense);
   }
   
   /* Progress bar */
@@ -399,25 +430,6 @@
     background: hsl(48 53% 55%);
   }
   
-  /* Brass text color utility */
-  .text-brass {
-    color: hsl(48 53% 55%);
-  }
-  
-  /* Brass border utility */
-  .border-brass {
-    border-color: hsl(48 53% 55%);
-  }
-  
-  /* Brass glow utility */
-  .glow-brass {
-    box-shadow: var(--glow-brass);
-  }
-  
-  .glow-brass-intense {
-    box-shadow: var(--glow-brass-intense);
-  }
-  
   /* Hide scrollbar */
   .scrollbar-hide {
     -ms-overflow-style: none;
@@ -427,39 +439,25 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+  
+  /* Text alignment fix for inputs */
+  .text-left-important {
+    text-align: left !important;
+  }
 }
 
 /* ============================================
-   FLOATING ORB ANIMATIONS
+   ANIMATIONS
    ============================================ */
 @keyframes float-slow {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(40px, -40px) scale(1.05);
-  }
-  66% {
-    transform: translate(-30px, 30px) scale(0.95);
-  }
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -40px) scale(1.05); }
+  66% { transform: translate(-30px, 30px) scale(0.95); }
 }
 
 @keyframes float-slower {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(-50px, -25px) scale(1.1);
-  }
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 0.8;
-  }
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-50px, -25px) scale(1.1); }
 }
 
 .animate-float-slow {
@@ -468,8 +466,4 @@
 
 .animate-float-slower {
   animation: float-slower 30s ease-in-out infinite;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
 }

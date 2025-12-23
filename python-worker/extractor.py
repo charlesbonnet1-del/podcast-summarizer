@@ -197,21 +197,27 @@ def get_page_title(url: str) -> str | None:
     return None
 
 
-def extract_content(url: str) -> tuple[str, str, str] | None:
+def extract_content(url: str, source_type: str = None) -> tuple[str, str, str] | None:
     """
     Main extraction function that detects source type and extracts content.
+    
+    Args:
+        url: The URL to extract content from
+        source_type: Optional hint for source type (ignored, auto-detected)
+        
     Returns (source_type, title, content) or None if failed.
     """
-    source_type = detect_source_type(url)
-    log.info("Extracting content", url=url, source_type=source_type)
+    # Auto-detect source type (ignore hint for consistency)
+    detected_type = detect_source_type(url)
+    log.info("Extracting content", url=url, source_type=detected_type)
     
     result = None
     
-    if source_type == "youtube":
+    if detected_type == "youtube":
         result = get_youtube_transcript(url)
-    elif source_type == "article":
+    elif detected_type == "article":
         result = extract_article_content(url)
-    elif source_type == "podcast":
+    elif detected_type == "podcast":
         # For podcasts, we'd need additional processing (audio download + Whisper)
         # For MVP, treat as article and try to get show notes
         result = extract_article_content(url)
@@ -220,6 +226,6 @@ def extract_content(url: str) -> tuple[str, str, str] | None:
     
     if result:
         title, content = result
-        return (source_type, title, content)
+        return (detected_type, title, content)
     
     return None

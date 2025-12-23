@@ -1,8 +1,17 @@
 """
-AI generation utilities for creating podcast scripts and audio.
-Stack: Groq (Llama 3) for LLM + Azure TTS (with OpenAI fallback)
+Keernel Generator V3 - Dual Voice Dialogue
+
+Architecture:
+- Groq (Llama 3.3 70B) for script generation
+- OpenAI TTS for dual voice synthesis (Breeze & Vale)
+- No Azure TTS
+
+Dialogue Format:
+- [VOICE_A] Breeze: L'expert pédagogue (voix: "nova")
+- [VOICE_B] Vale: Le challenger pragmatique (voix: "onyx")
 """
 import os
+import re
 import tempfile
 from datetime import datetime
 from urllib.parse import urlparse
@@ -14,116 +23,135 @@ log = structlog.get_logger()
 # CLIENTS INITIALIZATION
 # ============================================
 
-# Groq for LLM (fast & cheap)
 from groq import Groq
 groq_client = None
 if os.getenv("GROQ_API_KEY"):
     groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# OpenAI for fallback TTS
 from openai import OpenAI
 openai_client = None
 if os.getenv("OPENAI_API_KEY"):
     openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Azure Speech SDK for high-quality TTS
-azure_speech_key = os.getenv("AZURE_SPEECH_KEY")
-azure_speech_region = os.getenv("AZURE_SPEECH_REGION", "westeurope")
-
-
 # ============================================
-# PROMPTS
+# VOICE CONFIGURATION (Fixed Duo)
 # ============================================
 
-SCRIPT_SYSTEM_PROMPT = """Tu es un journaliste radio expert. Tu crées des scripts audio percutants en français.
+# Breeze: Expert pédagogue - voix claire et posée
+VOICE_BREEZE = "nova"
 
-## RÈGLES DE FER - ZÉRO MÉTA-DISCOURS
+# Vale: Challenger pragmatique - voix plus grave et directe
+VOICE_VALE = "onyx"
 
-INTERDICTIONS ABSOLUES (ne JAMAIS utiliser) :
-- "Passons à..."
-- "Voici le résumé..."
-- "Le script traite de..."
-- "Dans cette rubrique..."
-- "Nous allons parler de..."
-- "Le sujet suivant est..."
-- "Commençons par..."
-- "Pour conclure..."
+# Voice tags in script
+VOICE_TAG_A = "[VOICE_A]"  # Breeze
+VOICE_TAG_B = "[VOICE_B]"  # Vale
 
-TRANSITIONS AUTORISÉES (logiques/thématiques) :
-- "Pendant ce temps, à Taïwan..."
-- "C'est justement ce que..."
-- "Dans les couloirs de..."
-- "Surprise à..."
-- "Et c'est là que..."
-- Enchaînement direct sans transition
+# ============================================
+# DIALOGUE SYSTEM PROMPT
+# ============================================
 
-## STYLE RADIO PROFESSIONNEL
+DIALOGUE_SYSTEM_PROMPT = """Tu es un scénariste de podcast professionnel. Tu crées des scripts de dialogue entre deux hôtes en français.
 
-ACCROCHES : Commence TOUJOURS par l'information, jamais par une introduction.
-✅ "Record historique à Wall Street hier soir..."
-✅ "Dans les laboratoires d'OpenAI, une révolution se prépare..."
-❌ "Bonjour et bienvenue dans votre podcast..."
+## LES DEUX HÔTES
 
-RYTHME :
-- Phrases COURTES (max 20 mots)
-- Structure : Sujet → Verbe → Complément
-- Questions rhétoriques pour relancer l'attention
-- Chiffres arrondis et contextualisés
+**Breeze** ([VOICE_A]) - L'Expert Pédagogue
+- Pose le cadre, expose les faits, les chiffres et le contexte
+- Vulgarise sans simplifier à l'excès
+- Ton : Calme, précis, informatif
 
-## PHONÉTIQUE POUR TTS (CRUCIAL)
+**Vale** ([VOICE_B]) - Le Challenger Pragmatique  
+- Pose les questions que se pose l'auditeur
+- Souligne les risques, limites et implications concrètes
+- Ton : Direct, interrogatif, terre-à-terre
+- Questions types : "Concrètement, ça change quoi ?", "Oui mais le risque c'est...", "Attends, ça veut dire que..."
 
-Pour une prononciation parfaite par la synthèse vocale Azure, écris les anglicismes phonétiquement :
-- "LLM" → "L-L-M" ou "elle-elle-aime"
-- "GPU" → "G-P-U" ou "jé-pé-u"
-- "CEO" → "C-E-O" ou "si-i-o"
-- "stablecoin" → "stébeul-coïne"
-- "blockchain" → "bloque-chaîne"
+## RÈGLES D'OR
+
+### Style Anti-IA (CRUCIAL)
+INTERDICTIONS ABSOLUES :
+- Superlatifs : "révolutionnaire", "incroyable", "passionnant", "fascinant"
+- Enthousiasme artificiel : "C'est vraiment excitant !", "Quelle époque formidable !"
+- Bruit conversationnel : "C'est une super question Vale", "Je suis content d'être là"
+- Méta-discours : "Passons à notre prochain sujet", "Comme on l'a vu"
+
+AUTORISÉ :
+- Ton factuel et analytique
+- Scepticisme constructif
+- Questions directes et pragmatiques
+
+### Accessibilité
+- L'auditeur est intelligent mais NON-EXPERT du sujet
+- Tout terme technique doit être expliqué par sa fonction ou son impact
+- Pas de jargon brut : "L-L-M, c'est-à-dire un modèle de langage comme ChatGPT..."
+
+### Phonétique TTS (OBLIGATOIRE)
+Écris les anglicismes phonétiquement pour OpenAI TTS :
+- "LLM" → "elle-elle-aime"
+- "GPU" → "jé-pé-u"  
+- "CEO" → "si-i-o"
+- "AI" → "A-I"
 - "startup" → "start-eupe"
-- "podcast" → "pod-caste"
-- "tweet" → "twitte"
-- "thread" → "thrède"
-- "hype" → "haïpe"
+- "blockchain" → "bloque-chaîne"
 - "NVIDIA" → "ène-vidia"
 - "OpenAI" → "Opène-A-I"
+- "ChatGPT" → "Tchatte-G-P-T"
 
-## FORMAT
+### Format du Script
+Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B] sur sa propre ligne :
 
-- JAMAIS de markdown, astérisques, tirets ou listes à puces
-- Paragraphes fluides uniquement
-- Citations naturelles : "Selon TechCrunch...", "D'après Le Figaro..."
-- Conclure par un insight pratique ou une perspective
+[VOICE_A]
+Breeze expose un fait ou une information.
+
+[VOICE_B]
+Vale réagit, questionne ou nuance.
+
+[VOICE_A]
+Breeze répond ou approfondit.
+
+### Structure Narrative
+1. ACCROCHE : Vale pose une question intrigante ou Breeze balance un fait percutant
+2. DÉVELOPPEMENT : Ping-pong naturel entre les deux voix
+3. CONCLUSION : Insight pratique ou perspective (pas de "merci d'avoir écouté")
+
+### Rythme
+- Répliques de 2-4 phrases maximum
+- Alternance fréquente (pas de monologue)
+- Questions de Vale pour relancer l'attention
 """
 
-USER_PROMPT_TEMPLATE = """Crée un script radio de {duration} minutes (~{word_count} mots).
+DIALOGUE_USER_PROMPT = """Crée un script de dialogue podcast de {duration} minutes (~{word_count} mots au total).
 
-## SOURCES À SYNTHÉTISER :
+## SOURCES À COUVRIR :
 {sources}
 
-## CONTRAINTES STRICTES :
-1. Durée : {duration} min = {word_count} mots (tolérance ±15%)
-2. ZÉRO méta-discours (pas de "passons à", "voici")
-3. Commence DIRECTEMENT par une accroche percutante
-4. Phonétique TTS pour les anglicismes
-5. Chaque source = 1-2 paragraphes max
-6. Transitions thématiques ou géographiques
+## CONTRAINTES :
+1. Format STRICT : Chaque réplique commence par [VOICE_A] ou [VOICE_B]
+2. Durée : ~{word_count} mots total (tolérance ±15%)
+3. Style : Factuel, analytique, ZÉRO superlatif
+4. Phonétique TTS pour tous les anglicismes
+5. Alternance fréquente entre les voix
 
-## TON :
-Informatif, dynamique, accessible. Comme France Info ou Bloomberg Radio.
+## STRUCTURE :
+- Breeze ([VOICE_A]) : Faits, contexte, chiffres
+- Vale ([VOICE_B]) : Questions, limites, implications concrètes
 
-Script (commence directement, pas d'introduction) :"""
+Script (commence directement par une réplique) :"""
 
 
 # ============================================
-# SCRIPT GENERATION (Groq Llama 3)
+# DIALOGUE SCRIPT GENERATION
 # ============================================
 
-def generate_podcast_script(
+def generate_dialogue_script(
     sources: list[dict],
-    target_duration: int = 10,
-    language: str = "fr"
+    target_duration: int = 10
 ) -> str | None:
-    """Generate podcast script using Groq Llama 3."""
+    """
+    Generate a dual-voice dialogue script using Groq Llama 3.
     
+    Returns script with [VOICE_A] and [VOICE_B] tags.
+    """
     if not sources:
         log.warning("No sources provided")
         return None
@@ -132,165 +160,292 @@ def generate_podcast_script(
         log.error("Groq client not initialized - missing GROQ_API_KEY")
         return None
     
-    # ~150 words per minute for speech
+    # ~150 words per minute for dialogue
     target_word_count = target_duration * 150
     
     # Format sources
     sources_text = ""
     for i, source in enumerate(sources, 1):
-        content = source.get("content", "")[:6000]  # Limit content
+        content = source.get("content", "")[:5000]
         sources_text += f"\n---\nSource {i}: {source.get('title', 'Sans titre')}\nURL: {source.get('url', 'N/A')}\n\n{content}\n"
     
-    user_prompt = USER_PROMPT_TEMPLATE.format(
+    user_prompt = DIALOGUE_USER_PROMPT.format(
         duration=target_duration,
         word_count=target_word_count,
         sources=sources_text
     )
     
     try:
-        log.info("Generating script with Groq", num_sources=len(sources), target_duration=target_duration)
+        log.info("Generating dialogue script", num_sources=len(sources), target_duration=target_duration)
         
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": SCRIPT_SYSTEM_PROMPT},
+                {"role": "system", "content": DIALOGUE_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.7,
-            max_tokens=3000
+            max_tokens=4000
         )
         
         script = response.choices[0].message.content
         word_count = len(script.split())
         
-        log.info("Script generated", word_count=word_count, est_duration_min=round(word_count/150, 1))
+        # Validate script has voice tags
+        if VOICE_TAG_A not in script or VOICE_TAG_B not in script:
+            log.warning("Script missing voice tags, regenerating...")
+            # Try once more with explicit instruction
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": DIALOGUE_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt + "\n\nATTENTION: Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B] !"}
+                ],
+                temperature=0.7,
+                max_tokens=4000
+            )
+            script = response.choices[0].message.content
+        
+        log.info("Dialogue script generated", 
+                word_count=word_count, 
+                est_duration_min=round(word_count/150, 1),
+                voice_a_count=script.count(VOICE_TAG_A),
+                voice_b_count=script.count(VOICE_TAG_B))
+        
         return script
     
     except Exception as e:
-        log.error("Failed to generate script", error=str(e))
+        log.error("Failed to generate dialogue script", error=str(e))
         return None
 
 
 # ============================================
-# AUDIO GENERATION (Azure TTS + OpenAI Fallback)
+# SCRIPT PARSING
 # ============================================
 
-# Map OpenAI voices to Azure voices
-VOICE_MAP_AZURE = {
-    "alloy": "fr-FR-DeniseNeural",
-    "echo": "fr-FR-HenriNeural",
-    "fable": "fr-FR-DeniseNeural",
-    "onyx": "fr-FR-HenriNeural",
-    "nova": "fr-FR-DeniseNeural",
-    "shimmer": "fr-FR-DeniseNeural",
-}
+def parse_dialogue_script(script: str) -> list[dict]:
+    """
+    Parse a dialogue script into voice segments.
+    
+    Returns list of {"voice": "A"|"B", "text": "..."}
+    """
+    segments = []
+    
+    # Split by voice tags
+    pattern = r'\[VOICE_([AB])\]'
+    parts = re.split(pattern, script)
+    
+    # parts[0] is before first tag (usually empty)
+    # Then alternates: voice_letter, text, voice_letter, text...
+    
+    i = 1
+    while i < len(parts):
+        voice = parts[i]  # "A" or "B"
+        
+        if i + 1 < len(parts):
+            text = parts[i + 1].strip()
+            if text:
+                segments.append({
+                    "voice": voice,
+                    "text": text
+                })
+        i += 2
+    
+    log.info("Parsed dialogue", segments=len(segments))
+    return segments
 
-def generate_audio(
+
+# ============================================
+# DUAL VOICE TTS (OpenAI Only)
+# ============================================
+
+def generate_dialogue_audio(
     script: str,
-    voice: str = "alloy",
     output_path: str = None
 ) -> str | None:
     """
-    Generate audio using Azure TTS (primary) or OpenAI TTS (fallback).
-    Voice can be OpenAI voice name (alloy, nova, etc.) - will be mapped to Azure.
+    Generate audio for a dialogue script with two distinct voices.
+    
+    1. Parse script into voice segments
+    2. Generate audio for each segment with appropriate voice
+    3. Combine into final audio file
     """
     if not script:
         log.warning("No script provided")
         return None
     
+    if not openai_client:
+        log.error("OpenAI client not initialized - missing OPENAI_API_KEY")
+        return None
+    
     if not output_path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = os.path.join(tempfile.gettempdir(), f"episode_{timestamp}.mp3")
+        output_path = os.path.join(tempfile.gettempdir(), f"dialogue_{timestamp}.mp3")
     
-    # Try Azure TTS first
-    if azure_speech_key:
-        # Map OpenAI voice to Azure voice
-        azure_voice = VOICE_MAP_AZURE.get(voice, "fr-FR-DeniseNeural")
-        result = generate_audio_azure(script, azure_voice, output_path)
-        if result:
-            return result
-        log.warning("Azure TTS failed, trying OpenAI fallback")
+    # Parse script
+    segments = parse_dialogue_script(script)
     
-    # Fallback to OpenAI TTS
-    if openai_client:
-        return generate_audio_openai(script, voice, output_path)
+    if not segments:
+        log.error("No segments parsed from script")
+        return None
     
-    log.error("No TTS provider available")
-    return None
-
-
-def generate_audio_azure(script: str, voice: str, output_path: str) -> str | None:
-    """Generate audio using Azure Cognitive Services Speech."""
+    # Generate audio for each segment
+    audio_files = []
+    
+    for i, segment in enumerate(segments):
+        voice = VOICE_BREEZE if segment["voice"] == "A" else VOICE_VALE
+        text = segment["text"]
+        
+        try:
+            segment_path = output_path.replace(".mp3", f"_seg{i:03d}.mp3")
+            
+            # Handle OpenAI 4096 char limit
+            if len(text) > 4000:
+                # Split long segments
+                chunks = split_text_for_tts(text, 3800)
+                chunk_files = []
+                
+                for j, chunk in enumerate(chunks):
+                    chunk_path = output_path.replace(".mp3", f"_seg{i:03d}_chunk{j}.mp3")
+                    response = openai_client.audio.speech.create(
+                        model="tts-1-hd",  # Higher quality for dialogue
+                        voice=voice,
+                        input=chunk
+                    )
+                    response.stream_to_file(chunk_path)
+                    chunk_files.append(chunk_path)
+                
+                # Combine chunks
+                combine_audio_files(chunk_files, segment_path)
+                
+                # Cleanup chunk files
+                for cf in chunk_files:
+                    try:
+                        os.remove(cf)
+                    except:
+                        pass
+            else:
+                response = openai_client.audio.speech.create(
+                    model="tts-1-hd",
+                    voice=voice,
+                    input=text
+                )
+                response.stream_to_file(segment_path)
+            
+            audio_files.append(segment_path)
+            log.debug("Segment audio generated", segment=i, voice=voice, chars=len(text))
+            
+        except Exception as e:
+            log.error("Failed to generate segment audio", segment=i, error=str(e))
+            continue
+    
+    if not audio_files:
+        log.error("No audio segments generated")
+        return None
+    
+    # Combine all segments with small pauses
     try:
-        import azure.cognitiveservices.speech as speechsdk
+        combine_dialogue_audio(audio_files, output_path)
         
-        log.info("Generating audio with Azure TTS", voice=voice)
+        # Cleanup segment files
+        for f in audio_files:
+            try:
+                os.remove(f)
+            except:
+                pass
         
-        # Configure Azure Speech
-        speech_config = speechsdk.SpeechConfig(
-            subscription=azure_speech_key,
-            region=azure_speech_region
-        )
-        speech_config.speech_synthesis_voice_name = voice
-        speech_config.set_speech_synthesis_output_format(
-            speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3
-        )
+        duration = get_audio_duration(output_path)
+        log.info("Dialogue audio generated", 
+                output_path=output_path, 
+                duration_sec=duration,
+                segments=len(audio_files))
         
-        # Create audio output
-        audio_config = speechsdk.audio.AudioOutputConfig(filename=output_path)
+        return output_path
         
-        # Create synthesizer
-        synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=speech_config,
-            audio_config=audio_config
-        )
-        
-        # Synthesize
-        result = synthesizer.speak_text_async(script).get()
-        
-        if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            duration = get_audio_duration(output_path)
-            log.info("Azure TTS complete", output_path=output_path, duration_sec=duration)
-            return output_path
-        elif result.reason == speechsdk.ResultReason.Canceled:
-            cancellation = result.cancellation_details
-            log.error("Azure TTS canceled", reason=cancellation.reason, error=cancellation.error_details)
-            return None
-    
     except Exception as e:
-        log.error("Azure TTS failed", error=str(e))
+        log.error("Failed to combine dialogue audio", error=str(e))
         return None
 
 
-def generate_audio_openai(script: str, voice: str, output_path: str) -> str | None:
-    """Generate audio using OpenAI TTS (fallback)."""
-    # Validate OpenAI voice
-    valid_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
-    if voice not in valid_voices:
-        voice = "nova"  # Good default for French
+def combine_dialogue_audio(input_files: list[str], output_path: str):
+    """
+    Combine dialogue segments with natural pauses between speakers.
+    """
+    from pydub import AudioSegment
     
+    # Small pause between speakers (300ms)
+    pause = AudioSegment.silent(duration=300)
+    
+    combined = AudioSegment.empty()
+    
+    for i, file_path in enumerate(input_files):
+        try:
+            audio = AudioSegment.from_mp3(file_path)
+            combined += audio
+            
+            # Add pause after each segment (except last)
+            if i < len(input_files) - 1:
+                combined += pause
+                
+        except Exception as e:
+            log.warning("Failed to load segment", file=file_path, error=str(e))
+    
+    # Export with good quality
+    combined.export(output_path, format="mp3", bitrate="192k")
+
+
+# ============================================
+# LEGACY COMPATIBLE FUNCTIONS
+# ============================================
+
+def generate_audio(
+    script: str,
+    voice: str = "nova",
+    output_path: str = None
+) -> str | None:
+    """
+    Legacy function - now uses OpenAI TTS directly.
+    For dialogue scripts, use generate_dialogue_audio() instead.
+    """
+    if not script:
+        log.warning("No script provided")
+        return None
+    
+    if not openai_client:
+        log.error("OpenAI client not initialized")
+        return None
+    
+    if not output_path:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(tempfile.gettempdir(), f"audio_{timestamp}.mp3")
+    
+    # Check if this is a dialogue script
+    if VOICE_TAG_A in script or VOICE_TAG_B in script:
+        return generate_dialogue_audio(script, output_path)
+    
+    # Single voice generation
     try:
-        log.info("Generating audio with OpenAI TTS (fallback)", voice=voice)
+        valid_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+        if voice not in valid_voices:
+            voice = "nova"
         
-        # OpenAI TTS limit: 4096 chars per request
-        max_chunk = 4000
+        log.info("Generating single-voice audio", voice=voice)
         
-        if len(script) <= max_chunk:
+        if len(script) <= 4000:
             response = openai_client.audio.speech.create(
-                model="tts-1",
+                model="tts-1-hd",
                 voice=voice,
                 input=script
             )
             response.stream_to_file(output_path)
         else:
-            # Split and combine
-            chunks = split_script_for_tts(script, max_chunk)
+            chunks = split_text_for_tts(script, 3800)
             audio_files = []
             
             for i, chunk in enumerate(chunks):
                 chunk_path = output_path.replace(".mp3", f"_part{i}.mp3")
                 response = openai_client.audio.speech.create(
-                    model="tts-1",
+                    model="tts-1-hd",
                     voice=voice,
                     input=chunk
                 )
@@ -300,23 +455,42 @@ def generate_audio_openai(script: str, voice: str, output_path: str) -> str | No
             combine_audio_files(audio_files, output_path)
             
             for f in audio_files:
-                os.remove(f)
+                try:
+                    os.remove(f)
+                except:
+                    pass
         
         duration = get_audio_duration(output_path)
-        log.info("OpenAI TTS complete", output_path=output_path, duration_sec=duration)
+        log.info("Audio generated", output_path=output_path, duration_sec=duration)
         return output_path
-    
+        
     except Exception as e:
-        log.error("OpenAI TTS failed", error=str(e))
+        log.error("Failed to generate audio", error=str(e))
         return None
 
 
-def split_script_for_tts(script: str, max_size: int) -> list[str]:
-    """Split script into chunks at sentence boundaries."""
+# Keep old function name for compatibility
+def generate_podcast_script(
+    sources: list[dict],
+    target_duration: int = 10,
+    language: str = "fr"
+) -> str | None:
+    """
+    Legacy wrapper - now generates dialogue script.
+    """
+    return generate_dialogue_script(sources, target_duration)
+
+
+# ============================================
+# UTILITY FUNCTIONS
+# ============================================
+
+def split_text_for_tts(text: str, max_size: int) -> list[str]:
+    """Split text into chunks at sentence boundaries."""
     chunks = []
     current = ""
     
-    sentences = script.replace("...", "…").split(". ")
+    sentences = text.replace("...", "…").split(". ")
     
     for sentence in sentences:
         sentence = sentence.strip()
@@ -347,7 +521,7 @@ def combine_audio_files(input_files: list[str], output_path: str):
         audio = AudioSegment.from_mp3(file_path)
         combined += audio
     
-    combined.export(output_path, format="mp3")
+    combined.export(output_path, format="mp3", bitrate="192k")
 
 
 def get_audio_duration(file_path: str) -> int:
@@ -373,7 +547,7 @@ def generate_episode_title(sources: list[dict], script: str = None) -> str:
         return f"{today} - {title}"
     
     if not groq_client:
-        return f"Daily Digest - {today}"
+        return f"Keernel - {today}"
     
     try:
         source_titles = [s.get('title', '')[:50] for s in sources[:5]]
@@ -381,17 +555,17 @@ def generate_episode_title(sources: list[dict], script: str = None) -> str:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "Génère un titre court et accrocheur (max 50 caractères) qui résume ces sujets. Pas de guillemets."},
+                {"role": "system", "content": "Génère un titre court et factuel (max 50 caractères) qui résume ces sujets. Pas de guillemets, pas de superlatifs."},
                 {"role": "user", "content": f"Sujets: {', '.join(source_titles)}"}
             ],
-            temperature=0.8,
+            temperature=0.7,
             max_tokens=30
         )
         
         title = response.choices[0].message.content.strip().strip('"\'')
         return f"{today} - {title}"
     except:
-        return f"Daily Digest - {today}"
+        return f"Keernel - {today}"
 
 
 # ============================================

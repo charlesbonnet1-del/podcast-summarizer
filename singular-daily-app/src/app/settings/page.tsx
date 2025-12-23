@@ -118,7 +118,7 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Podcast Settings (Voice only now) */}
+      {/* Podcast Settings (Voice Duo info) */}
       <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -126,15 +126,13 @@ export default async function SettingsPage() {
               <Volume2 className="w-5 h-5" />
             </div>
             <div>
-              <CardTitle className="text-lg">Voice Preferences</CardTitle>
-              <CardDescription>Choose your podcast voice</CardDescription>
+              <CardTitle className="text-lg">Podcast Hosts</CardTitle>
+              <CardDescription>Votre duo d'experts</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <SettingsForm 
-            voiceId={settings.voice_id ?? "alloy"}
-          />
+          <SettingsForm />
         </CardContent>
       </Card>
 

@@ -80,17 +80,17 @@ export function MagicBar() {
 
   return (
     <div className="relative">
-      {/* Animated glow on focus - Light mode only */}
+      {/* Animated glow on focus - Brass glow */}
       <AnimatePresence>
         {isFocused && (
           <motion.div
-            className="absolute -inset-2 rounded-full dark:hidden"
+            className="absolute -inset-2 rounded-full"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             style={{
-              background: "linear-gradient(135deg, rgba(0, 245, 255, 0.15), rgba(204, 255, 0, 0.1))",
-              filter: "blur(20px)",
+              background: "radial-gradient(circle, rgba(197, 179, 88, 0.2), transparent)",
+              filter: "blur(15px)",
             }}
           />
         )}
@@ -105,7 +105,7 @@ export function MagicBar() {
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
       >
         <div className="flex items-center gap-4">
-          {/* Input - Sans-serif, centered feel */}
+          {/* Input - LEFT ALIGNED cursor, Roboto Mono */}
           <input
             ref={inputRef}
             value={input}
@@ -114,7 +114,7 @@ export function MagicBar() {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder="Paste a link or add a topic..."
-            className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/50 focus:outline-none text-center"
+            className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/60 focus:outline-none text-left font-mono"
             disabled={loading}
           />
 
@@ -122,7 +122,7 @@ export function MagicBar() {
           <motion.button
             onClick={handleSubmit}
             disabled={loading || !input.trim()}
-            className="flex items-center justify-center w-9 h-9 rounded-full text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-30 transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-full text-muted-foreground hover:text-brass disabled:opacity-30 transition-colors"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >

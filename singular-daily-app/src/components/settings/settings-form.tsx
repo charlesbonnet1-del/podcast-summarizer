@@ -1,126 +1,63 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Loader2, Check } from "lucide-react";
-import { toast } from "sonner";
+import { Users } from "lucide-react";
 
-interface SettingsFormProps {
-  voiceId: string;
-}
-
-const VOICES = [
-  { id: "alloy", name: "Denise (Femme)", description: "Voix neutre et équilibrée" },
-  { id: "echo", name: "Henri (Homme)", description: "Voix chaude et conversationnelle" },
-  { id: "nova", name: "Nova (Femme)", description: "Voix amicale et dynamique" },
-  { id: "onyx", name: "Onyx (Homme)", description: "Voix profonde et autoritaire" },
-];
-
-export function SettingsForm({ voiceId }: SettingsFormProps) {
-  const [voice, setVoice] = useState(voiceId);
-  const [loading, setLoading] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const handleSave = async () => {
-    setLoading(true);
-    setSaved(false);
-
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      toast.error("Please sign in again");
-      setLoading(false);
-      return;
-    }
-
-    // Get current settings JSONB
-    const { data: profile } = await supabase
-      .from("users")
-      .select("settings")
-      .eq("id", user.id)
-      .single();
-
-    const currentSettings = profile?.settings || {};
-
-    // Update voice_id in settings
-    const { error } = await supabase
-      .from("users")
-      .update({
-        settings: {
-          ...currentSettings,
-          voice_id: voice,
-        }
-      })
-      .eq("id", user.id);
-
-    if (error) {
-      toast.error("Failed to save settings");
-      setLoading(false);
-      return;
-    }
-
-    toast.success("Voice preference saved!");
-    setSaved(true);
-    setLoading(false);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  const hasChanges = voice !== voiceId;
-
+/**
+ * Voice Duo Info Component
+ * Displays information about the fixed Breeze & Vale duo
+ * No user selection - voices are fixed for dialogue format
+ */
+export function SettingsForm() {
   return (
     <div className="space-y-6">
-      {/* Voice */}
-      <div className="space-y-2">
-        <Label htmlFor="voice">AI Voice</Label>
-        <Select value={voice} onValueChange={setVoice}>
-          <SelectTrigger id="voice" className="rounded-xl h-12">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl">
-            {VOICES.map((v) => (
-              <SelectItem 
-                key={v.id} 
-                value={v.id}
-                className="rounded-lg"
-              >
-                <div className="flex flex-col">
-                  <span>{v.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {v.description}
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          La voix qui narrera votre podcast
+      {/* Duo Info */}
+      <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-xl bg-primary/10">
+            <Users className="w-5 h-5 text-primary" />
+          </div>
+          <h3 className="font-semibold">Format Dialogue</h3>
+        </div>
+        
+        <p className="text-sm text-muted-foreground mb-6">
+          Votre podcast est présenté par un duo d'experts qui débattent et analysent l'actualité ensemble.
         </p>
+        
+        <div className="grid gap-4">
+          {/* Breeze */}
+          <div className="flex items-start gap-4 p-4 rounded-xl bg-muted/50">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center font-serif font-bold text-primary">
+              B
+            </div>
+            <div>
+              <div className="font-medium">Breeze</div>
+              <div className="text-sm text-muted-foreground">
+                L'expert pédagogue — Pose le cadre, expose les faits et les chiffres
+              </div>
+            </div>
+          </div>
+          
+          {/* Vale */}
+          <div className="flex items-start gap-4 p-4 rounded-xl bg-muted/50">
+            <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-serif font-bold">
+              V
+            </div>
+            <div>
+              <div className="font-medium">Vale</div>
+              <div className="text-sm text-muted-foreground">
+                Le challenger pragmatique — Questions directes, risques et implications concrètes
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-
-      {/* Save Button */}
-      <Button 
-        onClick={handleSave}
-        disabled={loading || !hasChanges}
-        className="rounded-xl h-12 w-full sm:w-auto"
-      >
-        {loading ? (
-          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-        ) : saved ? (
-          <Check className="w-4 h-4 mr-2 text-green-500" />
-        ) : null}
-        {saved ? "Saved!" : "Save Changes"}
-      </Button>
+      
+      {/* Style Info */}
+      <div className="text-xs text-muted-foreground space-y-1">
+        <p>• Ton factuel et analytique, sans superlatifs</p>
+        <p>• Accessible aux non-experts, termes techniques expliqués</p>
+        <p>• Dialogue naturel avec questions et réponses</p>
+      </div>
     </div>
   );
 }
