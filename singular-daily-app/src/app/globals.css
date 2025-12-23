@@ -8,11 +8,11 @@
    ============================================ */
 
 /* Typography Imports */
-/* Wittgenstein: Titres & Identité */
+/* Wittgenstein-style: Elegant Serif for brand voice & titles */
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-/* Inter: Corps de texte, Data */
+/* Inter: Corps de texte */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-/* Roboto Mono: Code, chiffres */
+/* Roboto Mono: Data, UI, chiffres */
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
 
 @layer base {
@@ -131,7 +131,7 @@
 
 @layer components {
   /* ============================================
-     TYPOGRAPHY - Wittgenstein + Inter
+     TYPOGRAPHY - Wittgenstein (Serif) + Inter/Mono
      ============================================ */
   
   /* Display/Titles - Cormorant Garamond (Wittgenstein style) */
@@ -153,20 +153,20 @@
     font-family: var(--font-mono);
   }
   
-  /* Keernel Logo Title */
+  /* Keernel Logo Title - Wittgenstein Semi-Bold 600 */
   .title-keernel {
     font-family: var(--font-display);
     font-weight: 600;
     letter-spacing: -0.02em;
   }
   
-  /* Section Titles */
+  /* Section Titles - Wittgenstein */
   .title-section {
     font-family: var(--font-display);
     @apply text-2xl md:text-3xl font-medium;
   }
   
-  /* Data/Numbers */
+  /* Data/Numbers - Roboto Mono */
   .text-data {
     font-family: var(--font-mono);
     @apply text-sm tracking-wide;
@@ -284,28 +284,29 @@
   /* ============================================
      GENERATE BUTTON
      Light: bg charcoal, texte laiton, halo charcoal
+     Dark: bg crème, texte charcoal
      ============================================ */
   .btn-generate {
     @apply relative overflow-hidden rounded-full font-medium transition-all duration-300;
     font-family: var(--font-mono);
-    background: hsl(0 0% 10%);
-    color: hsl(48 53% 55%);
-    box-shadow: var(--glow-charcoal);
+    background: hsl(0 0% 10%);              /* Charcoal */
+    color: hsl(48 53% 55%);                 /* Laiton */
+    box-shadow: 0 0 20px rgba(26, 26, 26, 0.3);  /* Halo charcoal */
   }
   
   .btn-generate:hover {
-    box-shadow: 0 0 30px rgba(26, 26, 26, 0.4);
+    box-shadow: 0 0 30px rgba(26, 26, 26, 0.5);
     transform: translateY(-1px);
   }
   
   .dark .btn-generate {
-    background: hsl(36 40% 95%);
-    color: hsl(0 0% 10%);
-    box-shadow: 0 0 20px rgba(250, 245, 235, 0.1);
+    background: hsl(36 40% 95%);            /* Crème */
+    color: hsl(0 0% 10%);                   /* Charcoal */
+    box-shadow: 0 0 20px rgba(250, 245, 235, 0.15);
   }
   
   .dark .btn-generate:hover {
-    box-shadow: 0 0 30px rgba(250, 245, 235, 0.2);
+    box-shadow: 0 0 30px rgba(250, 245, 235, 0.25);
   }
 
   /* ============================================

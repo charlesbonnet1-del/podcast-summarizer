@@ -44,7 +44,7 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
     ? profile.first_name.slice(0, 2).toUpperCase()
     : user.email?.slice(0, 2).toUpperCase() ?? "U";
 
-  // Logo based on theme
+  // Logo based on theme - default to charcoal for SSR
   const logoSrc = resolvedTheme === "dark" ? "/logo-sable.svg" : "/logo-charcoal.svg";
 
   return (
