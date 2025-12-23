@@ -104,11 +104,11 @@ function FloatingOrbs() {
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      {/* Cyan orb - top right */}
+      {/* Brass orb - top right */}
       <motion.div
         className="absolute w-[500px] h-[500px] rounded-full opacity-30"
         style={{
-          background: "radial-gradient(circle, rgba(0, 245, 255, 0.4) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(197, 179, 88, 0.4) 0%, transparent 70%)",
           filter: "blur(60px)",
           top: "-10%",
           right: "-5%",
@@ -121,11 +121,11 @@ function FloatingOrbs() {
         transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
       />
       
-      {/* Lime orb - bottom left */}
+      {/* Brass lighter orb - bottom left */}
       <motion.div
         className="absolute w-[400px] h-[400px] rounded-full opacity-25"
         style={{
-          background: "radial-gradient(circle, rgba(204, 255, 0, 0.4) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(197, 179, 88, 0.3) 0%, transparent 70%)",
           filter: "blur(50px)",
           bottom: "10%",
           left: "-5%",
@@ -138,11 +138,11 @@ function FloatingOrbs() {
         transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
       />
       
-      {/* Purple orb - center */}
+      {/* Sand orb - center */}
       <motion.div
         className="absolute w-[300px] h-[300px] rounded-full opacity-20"
         style={{
-          background: "radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(247, 238, 221, 0.5) 0%, transparent 70%)",
           filter: "blur(40px)",
           top: "40%",
           left: "50%",
@@ -679,18 +679,19 @@ function GenerateButton({ pendingCount, hasTopics }: { pendingCount: number; has
     return (
       <button
         disabled
-        className="w-full max-w-xs mx-auto block px-6 py-3 rounded-full bg-secondary text-muted-foreground text-sm"
+        className="w-full max-w-xs mx-auto block px-6 py-3 rounded-full bg-secondary text-muted-foreground text-sm font-mono"
       >
         Add topics to get started
       </button>
     );
   }
 
+  // btn-generate: bg charcoal, text laiton, halo charcoal
   return (
     <motion.button
       onClick={handleGenerate}
       disabled={loading || pendingCount === 0}
-      className="w-full max-w-xs mx-auto block btn-brand px-6 py-3 text-black text-sm font-medium"
+      className="w-full max-w-xs mx-auto block btn-generate px-6 py-3 text-sm"
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
     >
@@ -718,6 +719,7 @@ export function KernelDashboard({
   pendingCount 
 }: KernelDashboardProps) {
   const hasTopics = topics.length > 0;
+  const { resolvedTheme } = useTheme();
 
   return (
     <div className="min-h-screen relative">
@@ -729,29 +731,31 @@ export function KernelDashboard({
 
       {/* Main content - centered */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-20">
-        {/* Logo */}
+        {/* Logo - SVG based on theme */}
         <motion.div
           className="mb-6"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#C5B358] to-[#C5B358] flex items-center justify-center">
-            <span className="text-2xl font-bold text-black">K</span>
-          </div>
+          <img 
+            src={resolvedTheme === "dark" ? "/logo-sable.svg" : "/logo-charcoal.svg"}
+            alt="Keernel"
+            className="w-16 h-16"
+          />
         </motion.div>
 
-        {/* Greeting */}
+        {/* Greeting - Wittgenstein Semi Bold 600 */}
         <motion.div
           className="text-center mb-10"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <h1 className="font-serif text-4xl md:text-5xl font-medium mb-2">
+          <h1 className="title-keernel text-4xl md:text-5xl mb-2">
             Bonjour{user.firstName ? `, ${user.firstName}` : ""}
           </h1>
-          <p className="text-muted-foreground text-sm tracking-wide">
+          <p className="text-muted-foreground text-sm tracking-wide font-mono">
             Votre podcast quotidien vous attend
           </p>
         </motion.div>
