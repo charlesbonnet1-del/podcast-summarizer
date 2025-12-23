@@ -55,16 +55,36 @@ def get_audio_duration(file_path: str) -> int:
 
 
 def normalize_voice_tags(script: str) -> str:
-    """Normalize voice tag formats."""
+    """Normalize various voice tag formats to [VOICE_A] and [VOICE_B]."""
     patterns = [
+        # Standard variations
         (r'\[VOICE[\s_-]*A\]', '[VOICE_A]'),
         (r'\[VOICE[\s_-]*B\]', '[VOICE_B]'),
         (r'\[voice[\s_-]*a\]', '[VOICE_A]'),
         (r'\[voice[\s_-]*b\]', '[VOICE_B]'),
+        # Colon format
         (r'VOICE_A\s*:', '[VOICE_A]\n'),
         (r'VOICE_B\s*:', '[VOICE_B]\n'),
+        # Bold markdown
+        (r'\*\*\[VOICE_A\]\*\*', '[VOICE_A]'),
+        (r'\*\*\[VOICE_B\]\*\*', '[VOICE_B]'),
+        (r'\*\*VOICE_A\*\*\s*:', '[VOICE_A]\n'),
+        (r'\*\*VOICE_B\*\*\s*:', '[VOICE_B]\n'),
+        # Name formats
         (r'Breeze\s*:', '[VOICE_A]\n'),
         (r'Vale\s*:', '[VOICE_B]\n'),
+        (r'\[Breeze\]', '[VOICE_A]'),
+        (r'\[Vale\]', '[VOICE_B]'),
+        (r'\*\*Breeze\*\*\s*:', '[VOICE_A]\n'),
+        (r'\*\*Vale\*\*\s*:', '[VOICE_B]\n'),
+        # Speaker format  
+        (r'Speaker\s*A\s*:', '[VOICE_A]\n'),
+        (r'Speaker\s*B\s*:', '[VOICE_B]\n'),
+        (r'Host\s*1\s*:', '[VOICE_A]\n'),
+        (r'Host\s*2\s*:', '[VOICE_B]\n'),
+        # Numbered voices
+        (r'\[VOICE\s*1\]', '[VOICE_A]'),
+        (r'\[VOICE\s*2\]', '[VOICE_B]'),
     ]
     result = script
     for pattern, replacement in patterns:
@@ -72,8 +92,27 @@ def normalize_voice_tags(script: str) -> str:
     return result
 
 
+def force_voice_alternation(segments: list[dict]) -> list[dict]:
+    """Ensure voices alternate properly - if all same voice, force alternation."""
+    if not segments:
+        return segments
+    
+    voices = set(s["voice"] for s in segments)
+    
+    if len(voices) == 1:
+        log.warning("Only one voice detected, forcing alternation")
+        for i, seg in enumerate(segments):
+            seg["voice"] = "A" if i % 2 == 0 else "B"
+    else:
+        for i in range(1, len(segments)):
+            if segments[i]["voice"] == segments[i-1]["voice"]:
+                segments[i]["voice"] = "B" if segments[i-1]["voice"] == "A" else "A"
+    
+    return segments
+
+
 def parse_dialogue_script(script: str) -> list[dict]:
-    """Parse into voice segments."""
+    """Parse into voice segments with robust fallback."""
     if not script:
         return []
     
@@ -88,9 +127,24 @@ def parse_dialogue_script(script: str) -> list[dict]:
         voice = parts[i].upper()
         if voice in ("A", "B") and i + 1 < len(parts):
             text = parts[i + 1].strip()
+            text = re.sub(r'^\s*\n+', '', text)
+            text = re.sub(r'\n+\s*$', '', text)
             if text:
                 segments.append({"voice": voice, "text": text})
         i += 2
+    
+    # FALLBACK: If no voice tags found, split by paragraphs and alternate
+    if not segments:
+        log.warning("No voice tags parsed, using paragraph fallback")
+        paragraphs = [p.strip() for p in script.split('\n\n') if p.strip()]
+        if not paragraphs:
+            paragraphs = [p.strip() for p in script.split('\n') if p.strip()]
+        for i, para in enumerate(paragraphs):
+            if para and len(para) > 10:
+                segments.append({"voice": "A" if i % 2 == 0 else "B", "text": para})
+    
+    # Force proper alternation
+    segments = force_voice_alternation(segments)
     
     return segments
 
