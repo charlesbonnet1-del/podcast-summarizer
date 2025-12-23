@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Settings, Volume2, User, Rss, Hash, Clock } from "lucide-react";
+import { Settings, Volume2, User, Rss, Hash, Clock, Globe } from "lucide-react";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { TopicPicker } from "@/components/settings/topic-picker";
@@ -41,26 +41,30 @@ export default async function SettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="font-serif text-3xl font-semibold tracking-tight flex items-center gap-3">
-          <Settings className="w-8 h-8" />
-          Settings
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Customize your Keernel experience
-        </p>
+      {/* Header - Style like home */}
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-card border border-brass/20 flex items-center justify-center glow-brass">
+          <Settings className="w-6 h-6 text-sand" />
+        </div>
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">
+            Settings
+          </h1>
+          <p className="text-muted-foreground font-body">
+            Customize your Keernel experience
+          </p>
+        </div>
       </div>
 
       {/* Profile Info */}
       <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
-              <User className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
+              <User className="w-5 h-5 text-sand" />
             </div>
             <div>
-              <CardTitle className="text-lg">Your Profile</CardTitle>
+              <CardTitle className="text-lg font-display">Your Profile</CardTitle>
               <CardDescription>Personalize your podcast greeting</CardDescription>
             </div>
           </div>
@@ -81,11 +85,11 @@ export default async function SettingsPage() {
       <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#C5B358]/10 flex items-center justify-center">
-              <Clock className="w-5 h-5 text-[#C5B358]" />
+            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
+              <Clock className="w-5 h-5 text-sand" />
             </div>
             <div>
-              <CardTitle className="text-lg">Format</CardTitle>
+              <CardTitle className="text-lg font-display">Format</CardTitle>
               <CardDescription>Choisissez la durée de votre briefing</CardDescription>
             </div>
           </div>
@@ -101,11 +105,11 @@ export default async function SettingsPage() {
       <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#C5B358]/10 flex items-center justify-center">
-              <Hash className="w-5 h-5 text-[#C5B358]" />
+            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
+              <Hash className="w-5 h-5 text-sand" />
             </div>
             <div>
-              <CardTitle className="text-lg">Topics</CardTitle>
+              <CardTitle className="text-lg font-display">Topics</CardTitle>
               <CardDescription>Choose your news categories</CardDescription>
             </div>
           </div>
@@ -122,11 +126,11 @@ export default async function SettingsPage() {
       <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
-              <Volume2 className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
+              <Volume2 className="w-5 h-5 text-sand" />
             </div>
             <div>
-              <CardTitle className="text-lg">Podcast Hosts</CardTitle>
+              <CardTitle className="text-lg font-display">Podcast Hosts</CardTitle>
               <CardDescription>Votre duo d'experts</CardDescription>
             </div>
           </div>
@@ -140,11 +144,11 @@ export default async function SettingsPage() {
       <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-              <Rss className="w-5 h-5 text-orange-500" />
+            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
+              <Rss className="w-5 h-5 text-sand" />
             </div>
             <div>
-              <CardTitle className="text-lg">Podcast Feed</CardTitle>
+              <CardTitle className="text-lg font-display">Podcast Feed</CardTitle>
               <CardDescription>Subscribe in your favorite podcast app</CardDescription>
             </div>
           </div>

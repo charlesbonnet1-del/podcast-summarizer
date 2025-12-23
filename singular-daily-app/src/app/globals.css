@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ============================================
-   KEERNEL AUTHORITY V2 - Design System
+   KEERNEL AUTHORITY V3 - Design System
    Philosophical Rigor + Tech Innovation
    ============================================ */
 
@@ -207,37 +207,43 @@
   }
 
   /* ============================================
-     TAG PILL - Topics
-     Light: crème, halo laiton, texte charcoal
+     TAG PILL - Topics (V3: fond charcoal, typo crème)
      ============================================ */
   .tag-pill {
     @apply rounded-full px-4 py-2;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    background: hsl(var(--card));
-    color: hsl(var(--foreground));
-    border: 1px solid hsl(48 53% 55% / 0.3);
-    box-shadow: var(--glow-brass);
+    font-family: var(--font-display);  /* Wittgenstein */
+    font-weight: 500;
+    font-size: 0.9rem;
+    background: hsl(0 0% 10%);         /* Charcoal */
+    color: hsl(36 40% 95%);            /* Crème */
+    border: 1px solid hsl(0 0% 20%);
+    box-shadow: 0 0 15px rgba(26, 26, 26, 0.25);
     transition: all 0.2s ease;
   }
   
   .tag-pill:hover {
-    border-color: hsl(48 53% 55% / 0.6);
-    box-shadow: var(--glow-brass-intense);
+    box-shadow: 0 0 25px rgba(26, 26, 26, 0.4);
+    transform: translateY(-1px);
   }
   
   .dark .tag-pill {
-    background: hsl(0 0% 13%);
-    color: hsl(36 40% 95%);
-    border: 1px solid hsl(48 53% 55% / 0.2);
+    background: hsl(36 40% 95%);       /* Crème */
+    color: hsl(0 0% 10%);              /* Charcoal */
+    border: 1px solid hsl(36 30% 88%);
+    box-shadow: 0 0 15px rgba(250, 245, 235, 0.15);
+  }
+  
+  .dark .tag-pill:hover {
+    box-shadow: 0 0 25px rgba(250, 245, 235, 0.25);
   }
   
   /* Tag selected state */
   .tag-pill-selected,
   .tag-pill[data-selected="true"] {
-    background: hsl(48 53% 55%);
-    color: hsl(0 0% 10%);
+    background: hsl(48 53% 55%);       /* Laiton */
+    color: hsl(0 0% 10%);              /* Charcoal */
     border-color: hsl(48 53% 55%);
+    box-shadow: var(--glow-brass);
   }
 
   /* ============================================
@@ -282,15 +288,18 @@
   }
 
   /* ============================================
-     GENERATE BUTTON
-     Light: bg charcoal, texte laiton, halo charcoal
+     GENERATE BUTTON (V3: charcoal + crème + Wittgenstein)
+     Light: bg charcoal, texte CRÈME, ombre charcoal
      Dark: bg crème, texte charcoal
      ============================================ */
   .btn-generate {
     @apply relative overflow-hidden rounded-full font-medium transition-all duration-300;
-    font-family: var(--font-mono);
-    background: hsl(0 0% 10%);              /* Charcoal */
-    color: hsl(48 53% 55%);                 /* Laiton */
+    font-family: var(--font-display);    /* Wittgenstein */
+    font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: -0.01em;
+    background: hsl(0 0% 10%);           /* Charcoal */
+    color: hsl(36 40% 95%);              /* CRÈME (pas laiton) */
     box-shadow: 0 0 20px rgba(26, 26, 26, 0.3);  /* Halo charcoal */
   }
   
@@ -300,8 +309,8 @@
   }
   
   .dark .btn-generate {
-    background: hsl(36 40% 95%);            /* Crème */
-    color: hsl(0 0% 10%);                   /* Charcoal */
+    background: hsl(36 40% 95%);         /* Crème */
+    color: hsl(0 0% 10%);                /* Charcoal */
     box-shadow: 0 0 20px rgba(250, 245, 235, 0.15);
   }
   
@@ -314,7 +323,8 @@
      ============================================ */
   .btn-brand {
     @apply relative overflow-hidden rounded-full font-medium transition-all duration-300;
-    font-family: var(--font-mono);
+    font-family: var(--font-display);    /* Wittgenstein */
+    font-weight: 600;
     background: hsl(48 53% 55%);
     color: hsl(0 0% 10%);
     box-shadow: var(--glow-brass);
@@ -351,6 +361,17 @@
   .dark .matte-card {
     background: hsl(0 0% 13%);
     border: 1px solid hsl(48 53% 55% / 0.1);
+  }
+
+  /* ============================================
+     SETTINGS PAGE - No white navbar, sand icons
+     ============================================ */
+  .settings-icon-sand {
+    color: hsl(36 50% 75%);  /* Sable doré */
+  }
+  
+  .dark .settings-icon-sand {
+    color: hsl(36 50% 75%);
   }
 
   /* ============================================
@@ -411,6 +432,11 @@
     color: hsl(36 40% 95%);
   }
   
+  /* Sand color for icons */
+  .text-sand {
+    color: hsl(36 50% 75%);
+  }
+  
   /* Glow utilities */
   .glow-brass {
     box-shadow: var(--glow-brass);
@@ -418,6 +444,10 @@
   
   .glow-brass-intense {
     box-shadow: var(--glow-brass-intense);
+  }
+  
+  .glow-charcoal {
+    box-shadow: 0 0 20px rgba(26, 26, 26, 0.3);
   }
   
   /* Progress bar */

@@ -71,7 +71,7 @@ export function ProfileForm({
       {/* Name fields */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="firstName">First Name</Label>
+          <Label htmlFor="firstName" className="font-display">First Name</Label>
           <Input
             id="firstName"
             placeholder="Your first name"
@@ -84,7 +84,7 @@ export function ProfileForm({
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="lastName">Last Name</Label>
+          <Label htmlFor="lastName" className="font-display">Last Name</Label>
           <Input
             id="lastName"
             placeholder="Your last name"
@@ -98,11 +98,11 @@ export function ProfileForm({
       {/* International Sources Toggle */}
       <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-            <Globe className="w-5 h-5 text-blue-500" />
+          <div className="w-10 h-10 rounded-lg bg-card border border-brass/20 flex items-center justify-center">
+            <Globe className="w-5 h-5 text-sand" />
           </div>
           <div>
-            <p className="font-medium">International Sources</p>
+            <p className="font-display font-medium">International Sources</p>
             <p className="text-sm text-muted-foreground">
               Include news from US, UK, Germany, Spain, Italy
             </p>
@@ -112,12 +112,14 @@ export function ProfileForm({
           type="button"
           onClick={() => setIncludeInternational(!includeInternational)}
           className={`relative w-12 h-6 rounded-full transition-colors ${
-            includeInternational ? 'bg-[#C5B358]' : 'bg-muted'
+            includeInternational ? 'bg-charcoal dark:bg-cream' : 'bg-muted'
           }`}
         >
           <span
-            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-              includeInternational ? 'left-7' : 'left-1'
+            className={`absolute top-1 w-4 h-4 rounded-full transition-transform ${
+              includeInternational 
+                ? 'left-7 bg-cream dark:bg-charcoal' 
+                : 'left-1 bg-white dark:bg-gray-400'
             }`}
           />
         </button>
@@ -126,7 +128,7 @@ export function ProfileForm({
       {includeInternational && (
         <div className="flex flex-wrap gap-2 px-1">
           {["🇫🇷 France", "🇺🇸 USA", "🇬🇧 UK", "🇩🇪 Germany", "🇪🇸 Spain", "🇮🇹 Italy"].map((country) => (
-            <Badge key={country} variant="secondary" className="text-xs">
+            <Badge key={country} variant="secondary" className="text-xs font-display">
               {country}
             </Badge>
           ))}
@@ -138,7 +140,7 @@ export function ProfileForm({
         <Button 
           onClick={handleSave} 
           disabled={saving}
-          className="w-full h-11 bg-[#C5B358] hover:bg-[#A89A48] text-black"
+          className="w-full h-11 btn-generate"
         >
           {saving ? (
             <>
@@ -164,14 +166,14 @@ export function ProfileForm({
         </div>
         <div className="flex justify-between items-center">
           <span className="text-sm text-muted-foreground">Plan</span>
-          <Badge variant="secondary" className="capitalize">
+          <Badge variant="secondary" className="capitalize font-display">
             {plan}
           </Badge>
         </div>
         {memberSince && (
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">Member since</span>
-            <span className="text-sm font-medium">
+            <span className="text-sm font-display font-medium">
               {new Date(memberSince).toLocaleDateString("en-US", {
                 month: "long",
                 day: "numeric",

@@ -19,20 +19,20 @@ export default function Home() {
             <Image 
               src={logoSrc}
               alt="Keernel"
-              width={32}
-              height={32}
-              className="w-8 h-8"
+              width={48}
+              height={48}
+              className="w-12 h-12"
             />
-            <span className="title-keernel text-xl">Keernel</span>
+            <span className="title-keernel text-2xl">Keernel</span>
           </div>
           <nav className="flex items-center gap-4">
             <Link href="/login">
-              <Button variant="ghost" className="rounded-full font-mono">
+              <Button variant="ghost" className="rounded-full font-serif font-medium">
                 Sign in
               </Button>
             </Link>
             <Link href="/login">
-              <Button className="btn-generate rounded-full font-mono">
+              <Button className="btn-generate rounded-full">
                 Get Started
               </Button>
             </Link>
@@ -68,7 +68,7 @@ export default function Home() {
             <Button 
               size="lg" 
               variant="outline" 
-              className="rounded-full text-lg px-8 h-14 border-brass/50 text-brass hover:bg-brass/10 font-mono"
+              className="rounded-full text-lg px-8 h-14 border-brass/50 text-brass hover:bg-brass/10 font-serif font-medium"
             >
               Watch demo
             </Button>
@@ -83,9 +83,9 @@ export default function Home() {
                   <Image 
                     src={logoSrc}
                     alt="Keernel"
-                    width={64}
-                    height={64}
-                    className="w-16 h-16 mx-auto mb-4 opacity-50"
+                    width={96}
+                    height={96}
+                    className="w-24 h-24 mx-auto mb-4 opacity-50"
                   />
                   <p className="text-muted-foreground font-mono">Dashboard Preview</p>
                 </div>
@@ -129,11 +129,11 @@ export default function Home() {
             <Image 
               src={logoSrc}
               alt="Keernel"
-              width={24}
-              height={24}
-              className="w-6 h-6"
+              width={36}
+              height={36}
+              className="w-9 h-9"
             />
-            <span className="font-medium title-keernel">Keernel</span>
+            <span className="font-medium title-keernel text-lg">Keernel</span>
           </div>
           <p className="text-sm text-muted-foreground font-mono">
             © 2024 Keernel. Built with ♥ for curious minds.

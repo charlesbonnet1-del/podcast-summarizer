@@ -8,12 +8,8 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 /**
- * V2 Topic structure - Verticals and their allowed topics
- * WORLD: asia, regulation, resources
- * TECH: ia, quantum, robotics
- * ECONOMICS: crypto, macro, stocks
- * SCIENCE: energy, health, space
- * CULTURE: cinema, gaming, lifestyle
+ * V3 Topic structure - Verticals and their allowed topics
+ * Icons use text-sand color class
  */
 const TOPIC_CATEGORIES = [
   {
@@ -156,15 +152,15 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
       {/* Header with count */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-serif text-lg font-medium">Vos Thèmes</h3>
+          <h3 className="font-display text-lg font-medium">Vos Thèmes</h3>
           <p className="text-sm text-muted-foreground">
             Sélectionnez jusqu'à {maxTopics} thèmes pour votre podcast
           </p>
         </div>
-        <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+        <div className={`px-3 py-1 rounded-full text-sm font-display font-medium ${
           isAtLimit 
             ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" 
-            : "bg-[#C5B358]/10 text-[#C5B358]"
+            : "bg-charcoal/10 dark:bg-cream/10 text-foreground"
         }`}>
           {selectedTopics.length}/{maxTopics}
         </div>
@@ -189,10 +185,11 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                 className="w-full flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xl">{category.icon}</span>
-                  <span className="font-medium">{category.name}</span>
+                  {/* Emoji with sand filter */}
+                  <span className="text-xl opacity-75 grayscale-[30%] sepia-[30%]">{category.icon}</span>
+                  <span className="font-display font-medium">{category.name}</span>
                   {selectedInCategory > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-[#C5B358]/20 text-[#C5B358] text-xs font-medium">
+                    <span className="px-2 py-0.5 rounded-full bg-charcoal dark:bg-cream text-cream dark:text-charcoal text-xs font-display font-medium">
                       {selectedInCategory}
                     </span>
                   )}
@@ -227,7 +224,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                             disabled={saving || isDisabled}
                             className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
                               isSelected
-                                ? "bg-[#C5B358]/10 border border-[#C5B358]/30"
+                                ? "bg-charcoal dark:bg-cream text-cream dark:text-charcoal glow-charcoal"
                                 : isDisabled
                                   ? "bg-secondary/30 opacity-50 cursor-not-allowed"
                                   : "bg-secondary/50 hover:bg-secondary border border-transparent"
@@ -235,17 +232,17 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                             whileHover={!isDisabled ? { scale: 1.01 } : {}}
                             whileTap={!isDisabled ? { scale: 0.99 } : {}}
                           >
-                            <span className={`text-sm ${isSelected ? "font-medium" : ""}`}>
+                            <span className={`text-sm font-display ${isSelected ? "font-semibold" : "font-medium"}`}>
                               {topic.label}
                             </span>
                             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
                               isSelected
-                                ? "border-[#C5B358] bg-[#C5B358]"
+                                ? "border-cream dark:border-charcoal bg-brass"
                                 : isDisabled
                                   ? "border-muted-foreground/20"
                                   : "border-muted-foreground/40"
                             }`}>
-                              {isSelected && <Check className="w-3 h-3 text-black" />}
+                              {isSelected && <Check className="w-3 h-3 text-charcoal" />}
                               {isDisabled && !isSelected && <Lock className="w-2.5 h-2.5 text-muted-foreground/40" />}
                             </div>
                           </motion.button>
@@ -267,7 +264,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
           animate={{ opacity: 1, y: 0 }}
           className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20"
         >
-          <p className="text-sm text-amber-600 dark:text-amber-400">
+          <p className="text-sm text-amber-600 dark:text-amber-400 font-display">
             <Lock className="w-4 h-4 inline mr-2" />
             Limite de {maxTopics} thèmes atteinte. Passez au plan Pro pour plus de thèmes.
           </p>
