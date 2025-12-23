@@ -1,11 +1,16 @@
 """
-Keernel Stitcher - Audio Assembly Engine v2
+Keernel Stitcher V3 - Dialogue Duo System (Breeze & Vale)
+
+NOW USES:
+- OpenAI TTS only (no Azure)
+- Dual voice dialogue: Breeze (nova) & Vale (onyx)
+- [VOICE_A] and [VOICE_B] tags in all scripts
 
 RÈGLES DE FER POUR LES SCRIPTS RADIO:
 1. ZÉRO MÉTA-DISCOURS - Jamais "Voici le script...", "Passons à..."
 2. L'OREILLE AVANT TOUT - Phrases courtes (Sujet-Verbe-Complément)
 3. ACCROCHES JOURNALISTIQUES - Entrer directement dans l'info
-4. CITATIONS NATURELLES - "D'après TechCrunch...", "Selon le Figaro..."
+4. FORMAT DIALOGUE - Toujours avec [VOICE_A] et [VOICE_B]
 5. TOUJOURS EN FRANÇAIS - Quelle que soit la langue source
 """
 import os
@@ -21,7 +26,17 @@ import structlog
 from dotenv import load_dotenv
 
 from db import supabase
-from generator import generate_audio, groq_client, get_audio_duration
+from generator import (
+    generate_dialogue_audio,
+    generate_dialogue_script,
+    groq_client,
+    openai_client,
+    get_audio_duration,
+    VOICE_BREEZE,
+    VOICE_VALE,
+    VOICE_TAG_A,
+    VOICE_TAG_B
+)
 from extractor import extract_content
 
 load_dotenv()
@@ -65,74 +80,86 @@ VERTICALS = {
 }
 
 # ============================================
-# SYSTEM PROMPTS - RÈGLES DE FER
+# DIALOGUE SYSTEM PROMPTS - V3 BREEZE & VALE
 # ============================================
 
-SYSTEM_PROMPT_RADIO = """Tu es un journaliste radio français de premier plan. Tu écris des scripts audio PERCUTANTS.
+DIALOGUE_SYSTEM_PROMPT = """Tu es un scénariste de podcast professionnel. Tu crées des scripts de dialogue entre deux hôtes en français.
 
-## RÈGLES DE FER ABSOLUES
+## LES DEUX HÔTES
 
-### 1. ZÉRO MÉTA-DISCOURS
-INTERDIT de commencer par :
-- "Voici le script..."
-- "Passons à..."  
-- "Le sujet suivant est..."
-- "Dans cette rubrique..."
-- "Nous allons parler de..."
+**Breeze** ([VOICE_A]) - L'Expert Pédagogue
+- Pose le cadre, expose les faits, les chiffres et le contexte
+- Vulgarise sans simplifier à l'excès
+- Ton : Calme, précis, informatif
 
-### 2. ACCROCHES DIRECTES
-Commence TOUJOURS par l'information elle-même :
-✅ "C'est un record qui vient de tomber à Wall Street..."
-✅ "Dans les couloirs d'OpenAI, la tension monte..."
-✅ "Surprise à l'Élysée ce matin..."
-✅ "Apple vient de frapper un grand coup..."
+**Vale** ([VOICE_B]) - Le Challenger Pragmatique  
+- Pose les questions que se pose l'auditeur
+- Souligne les risques, limites et implications concrètes
+- Ton : Direct, interrogatif, terre-à-terre
+- Questions types : "Concrètement, ça change quoi ?", "Oui mais le risque c'est...", "Attends, ça veut dire que..."
 
-### 3. STYLE ORAL
-- Phrases COURTES (Sujet-Verbe-Complément)
-- Rythme SOUTENU
-- PAS de listes à puces
-- PAS de parenthèses
-- JAMAIS de markdown
+## RÈGLES D'OR
 
-### 4. CITATIONS NATURELLES
-Cite la source naturellement :
-✅ "D'après TechCrunch..."
-✅ "Comme le révèle le Financial Times..."
-✅ "Selon les informations du Figaro..."
+### Style Anti-IA (CRUCIAL)
+INTERDICTIONS ABSOLUES :
+- Superlatifs : "révolutionnaire", "incroyable", "passionnant", "fascinant"
+- Enthousiasme artificiel : "C'est vraiment excitant !", "Quelle époque formidable !"
+- Bruit conversationnel : "C'est une super question Vale", "Je suis content d'être là"
+- Méta-discours : "Passons à notre prochain sujet", "Comme on l'a vu"
 
-### 5. TOUJOURS EN FRANÇAIS
-Quelle que soit la langue de la source (anglais, allemand, espagnol...), 
-le script doit être rédigé en FRANÇAIS fluide et naturel.
+AUTORISÉ :
+- Ton factuel et analytique
+- Scepticisme constructif
+- Questions directes et pragmatiques
 
-### 6. STRUCTURE
-- Accroche percutante (1-2 phrases)
-- Développement des faits (corps)
-- Chute ou perspective (1 phrase)
+### Accessibilité
+- L'auditeur est intelligent mais NON-EXPERT du sujet
+- Tout terme technique doit être expliqué par sa fonction ou son impact
+- Pas de jargon brut : "L-L-M, c'est-à-dire un modèle de langage comme ChatGPT..."
 
-Tu génères UNIQUEMENT le script, prêt à être lu à voix haute."""
+### Phonétique TTS (OBLIGATOIRE)
+Écris les anglicismes phonétiquement pour OpenAI TTS :
+- "LLM" → "elle-elle-aime"
+- "GPU" → "jé-pé-u"  
+- "CEO" → "si-i-o"
+- "AI" → "A-I"
+- "startup" → "start-eupe"
+- "blockchain" → "bloque-chaîne"
+- "NVIDIA" → "ène-vidia"
+- "OpenAI" → "Opène-A-I"
+- "ChatGPT" → "Tchatte-G-P-T"
 
+### Format du Script
+Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B] sur sa propre ligne :
 
-SYSTEM_PROMPT_EPHEMERIDE = """Tu es un animateur radio français cultivé et dynamique.
+[VOICE_A]
+Breeze expose un fait ou une information.
 
-Tu génères une éphéméride qui :
-1. Commence DIRECTEMENT par la date joliment formulée
-2. Mentionne le saint du jour
-3. Trouve UN fait historique MARQUANT pour cette date
-4. Fait un LIEN (même ténu) avec l'actualité tech ou une tendance du moment
-5. Termine par une transition naturelle vers les actualités
+[VOICE_B]
+Vale réagit, questionne ou nuance.
 
-STYLE :
-- Phrases courtes et percutantes
-- Présent de narration
-- Ton complice et enthousiaste
-- Environ 60-80 mots
+[VOICE_A]
+Breeze répond ou approfondit.
 
-INTERDIT :
-- "Aujourd'hui nous célébrons..."
-- "Pour cette éphéméride..."
-- Toute forme de méta-discours
+### Structure Narrative
+1. ACCROCHE : Vale pose une question intrigante ou Breeze balance un fait percutant
+2. DÉVELOPPEMENT : Ping-pong naturel entre les deux voix
+3. CONCLUSION : Insight pratique ou perspective (pas de "merci d'avoir écouté")
 
-Génère UNIQUEMENT le texte, prêt à être lu."""
+### Rythme
+- Répliques de 2-4 phrases maximum
+- Alternance fréquente (pas de monologue)
+- Questions de Vale pour relancer l'attention
+"""
+
+DIALOGUE_EPHEMERIDE_PROMPT = """Tu es un duo de présentateurs radio cultivés.
+
+**Breeze** ([VOICE_A]) apporte les faits historiques.
+**Vale** ([VOICE_B]) fait le lien avec le présent et pose des questions.
+
+Format STRICT : Chaque réplique commence par [VOICE_A] ou [VOICE_B].
+
+Génère l'éphéméride en 70-90 mots avec alternance des voix."""
 
 
 # ============================================
@@ -151,35 +178,26 @@ def normalize_first_name(name: str) -> str:
 
 
 def extract_source_identity(url: str) -> tuple[str, str]:
-    """
-    Extract source identity from URL.
-    Returns (source_identity, source_type)
-    """
+    """Extract source identity from URL."""
     try:
         parsed = urlparse(url)
         domain = parsed.netloc.replace('www.', '')
         
-        # YouTube
         if 'youtube.com' in domain or 'youtu.be' in domain:
-            # Try to extract channel handle from URL
             if '@' in url:
                 match = re.search(r'@[\w-]+', url)
                 if match:
                     return match.group(), 'youtube'
-            # Extract video ID for now, we'll get channel later
             return domain, 'youtube'
         
-        # Twitter/X
         if 'twitter.com' in domain or 'x.com' in domain:
             match = re.search(r'(?:twitter\.com|x\.com)/(\w+)', url)
             if match:
                 return f"@{match.group(1)}", 'twitter'
         
-        # Podcast platforms
         if any(p in domain for p in ['spotify.com', 'podcasts.apple.com', 'podcasts.google.com']):
             return domain, 'podcast'
         
-        # Default: use domain
         return domain, 'web'
         
     except:
@@ -225,7 +243,6 @@ def update_source_score(user_id: str, url: str):
     try:
         source_identity, source_type = extract_source_identity(url)
         
-        # Call the Supabase function
         supabase.rpc('increment_source_score', {
             'p_user_id': user_id,
             'p_source_identity': source_identity,
@@ -239,8 +256,30 @@ def update_source_score(user_id: str, url: str):
 
 
 # ============================================
-# SEGMENT A: PERSONALIZED INTRO
+# SEGMENT A: PERSONALIZED INTRO (Single Voice)
 # ============================================
+
+def generate_single_voice_audio(text: str, voice: str = "nova", output_path: str = None) -> str | None:
+    """Generate single voice audio for intro."""
+    if not text or not openai_client:
+        return None
+    
+    if not output_path:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(tempfile.gettempdir(), f"single_{timestamp}.mp3")
+    
+    try:
+        response = openai_client.audio.speech.create(
+            model="tts-1-hd",
+            voice=voice,
+            input=text
+        )
+        response.stream_to_file(output_path)
+        return output_path
+    except Exception as e:
+        log.error("Single voice TTS failed", error=str(e))
+        return None
+
 
 def get_or_create_intro(first_name: str) -> dict | None:
     """Get cached intro or create new one."""
@@ -273,7 +312,7 @@ def get_or_create_intro(first_name: str) -> dict | None:
     except:
         pass
     
-    # Generate new intro
+    # Generate new intro (single voice - Breeze greets)
     log.info("Generating new intro", first_name=normalized)
     
     display_name = first_name.strip().title() if first_name else "Ami"
@@ -282,7 +321,8 @@ def get_or_create_intro(first_name: str) -> dict | None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_path = os.path.join(tempfile.gettempdir(), f"intro_{normalized}_{timestamp}.mp3")
     
-    audio_path = generate_audio(intro_script, voice="alloy", output_path=temp_path)
+    # Use Breeze voice (nova) for intro
+    audio_path = generate_single_voice_audio(intro_script, voice=VOICE_BREEZE, output_path=temp_path)
     
     if not audio_path:
         log.error("Failed to generate intro audio")
@@ -312,13 +352,12 @@ def get_or_create_intro(first_name: str) -> dict | None:
 
 
 # ============================================
-# SEGMENT B: ÉCHO DU TEMPS (Enhanced Ephemeride)
+# SEGMENT B: ÉCHO DU TEMPS (Dialogue Version)
 # ============================================
 
 def get_or_create_ephemeride(target_date: date = None) -> dict | None:
     """
-    Generate ephemeride with VERIFIED historical fact from Wikimedia API.
-    No more LLM hallucinations on historical dates.
+    Generate ephemeride as DIALOGUE between Breeze & Vale.
     """
     if target_date is None:
         target_date = date.today()
@@ -353,7 +392,7 @@ def get_or_create_ephemeride(target_date: date = None) -> dict | None:
     except:
         pass
     
-    log.info("Generating ephemeride", date=date_str)
+    log.info("Generating ephemeride (dialogue)", date=date_str)
     
     if not groq_client:
         return None
@@ -367,72 +406,95 @@ def get_or_create_ephemeride(target_date: date = None) -> dict | None:
     
     formatted_date = target_date.strftime("%A %d %B %Y").capitalize()
     
-    # ============================================
-    # FETCH VERIFIED FACT FROM WIKIMEDIA API
-    # ============================================
-    from sourcing import get_best_ephemeride_fact
-    
-    wikimedia_fact = get_best_ephemeride_fact(
-        month=target_date.month, 
-        day=target_date.day
-    )
+    # Fetch verified fact from Wikimedia
+    try:
+        from sourcing import get_best_ephemeride_fact
+        wikimedia_fact = get_best_ephemeride_fact(
+            month=target_date.month, 
+            day=target_date.day
+        )
+    except:
+        wikimedia_fact = None
     
     if wikimedia_fact:
         fact_year = wikimedia_fact["year"]
         fact_text = wikimedia_fact["text"]
         is_tech = wikimedia_fact.get("is_tech_relevant", False)
         
-        log.info("Using Wikimedia fact", year=fact_year, tech_relevant=is_tech)
-        
-        prompt = f"""Génère l'Écho du Temps pour le {formatted_date}.
+        prompt = f"""Génère l'Écho du Temps pour le {formatted_date} en format DIALOGUE.
 
 FAIT HISTORIQUE VÉRIFIÉ (SOURCE: WIKIMEDIA) :
 En {fact_year} : {fact_text}
 
-Ta mission :
-1. Commence par "Nous sommes le {formatted_date}..."
-2. Mentionne un saint du jour plausible
-3. Reformule le fait historique de manière percutante
-4. {"Souligne le lien avec la tech actuelle (IA, espace, énergie...)" if is_tech else "Trouve un angle moderne ou une résonance avec l'actualité"}
-5. Termine par une transition vers les actualités
+FORMAT STRICT - Dialogue entre Breeze et Vale :
+[VOICE_A]
+Breeze présente la date et le fait historique.
 
-IMPORTANT : Utilise UNIQUEMENT le fait fourni ci-dessus, ne l'invente pas.
-Environ 70-90 mots. Ton dynamique et cultivé."""
+[VOICE_B]
+Vale fait le lien avec l'actualité ou pose une question.
+
+[VOICE_A]
+Breeze conclut et fait la transition.
+
+IMPORTANT : 
+- Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B]
+- Environ 70-90 mots au total
+- Utilise le fait vérifié ci-dessus"""
 
     else:
-        # Fallback: demander au LLM mais avec avertissement
-        log.warning("No Wikimedia fact available, using LLM generation")
-        prompt = f"""Génère l'Écho du Temps pour le {formatted_date}.
+        prompt = f"""Génère l'Écho du Temps pour le {formatted_date} en format DIALOGUE.
 
-Note : Pas de fait historique disponible, génère une éphéméride générique.
-Mentionne la date et un saint du jour plausible.
-Fais une transition vers les actualités.
+FORMAT STRICT - Dialogue entre Breeze et Vale :
+[VOICE_A]
+Breeze présente la date.
 
-Environ 60 mots. Ton dynamique."""
+[VOICE_B]
+Vale réagit ou pose une question.
+
+[VOICE_A]
+Breeze conclut et fait la transition vers les actualités.
+
+IMPORTANT : Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B]
+Environ 60 mots au total."""
 
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_EPHEMERIDE},
+                {"role": "system", "content": DIALOGUE_EPHEMERIDE_PROMPT},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,  # Lower temp for more factual
-            max_tokens=250
+            temperature=0.7,
+            max_tokens=300
         )
         
         script = response.choices[0].message.content.strip()
-        log.info("Ephemeride generated", words=len(script.split()))
+        
+        # Validate it has voice tags
+        if VOICE_TAG_A not in script or VOICE_TAG_B not in script:
+            log.warning("Ephemeride missing voice tags, regenerating...")
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": DIALOGUE_EPHEMERIDE_PROMPT},
+                    {"role": "user", "content": prompt + "\n\nATTENTION: Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B] !"}
+                ],
+                temperature=0.7,
+                max_tokens=300
+            )
+            script = response.choices[0].message.content.strip()
+        
+        log.info("Ephemeride script generated", words=len(script.split()))
         
     except Exception as e:
         log.error("Failed to generate ephemeride", error=str(e))
         return None
     
-    # Generate audio
+    # Generate dialogue audio
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_path = os.path.join(tempfile.gettempdir(), f"ephemeride_{date_str}_{timestamp}.mp3")
     
-    audio_path = generate_audio(script, voice="alloy", output_path=temp_path)
+    audio_path = generate_dialogue_audio(script, temp_path)
     if not audio_path:
         return None
     
@@ -462,10 +524,10 @@ Environ 60 mots. Ton dynamique."""
 
 
 # ============================================
-# SEGMENT GENERATION - DEEP DIVE & FLASH
+# SEGMENT GENERATION - DIALOGUE VERSION
 # ============================================
 
-def generate_segment_script(
+def generate_segment_script_dialogue(
     url: str,
     title: str,
     content: str,
@@ -473,7 +535,7 @@ def generate_segment_script(
     target_words: int,
     vertical: str = None
 ) -> str | None:
-    """Generate script with iron rules applied."""
+    """Generate script as DIALOGUE between Breeze & Vale."""
     
     source_name = get_domain(url)
     
@@ -482,39 +544,58 @@ def generate_segment_script(
 TITRE : {title}
 CONTENU : {content[:5000]}
 
-Écris un script DEEP DIVE d'environ {target_words} mots.
+Écris un script DIALOGUE d'environ {target_words} mots entre Breeze et Vale.
 
-STRUCTURE :
-1. Accroche percutante (entre direct dans le sujet)
-2. Les faits clés développés
-3. L'analyse ou la perspective
-4. Chute mémorable
+FORMAT STRICT :
+[VOICE_A]
+Breeze présente les faits et le contexte.
 
-Cite la source naturellement : "D'après {source_name}..."
+[VOICE_B]
+Vale pose des questions pragmatiques ou souligne les limites.
 
-GÉNÈRE UNIQUEMENT LE SCRIPT."""
+[VOICE_A]
+Breeze approfondit ou répond.
+
+[VOICE_B]
+Vale conclut avec une perspective pratique.
+
+RÈGLES :
+- Cite la source naturellement : "D'après {source_name}..."
+- Style factuel, ZÉRO superlatif
+- Alternance fréquente des voix
+- Chaque réplique 2-4 phrases max
+
+GÉNÈRE UNIQUEMENT LE SCRIPT DIALOGUE."""
 
     else:  # flash_news
         user_prompt = f"""SOURCE : {source_name}
 TITRE : {title}
 CONTENU : {content[:3000]}
 
-Écris un FLASH INFO d'environ {target_words} mots.
+Écris un FLASH INFO en DIALOGUE d'environ {target_words} mots.
 
-STRUCTURE :
-1. Accroche directe (l'info principale)
-2. Les faits essentiels
-3. Une phrase de conclusion
+FORMAT STRICT :
+[VOICE_A]
+Breeze annonce l'info principale.
 
-Cite la source : "Selon {source_name}..."
+[VOICE_B]
+Vale réagit ou pose une question clé.
 
-GÉNÈRE UNIQUEMENT LE SCRIPT."""
+[VOICE_A]
+Breeze conclut.
+
+RÈGLES :
+- Cite la source : "Selon {source_name}..."
+- Style direct et factuel
+- Chaque réplique 1-2 phrases max
+
+GÉNÈRE UNIQUEMENT LE SCRIPT DIALOGUE."""
 
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_RADIO},
+                {"role": "system", "content": DIALOGUE_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.7,
@@ -523,17 +604,30 @@ GÉNÈRE UNIQUEMENT LE SCRIPT."""
         
         script = response.choices[0].message.content.strip()
         
-        # Verify no meta-discourse slipped through
+        # Validate voice tags
+        if VOICE_TAG_A not in script or VOICE_TAG_B not in script:
+            log.warning("Script missing voice tags, regenerating...")
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": DIALOGUE_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt + "\n\nATTENTION: Chaque réplique DOIT commencer par [VOICE_A] ou [VOICE_B] !"}
+                ],
+                temperature=0.7,
+                max_tokens=target_words * 2
+            )
+            script = response.choices[0].message.content.strip()
+        
+        # Check for meta-discourse
         forbidden_starts = [
             "voici", "passons", "dans cette", "nous allons",
             "le sujet", "cette rubrique", "pour ce"
         ]
         first_words = script.lower()[:50]
         for forbidden in forbidden_starts:
-            if first_words.startswith(forbidden):
-                log.warning("Meta-discourse detected, regenerating...")
-                # Try once more
-                return generate_segment_script(url, title, content, segment_type, target_words, vertical)
+            if forbidden in first_words:
+                log.warning("Meta-discourse detected")
+                break
         
         return script
         
@@ -543,7 +637,7 @@ GÉNÈRE UNIQUEMENT LE SCRIPT."""
 
 
 def get_or_create_segment(url: str, segment_type: str, target_words: int = 200, vertical: str = None) -> dict | None:
-    """Get cached segment or create new one with iron rules."""
+    """Get cached segment or create new dialogue segment."""
     today = date.today().isoformat()
     
     # Check cache
@@ -586,19 +680,19 @@ def get_or_create_segment(url: str, segment_type: str, target_words: int = 200, 
     
     source_type, title, content = extraction
     
-    # Generate script with iron rules
-    script = generate_segment_script(url, title, content, segment_type, target_words, vertical)
+    # Generate DIALOGUE script
+    script = generate_segment_script_dialogue(url, title, content, segment_type, target_words, vertical)
     if not script:
         return None
     
-    log.info("Script generated", words=len(script.split()), type=segment_type)
+    log.info("Dialogue script generated", words=len(script.split()), type=segment_type)
     
-    # Generate audio
+    # Generate dialogue audio (Breeze & Vale)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_title = re.sub(r'[^a-zA-Z0-9]', '_', title[:30])
     temp_path = os.path.join(tempfile.gettempdir(), f"segment_{safe_title}_{timestamp}.mp3")
     
-    audio_path = generate_audio(script, voice="alloy", output_path=temp_path)
+    audio_path = generate_dialogue_audio(script, temp_path)
     if not audio_path:
         return None
     
@@ -622,7 +716,8 @@ def get_or_create_segment(url: str, segment_type: str, target_words: int = 200, 
             "word_count": len(script.split()),
             "source_name": get_domain(url),
             "source_identity": source_identity,
-            "language": "fr"
+            "language": "fr",
+            "voice_format": "dialogue_duo"  # Mark as new format
         }, on_conflict="url,date").execute()
     except Exception as e:
         log.warning("Cache failed", error=str(e))
@@ -637,30 +732,37 @@ def get_or_create_segment(url: str, segment_type: str, target_words: int = 200, 
 
 
 # ============================================
-# FILLER SEGMENT - Analysis when content is short
+# FILLER SEGMENT - Dialogue Analysis
 # ============================================
 
 def generate_filler_analysis(vertical: str, target_words: int) -> dict | None:
-    """Generate an analysis segment when content is insufficient."""
+    """Generate a dialogue analysis segment when content is insufficient."""
     
     vertical_info = VERTICALS.get(vertical, VERTICALS["ai_tech"])
     
-    prompt = f"""Génère une analyse de fond sur la verticale "{vertical_info['name']}".
+    prompt = f"""Génère une analyse de fond sur "{vertical_info['name']}" en format DIALOGUE.
 
-Choisis UN sujet d'actualité récent dans ce domaine et développe :
-1. Le contexte
-2. Les enjeux
-3. Les perspectives
+FORMAT STRICT :
+[VOICE_A]
+Breeze présente le contexte et les faits.
 
-Environ {target_words} mots. Style radio, dynamique.
+[VOICE_B]
+Vale pose des questions pragmatiques.
 
-Commence DIRECTEMENT par l'analyse, sans introduction méta."""
+[VOICE_A]
+Breeze développe les enjeux.
+
+[VOICE_B]
+Vale conclut avec une perspective.
+
+Environ {target_words} mots. Style radio, factuel.
+Commence DIRECTEMENT par [VOICE_A]."""
 
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_RADIO},
+                {"role": "system", "content": DIALOGUE_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.8,
@@ -668,17 +770,23 @@ Commence DIRECTEMENT par l'analyse, sans introduction méta."""
         )
         
         script = response.choices[0].message.content.strip()
+        
+        # Validate voice tags
+        if VOICE_TAG_A not in script or VOICE_TAG_B not in script:
+            log.warning("Filler missing voice tags")
+            return None
+            
         log.info("Filler analysis generated", vertical=vertical, words=len(script.split()))
         
     except Exception as e:
         log.error("Failed to generate filler", error=str(e))
         return None
     
-    # Generate audio
+    # Generate dialogue audio
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_path = os.path.join(tempfile.gettempdir(), f"filler_{vertical}_{timestamp}.mp3")
     
-    audio_path = generate_audio(script, voice="alloy", output_path=temp_path)
+    audio_path = generate_dialogue_audio(script, temp_path)
     if not audio_path:
         return None
     
@@ -746,9 +854,9 @@ def assemble_podcast(
     target_duration: int = 20,
     selected_verticals: dict = None
 ) -> dict | None:
-    """Assemble podcast with priority: Intro > Ephemeride > Deep Dives > Flash News."""
+    """Assemble podcast with dialogue format: Intro > Ephemeride > Deep Dives > Flash News."""
     
-    log.info("Assembling Keernel", 
+    log.info("Assembling Keernel (dialogue duo)", 
              user_id=user_id[:8], 
              target_min=target_duration,
              manual=len(manual_urls),
@@ -762,7 +870,7 @@ def assemble_podcast(
     
     try:
         # =====================
-        # SEGMENT A: INTRO
+        # SEGMENT A: INTRO (Single voice - Breeze)
         # =====================
         intro = get_or_create_intro(first_name)
         if intro and intro.get("local_path"):
@@ -771,7 +879,7 @@ def assemble_podcast(
             total_duration += intro["duration"]
         
         # =====================
-        # SEGMENT B: ÉCHO DU TEMPS
+        # SEGMENT B: ÉCHO DU TEMPS (Dialogue)
         # =====================
         ephemeride = get_or_create_ephemeride()
         if ephemeride and ephemeride.get("local_path"):
@@ -782,7 +890,7 @@ def assemble_podcast(
         remaining_seconds = target_seconds - total_duration
         
         # =====================
-        # PRIORITY 1: DEEP DIVES (60% of remaining)
+        # PRIORITY 1: DEEP DIVES (60% of remaining) - Dialogue
         # =====================
         deep_dive_budget = int(remaining_seconds * 0.6)
         deep_dive_used = 0
@@ -809,11 +917,10 @@ def assemble_podcast(
                     "type": "deep_dive"
                 })
                 
-                # Update source score
                 update_source_score(user_id, url)
         
         # =====================
-        # PRIORITY 2: FLASH NEWS FROM VERTICALS
+        # PRIORITY 2: FLASH NEWS FROM VERTICALS - Dialogue
         # =====================
         flash_budget = target_seconds - total_duration
         flash_used = 0
@@ -845,7 +952,6 @@ def assemble_podcast(
         # =====================
         min_threshold = target_seconds * 0.85
         if total_duration < min_threshold and selected_verticals:
-            # Find an enabled vertical
             for v_id, enabled in selected_verticals.items():
                 if enabled and v_id in VERTICALS:
                     remaining_words = estimate_words_for_duration(int(min_threshold - total_duration))
@@ -886,13 +992,14 @@ def assemble_podcast(
         if os.path.exists(output_path):
             os.remove(output_path)
         
-        log.info("Keernel assembled", duration=final_duration, segments=len(segments))
+        log.info("Keernel assembled (dialogue duo)", duration=final_duration, segments=len(segments))
         
         return {
             "audio_url": audio_url,
             "duration": final_duration,
             "segments": [{"type": s["type"], "duration": s["duration"]} for s in segments],
-            "sources_data": sources_data
+            "sources_data": sources_data,
+            "voice_format": "dialogue_duo"
         }
         
     except Exception as e:
@@ -913,8 +1020,8 @@ def assemble_podcast(
 # ============================================
 
 def generate_podcast_for_user(user_id: str) -> dict | None:
-    """Main entry point for podcast generation."""
-    log.info("Starting Keernel generation", user_id=user_id[:8])
+    """Main entry point for podcast generation with dialogue duo."""
+    log.info("Starting Keernel generation (dialogue duo)", user_id=user_id[:8])
     
     # Get user info
     try:
@@ -951,10 +1058,6 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
             log.warning("No pending content")
             return None
         
-        # Separate by priority:
-        # 1. Manual/high priority (user-added URLs)
-        # 2. GSheet RSS sources (curated library)
-        # 3. Bing News (backup/fallback)
         manual_urls = []
         gsheet_urls = []
         bing_urls = []
@@ -969,10 +1072,8 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
             elif source in ("gsheet_rss", "gsheet", "library", "rss"):
                 gsheet_urls.append(url)
             else:
-                # bing_news or any other source
                 bing_urls.append(url)
         
-        # Combine auto_urls with GSheet first, then Bing
         auto_urls = gsheet_urls + bing_urls
         
         log.info("Content queue breakdown", 
@@ -984,7 +1085,7 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
         log.error("Failed to get queue", error=str(e))
         return None
     
-    # Assemble
+    # Assemble with dialogue duo
     result = assemble_podcast(
         user_id=user_id,
         first_name=first_name,
@@ -1013,7 +1114,8 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
             "audio_url": result["audio_url"],
             "audio_duration": result["duration"],
             "sources_data": result["sources_data"],
-            "summary_text": f"Keernel avec {len(result['sources_data'])} sources"
+            "summary_text": f"Keernel dialogue avec {len(result['sources_data'])} sources",
+            "voice_format": "dialogue_duo"
         }).execute()
         
         supabase.table("content_queue") \
@@ -1022,7 +1124,7 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
             .eq("status", "pending") \
             .execute()
         
-        log.info("Episode created", episode_id=episode.data[0]["id"] if episode.data else None)
+        log.info("Episode created (dialogue duo)", episode_id=episode.data[0]["id"] if episode.data else None)
         
         return episode.data[0] if episode.data else None
         
