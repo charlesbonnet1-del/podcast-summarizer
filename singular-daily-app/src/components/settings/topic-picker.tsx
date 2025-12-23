@@ -1,21 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import { Check, Lock, ChevronDown, Zap, BookOpen } from "lucide-react";
+import { 
+  Check, 
+  Lock, 
+  ChevronDown, 
+  Bot,           // Tech 🤖
+  Globe,         // Monde 🌍
+  TrendingUp,    // Économie 📈
+  FlaskConical,  // Science 🔬
+  Film           // Culture 🎬
+} from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 /**
- * V3 Topic structure - Verticals and their allowed topics
- * Icons use text-sand color class
+ * V4 Topic structure - Using Lucide icons instead of emojis
+ * All icons use text-sand color class for consistency
  */
 const TOPIC_CATEGORIES = [
   {
     id: "tech",
     name: "Tech",
-    icon: "🤖",
+    Icon: Bot,
     topics: [
       { id: "ia", label: "IA & LLM", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT"] },
       { id: "quantum", label: "Quantum Computing", keywords: ["quantique", "quantum", "qubits", "IBM Quantum"] },
@@ -25,7 +34,7 @@ const TOPIC_CATEGORIES = [
   {
     id: "world",
     name: "Monde",
-    icon: "🌍",
+    Icon: Globe,
     topics: [
       { id: "asia", label: "Asie", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie"] },
       { id: "resources", label: "Ressources", keywords: ["pétrole", "gaz", "matières premières", "minerais"] },
@@ -35,7 +44,7 @@ const TOPIC_CATEGORIES = [
   {
     id: "economics",
     name: "Économie",
-    icon: "📈",
+    Icon: TrendingUp,
     topics: [
       { id: "stocks", label: "Bourse", keywords: ["CAC 40", "Wall Street", "bourse", "actions"] },
       { id: "crypto", label: "Crypto", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain"] },
@@ -45,7 +54,7 @@ const TOPIC_CATEGORIES = [
   {
     id: "science",
     name: "Science",
-    icon: "🔬",
+    Icon: FlaskConical,
     topics: [
       { id: "space", label: "Espace", keywords: ["NASA", "SpaceX", "espace", "Mars", "fusée"] },
       { id: "health", label: "Santé", keywords: ["santé", "médecine", "biotech", "vaccin"] },
@@ -55,7 +64,7 @@ const TOPIC_CATEGORIES = [
   {
     id: "culture",
     name: "Culture",
-    icon: "🎬",
+    Icon: Film,
     topics: [
       { id: "cinema", label: "Cinéma & Séries", keywords: ["cinéma", "Netflix", "films", "séries"] },
       { id: "gaming", label: "Gaming", keywords: ["jeux vidéo", "PlayStation", "Nintendo", "gaming"] },
@@ -77,7 +86,7 @@ interface TopicPickerProps {
 export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerProps) {
   const [selectedTopics, setSelectedTopics] = useState<string[]>(initialTopics);
   const [expandedCategories, setExpandedCategories] = useState<string[]>(
-    TOPIC_CATEGORIES.map(c => c.id) // All expanded by default
+    TOPIC_CATEGORIES.map(c => c.id)
   );
   const [saving, setSaving] = useState(false);
   const router = useRouter();
@@ -97,7 +106,6 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
   const toggleTopic = async (topicId: string, topicData: { label: string; keywords: string[] }) => {
     const isSelected = selectedTopics.includes(topicId);
 
-    // Check limit when adding
     if (!isSelected && isAtLimit) {
       toast.error(`Limite de ${maxTopics} thèmes atteinte pour le plan ${plan}`);
       return;
@@ -110,7 +118,6 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
       if (!user) throw new Error("Not authenticated");
 
       if (isSelected) {
-        // Remove topic
         const { error } = await supabase
           .from("user_interests")
           .delete()
@@ -122,7 +129,6 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
         setSelectedTopics(prev => prev.filter(id => id !== topicId));
         toast.success(`"${topicData.label}" retiré`);
       } else {
-        // Add topic
         const { error } = await supabase
           .from("user_interests")
           .insert({
@@ -160,7 +166,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
         <div className={`px-3 py-1 rounded-full text-sm font-display font-medium ${
           isAtLimit 
             ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" 
-            : "bg-charcoal/10 dark:bg-cream/10 text-foreground"
+            : "bg-secondary text-foreground"
         }`}>
           {selectedTopics.length}/{maxTopics}
         </div>
@@ -173,6 +179,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
           const selectedInCategory = category.topics.filter(t => 
             selectedTopics.includes(t.id)
           ).length;
+          const CategoryIcon = category.Icon;
 
           return (
             <div 
@@ -185,8 +192,8 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                 className="w-full flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  {/* Emoji with sand filter */}
-                  <span className="text-xl opacity-75 grayscale-[30%] sepia-[30%]">{category.icon}</span>
+                  {/* SVG Icon with sand color */}
+                  <CategoryIcon className="w-5 h-5 text-sand" />
                   <span className="font-display font-medium">{category.name}</span>
                   {selectedInCategory > 0 && (
                     <span className="px-2 py-0.5 rounded-full bg-charcoal dark:bg-cream text-cream dark:text-charcoal text-xs font-display font-medium">
@@ -224,7 +231,7 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                             disabled={saving || isDisabled}
                             className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
                               isSelected
-                                ? "bg-charcoal dark:bg-cream text-cream dark:text-charcoal glow-charcoal"
+                                ? "bg-charcoal dark:bg-cream text-cream dark:text-charcoal"
                                 : isDisabled
                                   ? "bg-secondary/30 opacity-50 cursor-not-allowed"
                                   : "bg-secondary/50 hover:bg-secondary border border-transparent"

@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import { Headphones, Zap, Bot, Rss } from "lucide-react";
+import { Zap, Bot, Rss } from "lucide-react";
 
 export default function Home() {
   const { resolvedTheme } = useTheme();
@@ -12,9 +12,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Header - Logo 50% bigger: 32 -> 48 */}
       <header className="fixed top-0 left-0 right-0 z-50 glass-card mx-4 mt-4">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image 
               src={logoSrc}
@@ -27,7 +27,7 @@ export default function Home() {
           </div>
           <nav className="flex items-center gap-4">
             <Link href="/login">
-              <Button variant="ghost" className="rounded-full font-serif font-medium">
+              <Button variant="ghost" className="rounded-full font-display font-medium">
                 Sign in
               </Button>
             </Link>
@@ -41,7 +41,7 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <main className="pt-32 pb-20 px-6">
+      <main className="pt-36 pb-20 px-6">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-brass/30 text-sm text-muted-foreground mb-8 font-mono glow-brass">
             <Zap className="w-4 h-4 text-brass" />
@@ -68,13 +68,13 @@ export default function Home() {
             <Button 
               size="lg" 
               variant="outline" 
-              className="rounded-full text-lg px-8 h-14 border-brass/50 text-brass hover:bg-brass/10 font-serif font-medium"
+              className="rounded-full text-lg px-8 h-14 border-brass/50 text-brass hover:bg-brass/10 font-display font-medium"
             >
               Watch demo
             </Button>
           </div>
 
-          {/* Preview */}
+          {/* Preview - Logo 50% bigger: 64 -> 96 */}
           <div className="relative">
             <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent z-10 pointer-events-none h-32 bottom-0 top-auto" />
             <div className="matte-card p-8 glow-brass">
@@ -122,7 +122,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
+      {/* Footer - Logo 50% bigger: 24 -> 36 */}
       <footer className="py-12 px-6 border-t border-border">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -133,7 +133,7 @@ export default function Home() {
               height={36}
               className="w-9 h-9"
             />
-            <span className="font-medium title-keernel text-lg">Keernel</span>
+            <span className="font-medium title-keernel text-xl">Keernel</span>
           </div>
           <p className="text-sm text-muted-foreground font-mono">
             © 2024 Keernel. Built with ♥ for curious minds.
