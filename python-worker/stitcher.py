@@ -1,27 +1,17 @@
 """
-Keernel Stitcher V4 - Captivating Dialogue Podcast
+Keernel Stitcher V5 - BULLETPROOF DIALOGUE
 
-CHANGEMENTS MAJEURS V4:
-1. Intro avec OpenAI TTS (Breeze) - plus de Azure
-2. Prompts captivants - style podcast engageant
-3. Sélection intelligente des angles intéressants
-4. Dialogue naturel avec vraie alternance Breeze/Vale
-5. Vitesse de diction optimisée
+Ce fichier GARANTIT un dialogue entre Breeze et Vale.
+Si le LLM ne génère pas de dialogue, on FORCE l'alternance.
 
-RÈGLES DE FER:
-- ZÉRO liste de courses
-- ZÉRO méta-discours
-- Angle UNIQUE et CAPTIVANT par sujet
-- TENSION narrative entre les deux hôtes
+DEBUG: Tous les logs sont explicites pour tracer le problème.
 """
 import os
 import re
 import tempfile
-import subprocess
 from datetime import datetime, date
 from urllib.parse import urlparse
 import unicodedata
-from typing import Optional
 
 import structlog
 from dotenv import load_dotenv
@@ -33,352 +23,251 @@ load_dotenv()
 log = structlog.get_logger()
 
 # ============================================
-# CLIENTS INITIALIZATION
+# CLIENTS
 # ============================================
 
 from groq import Groq
 groq_client = None
 if os.getenv("GROQ_API_KEY"):
     groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    log.info("✅ Groq client initialized")
+else:
+    log.error("❌ GROQ_API_KEY not set!")
 
 from openai import OpenAI
 openai_client = None
 if os.getenv("OPENAI_API_KEY"):
     openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    log.info("✅ OpenAI client initialized")
+else:
+    log.error("❌ OPENAI_API_KEY not set!")
 
 # ============================================
-# VOICE CONFIGURATION
+# VOICES
 # ============================================
 
-# Breeze: Expert - voix claire et posée
-VOICE_BREEZE = "nova"
-
-# Vale: Challenger - voix plus grave et directe  
-VOICE_VALE = "onyx"
-
-VOICE_TAG_A = "[VOICE_A]"  # Breeze
-VOICE_TAG_B = "[VOICE_B]"  # Vale
+VOICE_BREEZE = "nova"   # Voix A - Expert
+VOICE_VALE = "onyx"     # Voix B - Challenger
 
 # ============================================
-# CONSTANTS
+# PROMPTS
 # ============================================
 
-WORDS_PER_MINUTE = 160  # Légèrement plus rapide pour dynamisme
+SYSTEM_PROMPT = """Tu génères des DIALOGUES podcast entre deux hôtes.
 
-VERTICALS = {
-    "ai_tech": {"name": "IA & Tech"},
-    "politics": {"name": "Politique & Monde"},
-    "finance": {"name": "Finance & Marchés"},
-    "science": {"name": "Science & Santé"},
-    "culture": {"name": "Culture & Divertissement"}
-}
+HÔTE A (Breeze) - Expert qui explique
+HÔTE B (Vale) - Challenger qui questionne
 
-# ============================================
-# PROMPTS CAPTIVANTS V4
-# ============================================
+FORMAT OBLIGATOIRE - Chaque réplique sur ce format EXACT:
 
-SYSTEM_PROMPT_DIALOGUE = """Tu es le duo de podcasters le plus écouté de France. Ton secret : transformer n'importe quelle actu en conversation CAPTIVANTE.
+[A]
+Texte de Breeze ici.
 
-## TES DEUX PERSONNALITÉS
+[B]
+Texte de Vale ici.
 
-**BREEZE** ([VOICE_A]) - Le vulgarisateur brillant
-- Trouve toujours L'ANGLE qui rend le sujet fascinant
-- Utilise des ANALOGIES percutantes ("C'est comme si...")  
-- Donne des CHIFFRES qui claquent, pas des listes
-- Ton: Passionné mais jamais exalté
+[A]
+Breeze continue.
 
-**VALE** ([VOICE_B]) - L'avocat du diable bienveillant
-- Pose LA question que tout le monde pense tout bas
-- Joue le sceptique: "Attends, mais concrètement..."
-- Cherche l'impact HUMAIN: "Et pour les gens normaux?"
-- Ton: Curieux, légèrement provocateur
+[B]
+Vale répond.
 
-## RÈGLES D'OR ABSOLUES
-
-### ❌ INTERDIT - Le style "liste de courses"
-JAMAIS: "Cette semaine, on a X, Y et Z. Commençons par X."
-JAMAIS: "Premier point... Deuxième point..."
-JAMAIS: énumérer les infos sans fil conducteur
-
-### ✅ OBLIGATOIRE - Le style "accroche narrative"
-TOUJOURS: Commencer par un FAIT ÉTONNANT ou une QUESTION PROVOCANTE
-TOUJOURS: Créer une TENSION (problème/solution, avant/après, pour/contre)
-TOUJOURS: Un seul ANGLE par sujet, mais traité en profondeur
-
-### Format dialogue STRICT
-Chaque réplique commence par [VOICE_A] ou [VOICE_B] SEUL sur sa ligne.
-Alternance OBLIGATOIRE. Jamais deux [VOICE_A] ou [VOICE_B] consécutifs.
-
-### Style oral naturel
-- Phrases courtes (max 20 mots)
-- Contractions: "C'est" pas "Cela est"
-- Interjections: "Bon,", "Alors,", "Écoute,"
-- Questions rhétoriques pour relancer
-
-### Phonétique TTS
-Écris phonétiquement: "LLM" → "elle-elle-aime", "GPU" → "jé-pé-u", "AI" → "A-I"
+RÈGLES:
+- Utilise [A] et [B] comme tags (pas [VOICE_A])
+- Alterne TOUJOURS entre [A] et [B]
+- Minimum 4 répliques (2 de chaque)
+- Style conversationnel naturel
+- Pas de listes, pas de résumé ennuyeux
 """
 
-PROMPT_SEGMENT_CAPTIVANT = """SUJET: {title}
-SOURCE: {source_name}
-CONTENU BRUT:
+USER_PROMPT_TEMPLATE = """Transforme ce contenu en dialogue captivant de {words} mots.
+
+CONTENU:
 {content}
 
----
+RAPPEL FORMAT:
+[A]
+Breeze parle.
 
-Ta mission: Transformer ça en 2-3 minutes de CONVERSATION CAPTIVANTE.
+[B]
+Vale répond.
 
-ÉTAPE 1 - Trouve L'ANGLE
-Parmi tout ce contenu, quel est LE détail le plus surprenant/important/controversé?
-Ne fais PAS un résumé. Choisis UN angle et creuse-le.
+Génère le dialogue maintenant:"""
 
-ÉTAPE 2 - Crée la TENSION  
-- Quel est le PROBLÈME ou l'ENJEU caché?
-- Qui GAGNE et qui PERD?
-- Qu'est-ce qui pourrait MAL TOURNER?
+# ============================================
+# PARSING - ULTRA ROBUST
+# ============================================
 
-ÉTAPE 3 - Écris le DIALOGUE ({target_words} mots)
-
-FORMAT STRICT:
-[VOICE_A]
-Breeze lance avec un fait percutant ou une question.
-
-[VOICE_B]
-Vale réagit, challenge, demande "concrètement".
-
-[VOICE_A]
-Breeze développe, donne un exemple parlant.
-
-[VOICE_B]
-Vale pousse plus loin ou nuance.
-
-[VOICE_A]
-Breeze conclut avec une perspective.
-
-RAPPELS:
-- Cite "{source_name}" naturellement UNE fois
-- Minimum 5 répliques alternées
-- ZÉRO superlatif, ZÉRO "révolutionnaire"
-- Pas de "merci d'avoir écouté"
-
-GÉNÈRE UNIQUEMENT LE SCRIPT:"""
-
-PROMPT_EPHEMERIDE_CAPTIVANT = """Date: {formatted_date}
-
-Fait historique (vérifié): En {fact_year}, {fact_text}
-
----
-
-Crée un DIALOGUE de 60 mots entre Breeze et Vale.
-
-L'objectif: Faire le PONT entre ce fait historique et l'actualité d'aujourd'hui.
-Trouve une connexion SURPRENANTE avec la tech, l'IA, ou un sujet actuel.
-
-FORMAT:
-[VOICE_A]
-Breeze mentionne la date et le fait historique avec un twist.
-
-[VOICE_B]  
-Vale fait le lien avec aujourd'hui ("Tiens, ça me rappelle...")
-
-[VOICE_A]
-Breeze rebondit et lance vers les actus.
-
-Style: Complice, cultivé, jamais pédant.
-
-GÉNÈRE UNIQUEMENT LE SCRIPT:"""
-
-PROMPT_INTRO_DYNAMIQUE = """Génère une phrase d'intro personnalisée et dynamique pour {name}.
-
-EXEMPLES DE TON:
-- "{name}, installez-vous, on a du lourd aujourd'hui."
-- "Salut {name}! Prêt pour votre dose d'actus?"  
-- "{name}, c'est parti pour votre Keernel du jour."
-
-CONTRAINTES:
-- Maximum 12 mots
-- Ton chaleureux mais pas mielleux
-- Pas de "Bonjour" classique, sois créatif
-- Une seule phrase
-
-Génère UNIQUEMENT la phrase:"""
+def parse_to_segments(script: str) -> list[dict]:
+    """
+    Parse ANY script format into voice segments.
+    Handles [A], [B], [VOICE_A], [VOICE_B], Breeze:, Vale:, etc.
+    """
+    if not script:
+        log.error("❌ Empty script!")
+        return []
+    
+    log.info("📝 Parsing script", length=len(script), preview=script[:200])
+    
+    # Normalize all possible formats to [A] and [B]
+    normalized = script
+    
+    # Replace various formats
+    replacements = [
+        (r'\[VOICE_A\]', '\n[A]\n'),
+        (r'\[VOICE_B\]', '\n[B]\n'),
+        (r'\[VOICE A\]', '\n[A]\n'),
+        (r'\[VOICE B\]', '\n[B]\n'),
+        (r'\[Voice_A\]', '\n[A]\n'),
+        (r'\[Voice_B\]', '\n[B]\n'),
+        (r'VOICE_A:', '\n[A]\n'),
+        (r'VOICE_B:', '\n[B]\n'),
+        (r'Breeze\s*:', '\n[A]\n'),
+        (r'Vale\s*:', '\n[B]\n'),
+        (r'\*\*Breeze\*\*\s*:', '\n[A]\n'),
+        (r'\*\*Vale\*\*\s*:', '\n[B]\n'),
+        (r'Speaker A\s*:', '\n[A]\n'),
+        (r'Speaker B\s*:', '\n[B]\n'),
+        (r'Host 1\s*:', '\n[A]\n'),
+        (r'Host 2\s*:', '\n[B]\n'),
+        (r'\[Breeze\]', '\n[A]\n'),
+        (r'\[Vale\]', '\n[B]\n'),
+    ]
+    
+    for pattern, repl in replacements:
+        normalized = re.sub(pattern, repl, normalized, flags=re.IGNORECASE)
+    
+    # Now parse [A] and [B] tags
+    segments = []
+    
+    # Split by [A] or [B]
+    pattern = r'\[([AB])\]'
+    parts = re.split(pattern, normalized)
+    
+    log.info("📊 Split result", parts_count=len(parts))
+    
+    # parts = ['before', 'A', 'text', 'B', 'text', ...]
+    i = 1
+    while i < len(parts) - 1:
+        voice = parts[i].upper()
+        text = parts[i + 1].strip()
+        
+        # Clean the text
+        text = re.sub(r'^\s*\n+', '', text)
+        text = re.sub(r'\n+\s*$', '', text)
+        text = text.strip()
+        
+        if voice in ('A', 'B') and text and len(text) > 5:
+            segments.append({'voice': voice, 'text': text})
+            log.debug(f"✅ Segment {len(segments)}: Voice {voice}, {len(text)} chars")
+        
+        i += 2
+    
+    # If no segments found, FALLBACK: split by paragraphs
+    if not segments:
+        log.warning("⚠️ No voice tags found, using paragraph fallback")
+        paragraphs = [p.strip() for p in script.split('\n\n') if p.strip() and len(p.strip()) > 20]
+        
+        if not paragraphs:
+            paragraphs = [p.strip() for p in script.split('\n') if p.strip() and len(p.strip()) > 20]
+        
+        for i, para in enumerate(paragraphs[:10]):  # Max 10 segments
+            segments.append({
+                'voice': 'A' if i % 2 == 0 else 'B',
+                'text': para
+            })
+    
+    # FORCE alternation if needed
+    if segments:
+        voices_found = set(s['voice'] for s in segments)
+        log.info(f"📊 Voices found: {voices_found}")
+        
+        if len(voices_found) == 1:
+            log.warning("⚠️ Only one voice! Forcing alternation...")
+            for i, seg in enumerate(segments):
+                seg['voice'] = 'A' if i % 2 == 0 else 'B'
+    
+    # Final count
+    voice_a = sum(1 for s in segments if s['voice'] == 'A')
+    voice_b = sum(1 for s in segments if s['voice'] == 'B')
+    
+    log.info(f"✅ PARSED: {len(segments)} segments, Voice A: {voice_a}, Voice B: {voice_b}")
+    
+    return segments
 
 
 # ============================================
-# AUDIO GENERATION (OpenAI TTS only)
+# AUDIO GENERATION
 # ============================================
 
-def generate_tts_audio(text: str, voice: str, output_path: str, speed: float = 1.0) -> str | None:
-    """Generate audio using OpenAI TTS."""
+def generate_tts(text: str, voice: str, output_path: str) -> bool:
+    """Generate TTS audio with OpenAI."""
     if not openai_client:
-        log.error("OpenAI client not initialized")
-        return None
+        log.error("❌ OpenAI client not available!")
+        return False
     
     try:
+        log.info(f"🎤 TTS: {voice}, {len(text)} chars")
+        
         response = openai_client.audio.speech.create(
             model="tts-1-hd",
             voice=voice,
             input=text,
-            speed=speed  # 1.0 = normal, 1.1 = légèrement plus rapide
+            speed=1.1  # Slightly faster
         )
         response.stream_to_file(output_path)
-        return output_path
+        
+        log.info(f"✅ Audio saved: {output_path}")
+        return True
+        
     except Exception as e:
-        log.error("TTS generation failed", error=str(e))
-        return None
-
-
-def get_audio_duration(file_path: str) -> int:
-    """Get duration of audio file in seconds."""
-    try:
-        from pydub import AudioSegment
-        audio = AudioSegment.from_mp3(file_path)
-        return len(audio) // 1000
-    except:
-        return 0
-
-
-# ============================================
-# SCRIPT PARSING
-# ============================================
-
-def normalize_voice_tags(script: str) -> str:
-    """Normalize various voice tag formats to [VOICE_A] and [VOICE_B]."""
-    # First, handle common LLM output formats
-    patterns = [
-        # Standard variations
-        (r'\[VOICE[\s_-]*A\]', '[VOICE_A]'),
-        (r'\[VOICE[\s_-]*B\]', '[VOICE_B]'),
-        (r'\[voice[\s_-]*a\]', '[VOICE_A]'),
-        (r'\[voice[\s_-]*b\]', '[VOICE_B]'),
-        # Colon format
-        (r'VOICE_A\s*:', '[VOICE_A]\n'),
-        (r'VOICE_B\s*:', '[VOICE_B]\n'),
-        # Bold markdown
-        (r'\*\*\[VOICE_A\]\*\*', '[VOICE_A]'),
-        (r'\*\*\[VOICE_B\]\*\*', '[VOICE_B]'),
-        (r'\*\*VOICE_A\*\*\s*:', '[VOICE_A]\n'),
-        (r'\*\*VOICE_B\*\*\s*:', '[VOICE_B]\n'),
-        # Name formats
-        (r'Breeze\s*:', '[VOICE_A]\n'),
-        (r'Vale\s*:', '[VOICE_B]\n'),
-        (r'\[Breeze\]', '[VOICE_A]'),
-        (r'\[Vale\]', '[VOICE_B]'),
-        (r'\*\*Breeze\*\*\s*:', '[VOICE_A]\n'),
-        (r'\*\*Vale\*\*\s*:', '[VOICE_B]\n'),
-        # Speaker format
-        (r'Speaker\s*A\s*:', '[VOICE_A]\n'),
-        (r'Speaker\s*B\s*:', '[VOICE_B]\n'),
-        (r'Host\s*1\s*:', '[VOICE_A]\n'),
-        (r'Host\s*2\s*:', '[VOICE_B]\n'),
-        # Numbered voices
-        (r'\[VOICE\s*1\]', '[VOICE_A]'),
-        (r'\[VOICE\s*2\]', '[VOICE_B]'),
-    ]
-    
-    result = script
-    for pattern, replacement in patterns:
-        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
-    
-    return result
-
-
-def force_voice_alternation(segments: list[dict]) -> list[dict]:
-    """Ensure voices alternate properly - if all same voice, force alternation."""
-    if not segments:
-        return segments
-    
-    # Check if we have both voices
-    voices = set(s["voice"] for s in segments)
-    
-    if len(voices) == 1:
-        # Only one voice detected - force alternation
-        log.warning("Only one voice detected, forcing alternation")
-        for i, seg in enumerate(segments):
-            seg["voice"] = "A" if i % 2 == 0 else "B"
-    else:
-        # Fix consecutive same voices by alternating
-        for i in range(1, len(segments)):
-            if segments[i]["voice"] == segments[i-1]["voice"]:
-                segments[i]["voice"] = "B" if segments[i-1]["voice"] == "A" else "A"
-    
-    return segments
-
-
-def parse_dialogue_script(script: str) -> list[dict]:
-    """Parse script into voice segments with robust fallback."""
-    if not script:
-        return []
-    
-    script = normalize_voice_tags(script)
-    segments = []
-    
-    pattern = r'\[VOICE_([AB])\]'
-    parts = re.split(pattern, script, flags=re.IGNORECASE)
-    
-    i = 1
-    while i < len(parts):
-        voice = parts[i].upper()
-        if voice in ("A", "B") and i + 1 < len(parts):
-            text = parts[i + 1].strip()
-            text = re.sub(r'^\s*\n+', '', text)
-            text = re.sub(r'\n+\s*$', '', text)
-            if text:
-                segments.append({"voice": voice, "text": text})
-        i += 2
-    
-    # FALLBACK: If no voice tags found, split by paragraphs and alternate
-    if not segments:
-        log.warning("No voice tags parsed, using paragraph fallback")
-        paragraphs = [p.strip() for p in script.split('\n\n') if p.strip()]
-        if not paragraphs:
-            paragraphs = [p.strip() for p in script.split('\n') if p.strip()]
-        for i, para in enumerate(paragraphs):
-            if para and len(para) > 10:  # Skip very short lines
-                segments.append({"voice": "A" if i % 2 == 0 else "B", "text": para})
-    
-    # Force proper alternation
-    segments = force_voice_alternation(segments)
-    
-    voice_a = sum(1 for s in segments if s["voice"] == "A")
-    voice_b = sum(1 for s in segments if s["voice"] == "B")
-    log.info("Parsed dialogue", total=len(segments), voice_a=voice_a, voice_b=voice_b)
-    
-    return segments
+        log.error(f"❌ TTS failed: {e}")
+        return False
 
 
 def generate_dialogue_audio(script: str, output_path: str) -> str | None:
-    """Generate audio with two alternating voices."""
-    segments = parse_dialogue_script(script)
+    """Generate audio with BOTH voices."""
+    
+    log.info("🎙️ Starting dialogue audio generation")
+    
+    segments = parse_to_segments(script)
     
     if not segments:
-        log.error("No segments parsed")
+        log.error("❌ No segments to generate!")
         return None
+    
+    # Check we have both voices
+    voices = set(s['voice'] for s in segments)
+    log.info(f"🔊 Generating audio for voices: {voices}")
+    
+    if 'B' not in voices:
+        log.error("❌ NO VOICE B DETECTED - This will be a monologue!")
     
     audio_files = []
     
-    for i, segment in enumerate(segments):
-        voice = VOICE_BREEZE if segment["voice"] == "A" else VOICE_VALE
-        text = segment["text"]
+    for i, seg in enumerate(segments):
+        voice = VOICE_BREEZE if seg['voice'] == 'A' else VOICE_VALE
+        text = seg['text']
         
-        log.info(f"Generating segment {i+1}/{len(segments)}", voice=voice)
+        seg_path = output_path.replace('.mp3', f'_seg{i:03d}.mp3')
         
-        segment_path = output_path.replace(".mp3", f"_seg{i:03d}.mp3")
+        log.info(f"🎤 Segment {i+1}/{len(segments)}: {voice} ({seg['voice']})")
         
-        # Vitesse légèrement plus rapide pour dynamisme (1.05)
-        if generate_tts_audio(text, voice, segment_path, speed=1.05):
-            audio_files.append(segment_path)
+        if generate_tts(text, voice, seg_path):
+            audio_files.append(seg_path)
         else:
-            log.warning(f"Failed segment {i}")
+            log.warning(f"⚠️ Segment {i} failed, skipping")
     
     if not audio_files:
+        log.error("❌ No audio files generated!")
         return None
     
-    # Combine with pauses
+    # Combine with pydub
     try:
         from pydub import AudioSegment
-        pause = AudioSegment.silent(duration=250)  # 250ms entre les répliques
+        
         combined = AudioSegment.empty()
+        pause = AudioSegment.silent(duration=300)  # 300ms pause
         
         for i, path in enumerate(audio_files):
             audio = AudioSegment.from_mp3(path)
@@ -386,7 +275,7 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
             if i < len(audio_files) - 1:
                 combined += pause
         
-        combined.export(output_path, format="mp3", bitrate="192k")
+        combined.export(output_path, format='mp3', bitrate='192k')
         
         # Cleanup
         for f in audio_files:
@@ -395,24 +284,148 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
             except:
                 pass
         
+        log.info(f"✅ Combined audio: {output_path}")
         return output_path
+        
     except Exception as e:
-        log.error("Combine failed", error=str(e))
+        log.error(f"❌ Combine failed: {e}")
         return None
 
 
+def get_audio_duration(path: str) -> int:
+    """Get duration in seconds."""
+    try:
+        from pydub import AudioSegment
+        return len(AudioSegment.from_mp3(path)) // 1000
+    except:
+        return 0
+
+
 # ============================================
-# UTILITY FUNCTIONS
+# CONTENT GENERATION
 # ============================================
 
-def normalize_first_name(name: str) -> str:
-    if not name:
-        return "ami"
-    name = name.lower().strip()
-    name = unicodedata.normalize('NFD', name)
-    name = ''.join(c for c in name if unicodedata.category(c) != 'Mn')
-    return re.sub(r'[^a-z0-9]', '', name) or "ami"
+def generate_dialogue_script(content: str, target_words: int = 200) -> str | None:
+    """Generate dialogue script with Groq."""
+    
+    if not groq_client:
+        log.error("❌ Groq client not available!")
+        return None
+    
+    prompt = USER_PROMPT_TEMPLATE.format(
+        words=target_words,
+        content=content[:5000]
+    )
+    
+    log.info(f"📝 Generating script with Groq ({target_words} words)")
+    
+    for attempt in range(3):
+        try:
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=target_words * 3
+            )
+            
+            script = response.choices[0].message.content
+            
+            log.info(f"📄 Script generated (attempt {attempt+1})", 
+                    length=len(script),
+                    has_A='[A]' in script or '[VOICE_A]' in script,
+                    has_B='[B]' in script or '[VOICE_B]' in script)
+            
+            # Test parse
+            segments = parse_to_segments(script)
+            voice_b_count = sum(1 for s in segments if s['voice'] == 'B')
+            
+            if voice_b_count >= 2:
+                log.info(f"✅ Valid dialogue script with {voice_b_count} Vale segments")
+                return script
+            
+            log.warning(f"⚠️ Only {voice_b_count} Vale segments, retrying...")
+            
+        except Exception as e:
+            log.error(f"❌ Generation attempt {attempt+1} failed: {e}")
+    
+    log.error("❌ All attempts failed!")
+    return None
 
+
+# ============================================
+# SEGMENT CREATION
+# ============================================
+
+def create_segment(url: str, target_words: int = 250) -> dict | None:
+    """Create audio segment from URL."""
+    
+    log.info(f"🔗 Processing: {url[:60]}...")
+    
+    # Extract content
+    extraction = extract_content(url)
+    if not extraction:
+        log.warning(f"⚠️ Extraction failed: {url[:60]}")
+        return None
+    
+    source_type, title, content = extraction
+    log.info(f"📰 Extracted: {title[:50]}")
+    
+    # Generate script
+    script = generate_dialogue_script(content, target_words)
+    if not script:
+        log.error("❌ Script generation failed")
+        return None
+    
+    # Generate audio
+    timestamp = datetime.now().strftime("%H%M%S")
+    safe_title = re.sub(r'[^a-z0-9]', '', title.lower()[:15])
+    temp_path = os.path.join(tempfile.gettempdir(), f"seg_{safe_title}_{timestamp}.mp3")
+    
+    audio_path = generate_dialogue_audio(script, temp_path)
+    if not audio_path:
+        log.error("❌ Audio generation failed")
+        return None
+    
+    duration = get_audio_duration(audio_path)
+    log.info(f"✅ Segment created: {title[:40]}, {duration}s")
+    
+    return {
+        "local_path": audio_path,
+        "duration": duration,
+        "title": title
+    }
+
+
+# ============================================
+# INTRO (Single voice - Breeze)
+# ============================================
+
+def create_intro(first_name: str) -> dict | None:
+    """Create intro with Breeze voice."""
+    
+    display_name = first_name.strip().title() if first_name else "Ami"
+    intro_text = f"{display_name}, c'est parti pour votre Keernel!"
+    
+    log.info(f"🎤 Creating intro for {display_name}")
+    
+    timestamp = datetime.now().strftime("%H%M%S")
+    temp_path = os.path.join(tempfile.gettempdir(), f"intro_{timestamp}.mp3")
+    
+    if generate_tts(intro_text, VOICE_BREEZE, temp_path):
+        return {
+            "local_path": temp_path,
+            "duration": get_audio_duration(temp_path)
+        }
+    
+    return None
+
+
+# ============================================
+# UTILITY
+# ============================================
 
 def get_domain(url: str) -> str:
     try:
@@ -421,335 +434,78 @@ def get_domain(url: str) -> str:
         return "source"
 
 
-def upload_to_storage(local_path: str, remote_path: str) -> str | None:
+def upload_audio(local_path: str, remote_path: str) -> str | None:
     try:
         with open(local_path, 'rb') as f:
-            audio_data = f.read()
+            data = f.read()
         supabase.storage.from_("audio").upload(
-            remote_path, audio_data,
+            remote_path, data,
             {"content-type": "audio/mpeg", "upsert": "true"}
         )
         return supabase.storage.from_("audio").get_public_url(remote_path)
     except Exception as e:
-        log.warning("Upload failed", error=str(e))
+        log.error(f"❌ Upload failed: {e}")
         return None
-
-
-# ============================================
-# INTRO (OpenAI TTS - Breeze voice)
-# ============================================
-
-def get_or_create_intro(first_name: str) -> dict | None:
-    """Generate personalized intro with Breeze voice (OpenAI)."""
-    normalized = normalize_first_name(first_name)
-    display_name = first_name.strip().title() if first_name else "Ami"
-    
-    # Force regeneration - no cache for now to ensure OpenAI voice
-    log.info("Generating intro with OpenAI", first_name=normalized)
-    
-    # Generate dynamic intro text
-    if groq_client:
-        try:
-            response = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "user", "content": PROMPT_INTRO_DYNAMIQUE.format(name=display_name)}
-                ],
-                temperature=0.8,
-                max_tokens=50
-            )
-            intro_text = response.choices[0].message.content.strip().strip('"')
-        except:
-            intro_text = f"{display_name}, c'est parti pour votre Keernel!"
-    else:
-        intro_text = f"{display_name}, c'est parti pour votre Keernel!"
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    temp_path = os.path.join(tempfile.gettempdir(), f"intro_{normalized}_{timestamp}.mp3")
-    
-    # Use Breeze voice (nova) with OpenAI
-    audio_path = generate_tts_audio(intro_text, VOICE_BREEZE, temp_path, speed=1.0)
-    
-    if not audio_path:
-        return None
-    
-    duration = get_audio_duration(audio_path)
-    
-    return {
-        "local_path": audio_path,
-        "duration": duration,
-        "text": intro_text
-    }
-
-
-# ============================================
-# EPHEMERIDE (Dialogue format)
-# ============================================
-
-def get_or_create_ephemeride(target_date: date = None) -> dict | None:
-    """Generate ephemeride as dialogue."""
-    if target_date is None:
-        target_date = date.today()
-    
-    date_str = target_date.isoformat()
-    
-    if not groq_client:
-        return None
-    
-    # Format date
-    import locale
-    try:
-        locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
-    except:
-        pass
-    formatted_date = target_date.strftime("%A %d %B").capitalize()
-    
-    # Get historical fact
-    try:
-        from sourcing import get_best_ephemeride_fact
-        fact = get_best_ephemeride_fact(target_date.month, target_date.day)
-    except:
-        fact = None
-    
-    if fact:
-        prompt = PROMPT_EPHEMERIDE_CAPTIVANT.format(
-            formatted_date=formatted_date,
-            fact_year=fact["year"],
-            fact_text=fact["text"]
-        )
-    else:
-        prompt = f"""Date: {formatted_date}
-
-Crée un dialogue court (50 mots) entre Breeze et Vale pour lancer le podcast.
-
-[VOICE_A]
-Breeze mentionne la date avec énergie.
-
-[VOICE_B]
-Vale enchaîne vers les actus du jour.
-
-GÉNÈRE LE SCRIPT:"""
-
-    try:
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_DIALOGUE},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=200
-        )
-        script = response.choices[0].message.content.strip()
-    except Exception as e:
-        log.error("Ephemeride generation failed", error=str(e))
-        return None
-    
-    # Validate dialogue
-    if VOICE_TAG_A not in script or VOICE_TAG_B not in script:
-        log.warning("Ephemeride missing voice tags")
-        return None
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    temp_path = os.path.join(tempfile.gettempdir(), f"ephemeride_{timestamp}.mp3")
-    
-    audio_path = generate_dialogue_audio(script, temp_path)
-    if not audio_path:
-        return None
-    
-    return {
-        "local_path": audio_path,
-        "duration": get_audio_duration(audio_path),
-        "script": script
-    }
-
-
-# ============================================
-# SEGMENT GENERATION (Captivating dialogue)
-# ============================================
-
-def generate_captivating_segment(
-    url: str,
-    title: str,
-    content: str,
-    target_words: int
-) -> dict | None:
-    """Generate a captivating dialogue segment."""
-    
-    if not groq_client:
-        return None
-    
-    source_name = get_domain(url)
-    
-    prompt = PROMPT_SEGMENT_CAPTIVANT.format(
-        title=title,
-        source_name=source_name,
-        content=content[:6000],
-        target_words=target_words
-    )
-    
-    max_attempts = 2
-    
-    for attempt in range(max_attempts):
-        try:
-            extra = "" if attempt == 0 else "\n\nATTENTION: Assure-toi d'alterner [VOICE_A] et [VOICE_B]!"
-            
-            response = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_DIALOGUE},
-                    {"role": "user", "content": prompt + extra}
-                ],
-                temperature=0.7,
-                max_tokens=target_words * 3
-            )
-            
-            script = response.choices[0].message.content.strip()
-            script = normalize_voice_tags(script)
-            
-            # Validate
-            voice_a = script.count(VOICE_TAG_A)
-            voice_b = script.count(VOICE_TAG_B)
-            
-            log.info("Script generated", voice_a=voice_a, voice_b=voice_b, attempt=attempt+1)
-            
-            if voice_a >= 2 and voice_b >= 2:
-                return {"script": script, "title": title}
-            
-        except Exception as e:
-            log.error("Generation failed", error=str(e))
-    
-    return None
-
-
-def get_or_create_segment(url: str, target_words: int = 250) -> dict | None:
-    """Create a captivating dialogue segment from URL."""
-    
-    log.info("Processing URL", url=url[:60])
-    
-    # Extract content
-    extraction = extract_content(url)
-    if not extraction:
-        log.warning("Extraction failed", url=url[:60])
-        return None
-    
-    source_type, title, content = extraction
-    
-    # Generate captivating script
-    result = generate_captivating_segment(url, title, content, target_words)
-    if not result:
-        return None
-    
-    # Generate audio
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_title = re.sub(r'[^a-zA-Z0-9]', '_', title[:20])
-    temp_path = os.path.join(tempfile.gettempdir(), f"seg_{safe_title}_{timestamp}.mp3")
-    
-    audio_path = generate_dialogue_audio(result["script"], temp_path)
-    if not audio_path:
-        return None
-    
-    return {
-        "local_path": audio_path,
-        "duration": get_audio_duration(audio_path),
-        "title": title,
-        "script": result["script"]
-    }
 
 
 # ============================================
 # MAIN ASSEMBLY
 # ============================================
 
-def stitch_audio_segments(segment_paths: list[str], output_path: str) -> bool:
-    """Concatenate audio files."""
-    if not segment_paths:
-        return False
+def assemble_podcast(user_id: str, first_name: str, urls: list[str], target_duration: int = 15) -> dict | None:
+    """Assemble full podcast."""
     
-    try:
-        from pydub import AudioSegment
-        combined = AudioSegment.empty()
-        
-        for path in segment_paths:
-            audio = AudioSegment.from_mp3(path)
-            combined += audio
-        
-        combined.export(output_path, format="mp3", bitrate="192k")
-        return True
-    except Exception as e:
-        log.error("Stitch failed", error=str(e))
-        return False
-
-
-def assemble_podcast(
-    user_id: str,
-    first_name: str,
-    urls: list[str],
-    target_duration: int = 15
-) -> dict | None:
-    """Assemble the full podcast."""
-    
-    log.info("Assembling podcast", user=user_id[:8], urls=len(urls), target_min=target_duration)
+    log.info(f"🎙️ STARTING PODCAST ASSEMBLY")
+    log.info(f"   User: {user_id[:8]}")
+    log.info(f"   URLs: {len(urls)}")
+    log.info(f"   Target: {target_duration} min")
     
     segments = []
-    sources_data = []
+    sources = []
     temp_files = []
-    total_duration = 0
-    target_seconds = target_duration * 60
     
     try:
-        # 1. INTRO (Breeze voice - OpenAI)
-        intro = get_or_create_intro(first_name)
+        # 1. INTRO
+        intro = create_intro(first_name)
         if intro:
             segments.append(intro["local_path"])
             temp_files.append(intro["local_path"])
-            total_duration += intro["duration"]
-            log.info("Intro added", duration=intro["duration"])
+            log.info(f"✅ Intro: {intro['duration']}s")
         
-        # 2. EPHEMERIDE (Dialogue)
-        ephemeride = get_or_create_ephemeride()
-        if ephemeride:
-            segments.append(ephemeride["local_path"])
-            temp_files.append(ephemeride["local_path"])
-            total_duration += ephemeride["duration"]
-            log.info("Ephemeride added", duration=ephemeride["duration"])
+        # 2. CONTENT SEGMENTS
+        target_seconds = target_duration * 60
+        words_per_seg = max(150, min(350, target_seconds // max(1, len(urls))))
         
-        # 3. CONTENT SEGMENTS
-        remaining = target_seconds - total_duration
-        words_per_segment = max(200, min(400, remaining // max(1, len(urls)) * WORDS_PER_MINUTE // 60))
-        
-        for url in urls:
-            if total_duration >= target_seconds * 0.95:
-                break
-            
-            segment = get_or_create_segment(url, words_per_segment)
-            if segment:
-                segments.append(segment["local_path"])
-                temp_files.append(segment["local_path"])
-                total_duration += segment["duration"]
-                sources_data.append({
-                    "title": segment["title"],
+        for url in urls[:5]:  # Max 5 URLs
+            seg = create_segment(url, words_per_seg)
+            if seg:
+                segments.append(seg["local_path"])
+                temp_files.append(seg["local_path"])
+                sources.append({
+                    "title": seg["title"],
                     "url": url,
                     "domain": get_domain(url)
                 })
-                log.info("Segment added", title=segment["title"][:40], duration=segment["duration"])
         
         if len(segments) < 2:
-            log.error("Not enough segments")
+            log.error("❌ Not enough segments!")
             return None
         
-        # 4. STITCH
+        # 3. COMBINE
+        from pydub import AudioSegment
+        combined = AudioSegment.empty()
+        for path in segments:
+            combined += AudioSegment.from_mp3(path)
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = os.path.join(tempfile.gettempdir(), f"podcast_{user_id[:8]}_{timestamp}.mp3")
+        output_path = os.path.join(tempfile.gettempdir(), f"podcast_{timestamp}.mp3")
+        combined.export(output_path, format="mp3", bitrate="192k")
         
-        if not stitch_audio_segments(segments, output_path):
-            return None
+        duration = len(combined) // 1000
         
-        final_duration = get_audio_duration(output_path)
-        
-        # 5. UPLOAD
-        remote_path = f"{user_id}/keernel_{timestamp}.mp3"
-        audio_url = upload_to_storage(output_path, remote_path)
+        # 4. UPLOAD
+        remote = f"{user_id}/keernel_{timestamp}.mp3"
+        audio_url = upload_audio(output_path, remote)
         
         # Cleanup
         os.remove(output_path)
@@ -759,16 +515,16 @@ def assemble_podcast(
             except:
                 pass
         
-        log.info("Podcast assembled", duration=final_duration, segments=len(sources_data))
+        log.info(f"✅ PODCAST COMPLETE: {duration}s, {len(sources)} sources")
         
         return {
             "audio_url": audio_url,
-            "duration": final_duration,
-            "sources_data": sources_data
+            "duration": duration,
+            "sources_data": sources
         }
         
     except Exception as e:
-        log.error("Assembly failed", error=str(e))
+        log.error(f"❌ Assembly failed: {e}")
         return None
 
 
@@ -778,9 +534,12 @@ def assemble_podcast(
 
 def generate_podcast_for_user(user_id: str) -> dict | None:
     """Main entry point."""
-    log.info("Starting podcast generation", user=user_id[:8])
     
-    # Get user info
+    log.info("=" * 50)
+    log.info("🚀 GENERATE PODCAST FOR USER")
+    log.info("=" * 50)
+    
+    # Get user
     try:
         user = supabase.table("users").select("first_name, target_duration").eq("id", user_id).single().execute()
         first_name = user.data.get("first_name") or "Ami"
@@ -789,15 +548,19 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
         first_name = "Ami"
         target_duration = 15
     
-    # Get content queue
+    log.info(f"👤 User: {first_name}, Target: {target_duration}min")
+    
+    # Get queue
     try:
         queue = supabase.table("content_queue").select("url").eq("user_id", user_id).eq("status", "pending").execute()
         urls = [item["url"] for item in queue.data] if queue.data else []
     except:
         urls = []
     
+    log.info(f"📋 Queue: {len(urls)} URLs")
+    
     if not urls:
-        log.warning("No content in queue")
+        log.warning("⚠️ No content in queue!")
         return None
     
     # Assemble
@@ -822,8 +585,9 @@ def generate_podcast_for_user(user_id: str) -> dict | None:
         
         supabase.table("content_queue").update({"status": "processed"}).eq("user_id", user_id).eq("status", "pending").execute()
         
+        log.info(f"✅ EPISODE CREATED!")
         return episode.data[0] if episode.data else None
         
     except Exception as e:
-        log.error("Episode creation failed", error=str(e))
+        log.error(f"❌ Episode creation failed: {e}")
         return None

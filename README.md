@@ -1,97 +1,73 @@
-# 🔧 Fix Podcast Dialogue - V3.1
+# 🎙️ Podcast V5 - BULLETPROOF DIALOGUE
 
-## Problème identifié
-Le podcast était généré uniquement avec la voix de Breeze (nova) sans Vale (onyx) car :
-1. Le parsing des tags `[VOICE_B]` ne fonctionnait pas correctement
-2. Les anciens segments étaient en cache
-3. Le LLM générait parfois des formats de tags non reconnus
+## Le problème
+Le LLM ne génère pas toujours les tags [VOICE_A]/[VOICE_B] correctement.
+Résultat: tout est lu avec une seule voix.
 
-## Fichiers à remplacer
+## La solution V5
 
-### 1. `python-worker/generator.py`
-Améliorations :
-- **Normalisation robuste** des tags : gère `[VOICE A]`, `[voice_a]`, `Breeze:`, etc.
-- **Meilleurs logs** pour debugger le parsing
-- **Validation stricte** : regénère si pas assez de tags des deux voix
-- **Fallback** : si le parsing échoue, génère en voix unique au lieu de crasher
+### 1. Tags simplifiés
+Au lieu de `[VOICE_A]` et `[VOICE_B]`, on utilise `[A]` et `[B]`.
+Le LLM suit mieux ce format court.
 
-### 2. `python-worker/stitcher.py` (déjà fourni précédemment)
-- Appelle `generate_dialogue_audio()` directement
-- Génère des prompts qui forcent l'alternance des voix
+### 2. Parsing ultra-robuste
+Le code reconnaît TOUS ces formats:
+- `[A]` / `[B]`
+- `[VOICE_A]` / `[VOICE_B]`
+- `Breeze:` / `Vale:`
+- `Speaker A:` / `Speaker B:`
+- Et plein d'autres...
 
-## Instructions de déploiement
+### 3. Fallback automatique
+Si AUCUN tag n'est trouvé → on split par paragraphes et on alterne.
+Résultat: il y aura TOUJOURS un dialogue.
 
-### Étape 1 : Remplacer les fichiers
-```bash
-# Dans ton repo local
-cp generator.py python-worker/generator.py
-cp stitcher.py python-worker/stitcher.py
+### 4. Logs explicites
+Chaque étape affiche des logs avec ✅ ou ❌ pour debugger facilement.
 
-# Commit et push
-git add .
-git commit -m "Fix: dialogue dual voice Breeze & Vale"
-git push
+## Déploiement
+
+### 1. Remplace les fichiers sur ton worker (Fly.io/Render)
+```
+python-worker/stitcher.py
+python-worker/generator.py
 ```
 
-### Étape 2 : VIDER LE CACHE (IMPORTANT!)
-Exécute ce SQL dans Supabase :
-
+### 2. Vide le cache dans Supabase
 ```sql
--- Vider le cache des segments pour forcer la régénération
-DELETE FROM processed_segments 
-WHERE date = CURRENT_DATE 
-   OR voice_format IS NULL 
-   OR voice_format != 'dialogue_duo';
-
--- Vider le cache de l'éphéméride du jour
-DELETE FROM daily_ephemeride 
-WHERE date = CURRENT_DATE;
-
--- Optionnel : voir les segments en cache
-SELECT date, segment_type, voice_format, title 
-FROM processed_segments 
-ORDER BY date DESC 
-LIMIT 20;
+DELETE FROM cached_intros;
+DELETE FROM processed_segments;
+DELETE FROM daily_ephemeride;
 ```
 
-### Étape 3 : Vérifier les variables d'environnement
-Dans Vercel, assure-toi d'avoir :
-- `OPENAI_API_KEY` - pour TTS (nova et onyx)
-- `GROQ_API_KEY` - pour générer les scripts
+### 3. Redémarre ton worker
+```bash
+# Sur Fly.io
+fly deploy
 
-### Étape 4 : Tester
-1. Génère un nouveau podcast
-2. Écoute pour vérifier l'alternance des voix
-3. Regarde les logs pour voir :
-   - `voice_a_count` et `voice_b_count` dans les logs de génération
-   - `voice_a_segments` et `voice_b_segments` dans les logs de parsing
-
-## Voix utilisées
-
-| Hôte | Tag | Voix OpenAI | Personnalité |
-|------|-----|-------------|--------------|
-| **Breeze** | `[VOICE_A]` | `nova` | Expert pédagogue, factuel |
-| **Vale** | `[VOICE_B]` | `onyx` | Challenger pragmatique, questions |
-
-## Logs à surveiller
-
-### ✅ Bon fonctionnement
-```
-INFO: Script generated voice_a_count=4 voice_b_count=3
-INFO: Dialogue parsed total_segments=7 voice_a_segments=4 voice_b_segments=3
-INFO: Generating segment 1/7 voice=nova voice_id=A
-INFO: Generating segment 2/7 voice=onyx voice_id=B
+# Sur Render
+# Push to GitHub, auto-deploy
 ```
 
-### ❌ Problème
+### 4. Teste
+Génère un podcast et regarde les logs.
+Tu devrais voir:
 ```
-WARNING: Script missing sufficient voice tags voice_a=5 voice_b=0
-ERROR: NO VOICE_B SEGMENTS FOUND
+✅ Groq client initialized
+✅ OpenAI client initialized
+📝 Generating script with Groq
+📄 Script generated has_A=True has_B=True
+✅ Valid dialogue script with 3 Vale segments
+🎤 Segment 1/6: nova (A)
+🎤 Segment 2/6: onyx (B)
+🎤 Segment 3/6: nova (A)
+...
 ```
 
-## Troubleshooting
+## Vérification du dialogue
 
-### Si toujours pas de Vale après le fix :
-1. Vérifie que le cache est bien vidé (SQL ci-dessus)
-2. Regarde les logs Vercel pour voir le script brut généré
-3. Vérifie que le nouveau code est bien déployé (hash du commit dans Vercel)
+Dans les logs, cherche:
+- `Voice A: X, Voice B: Y` → les deux doivent être > 0
+- `🎤 Segment X: onyx (B)` → tu dois voir "onyx" pour Vale
+
+Si tu vois seulement `nova (A)` → le problème persiste.
