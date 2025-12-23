@@ -185,18 +185,26 @@ def get_all_active_keywords() -> list:
 
 
 # Mapping from GSheet vertical names to Supabase vertical IDs
+# New V2 structure: WORLD, TECH, ECONOMICS, SCIENCE, CULTURE
 VERTICAL_MAPPING = {
     # GSheet values (case-insensitive) -> Supabase IDs
-    "tech": "ai_tech",
-    "ia&tech": "ai_tech",
-    "ia tech": "ai_tech",
-    "ai_tech": "ai_tech",
+    # TECH vertical
+    "tech": "tech",
+    "ia&tech": "tech",
+    "ia tech": "tech",
+    "ai_tech": "tech",
+    # WORLD vertical
     "world": "world",
     "monde": "world",
     "politique": "world",  # Legacy mapping
     "politics": "world",   # Legacy mapping
-    "finance": "finance",
+    # ECONOMICS vertical (new, replaces finance)
+    "economics": "economics",
+    "finance": "economics",  # Legacy mapping
+    "économie": "economics",
+    # SCIENCE vertical
     "science": "science",
+    # CULTURE vertical
     "culture": "culture",
 }
 

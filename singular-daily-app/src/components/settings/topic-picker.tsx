@@ -8,13 +8,17 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 /**
- * Topic IDs MUST match exactly with GSheet column B values:
- * ['ia', 'quantum', 'robotics', 'asia', 'resources', 'regulation', 'crypto', 'macro', 'stocks', 'space', 'health', 'energy', 'cinema', 'gaming', 'lifestyle']
+ * V2 Topic structure - Verticals and their allowed topics
+ * WORLD: asia, regulation, resources
+ * TECH: ia, quantum, robotics
+ * ECONOMICS: crypto, macro, stocks
+ * SCIENCE: energy, health, space
+ * CULTURE: cinema, gaming, lifestyle
  */
 const TOPIC_CATEGORIES = [
   {
-    id: "ai_tech",
-    name: "IA & Tech",
+    id: "tech",
+    name: "Tech",
     icon: "🤖",
     topics: [
       { id: "ia", label: "IA & LLM", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT"] },
@@ -33,8 +37,8 @@ const TOPIC_CATEGORIES = [
     ]
   },
   {
-    id: "finance",
-    name: "Finance",
+    id: "economics",
+    name: "Économie",
     icon: "📈",
     topics: [
       { id: "stocks", label: "Bourse", keywords: ["CAC 40", "Wall Street", "bourse", "actions"] },
