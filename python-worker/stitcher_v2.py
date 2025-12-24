@@ -43,20 +43,22 @@ WORDS_PER_MINUTE = 150
 SEGMENT_CACHE_DAYS = 7  # Keep audio cache for 7 days
 REPORT_RETENTION_DAYS = 365  # Keep reports for 1 year
 
-# Format configurations - FIXED DURATIONS
+# Format configurations - OPTIMIZED FOR DENSITY
+# TTS at 1.05x speed ≈ 160 words/minute
+# More articles with shorter segments = higher information density
 FORMAT_CONFIG = {
     "flash": {
         "duration_minutes": 4,
-        "total_words": 600,        # 4 min * 150 wpm
-        "max_articles": 4,         # More articles for variety
-        "words_per_article": 150,  # Shorter per article but more articles
-        "style": "dynamique et percutant"
+        "total_words": 900,           # Target ~4-5 min
+        "max_articles": 7,            # 7 articles for high density
+        "words_per_article": 130,     # ~35-40 seconds per article
+        "style": "ultra-concis et percutant"
     },
     "digest": {
         "duration_minutes": 15,
-        "total_words": 2000,       # ~13 min of content + intro/outro
-        "max_articles": 8,         # More sources
-        "words_per_article": 250,
+        "total_words": 2800,          # Target ~15 min
+        "max_articles": 12,           # 12 sources for comprehensive coverage
+        "words_per_article": 240,     # ~1 min per article
         "style": "approfondi et analytique"
     }
 }
@@ -576,9 +578,9 @@ def get_or_create_outro() -> Optional[dict]:
 def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
     """
     Select content with:
-    1. PRIORITY to gsheet_rss sources
+    1. PRIORITY to gsheet/rss/library sources (NOT bing)
     2. DIVERSITY across topics
-    3. Fill remaining with bing_news
+    3. Fill remaining with bing_news ONLY if needed
     """
     try:
         # Get all pending content
@@ -591,42 +593,59 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
             .execute()
         
         if not result.data:
+            log.warning("❌ No pending content in queue!")
             return []
         
         items = result.data
         
-        # Separate by source type - GSHEET FIRST
-        gsheet_items = [i for i in items if i.get("source") in ("gsheet_rss", "rss", "library", "manual")]
-        bing_items = [i for i in items if i.get("source") in ("bing_news", "bing", "news")]
-        other_items = [i for i in items if i not in gsheet_items and i not in bing_items]
+        # Log all unique source values for debugging
+        unique_sources = set(i.get("source", "NONE") for i in items)
+        log.info(f"📋 Queue has {len(items)} items, sources: {unique_sources}")
         
-        log.info(f"📊 Sources: gsheet={len(gsheet_items)}, bing={len(bing_items)}, other={len(other_items)}")
+        # Separate by source type - ANYTHING that's NOT bing is priority
+        # GSheet RSS typically has source="gsheet_rss" or similar
+        priority_items = []
+        bing_items = []
         
-        # Group gsheet items by topic for diversity
-        gsheet_by_topic = {}
-        for item in gsheet_items:
+        for item in items:
+            source = (item.get("source") or "").lower()
+            # Bing sources contain "bing" in the name
+            if "bing" in source:
+                bing_items.append(item)
+            else:
+                # Everything else is priority (gsheet, rss, manual, library, etc.)
+                priority_items.append(item)
+        
+        log.info(f"📊 Priority (non-bing): {len(priority_items)}, Bing: {len(bing_items)}")
+        
+        # Group priority items by topic for diversity
+        priority_by_topic = {}
+        for item in priority_items:
             topic = item.get("keyword") or item.get("vertical_id") or "general"
-            if topic not in gsheet_by_topic:
-                gsheet_by_topic[topic] = []
-            gsheet_by_topic[topic].append(item)
+            if topic not in priority_by_topic:
+                priority_by_topic[topic] = []
+            priority_by_topic[topic].append(item)
         
-        # Select from gsheet first, round-robin by topic
+        # Select from priority sources first, round-robin by topic
         selected = []
-        topic_list = list(gsheet_by_topic.keys())
+        topic_list = list(priority_by_topic.keys())
         idx = 0
         
-        # Take from gsheet until we have enough or run out
+        # Take from priority until we have enough or run out
         while len(selected) < max_articles and topic_list:
             topic = topic_list[idx % len(topic_list)]
-            if gsheet_by_topic.get(topic):
-                selected.append(gsheet_by_topic[topic].pop(0))
+            if priority_by_topic.get(topic):
+                item = priority_by_topic[topic].pop(0)
+                selected.append(item)
+                log.info(f"   ✅ Selected: {item.get('title', 'No title')[:40]}... (source={item.get('source')})")
             idx += 1
-            topic_list = [t for t in topic_list if gsheet_by_topic.get(t)]
+            topic_list = [t for t in topic_list if priority_by_topic.get(t)]
         
-        # Fill remaining slots with bing_news if needed
+        # Fill remaining slots with bing_news ONLY if we don't have enough
         remaining = max_articles - len(selected)
         if remaining > 0 and bing_items:
-            # Group bing by topic too
+            log.info(f"📰 Need {remaining} more, filling from Bing...")
+            
             bing_by_topic = {}
             for item in bing_items:
                 topic = item.get("keyword") or "news"
@@ -639,15 +658,17 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
             while len(selected) < max_articles and topic_list:
                 topic = topic_list[idx % len(topic_list)]
                 if bing_by_topic.get(topic):
-                    selected.append(bing_by_topic[topic].pop(0))
+                    item = bing_by_topic[topic].pop(0)
+                    selected.append(item)
+                    log.info(f"   📰 Added Bing: {item.get('title', 'No title')[:40]}...")
                 idx += 1
                 topic_list = [t for t in topic_list if bing_by_topic.get(t)]
         
-        # Count sources
-        gsheet_count = sum(1 for s in selected if s.get("source") in ("gsheet_rss", "rss", "library", "manual"))
-        bing_count = len(selected) - gsheet_count
+        # Final count
+        priority_count = sum(1 for s in selected if "bing" not in (s.get("source") or "").lower())
+        bing_count = len(selected) - priority_count
         
-        log.info(f"✅ Selected {len(selected)} articles: {gsheet_count} gsheet, {bing_count} bing")
+        log.info(f"✅ FINAL: {len(selected)} articles ({priority_count} priority, {bing_count} bing)")
         return selected
         
     except Exception as e:
@@ -720,12 +741,9 @@ def assemble_lego_podcast(
         total_duration += intro.get("audio_duration", intro.get("duration", 5))
         log.info(f"✅ Intro: {total_duration}s")
     
-    # 2. NEWS SEGMENTS (DIALOGUE format)
-    for item in items:
-        # Stop if we're at 90% of target duration
-        if total_duration >= target_seconds * 0.9:
-            log.info(f"⏱️ Reached 90% target ({total_duration}s), stopping")
-            break
+    # 2. NEWS SEGMENTS (DIALOGUE format) - Process ALL selected articles
+    for idx, item in enumerate(items):
+        log.info(f"🎯 Processing article {idx+1}/{len(items)}: {item.get('title', 'No title')[:50]}...")
         
         segment = get_or_create_segment(
             url=item["url"],
@@ -753,7 +771,9 @@ def assemble_lego_podcast(
                 "domain": segment.get("source_name", urlparse(item["url"]).netloc)
             })
             
-            log.info(f"📊 Running total: {total_duration}s / {target_seconds}s")
+            log.info(f"📊 Segment {idx+1}: {segment.get('duration', 0)}s | Total: {total_duration}s / {target_seconds}s")
+        else:
+            log.warning(f"⚠️ Failed to create segment for: {item.get('title', 'No title')[:40]}")
     
     if not sources_data:
         log.error("❌ No segments generated!")
@@ -791,13 +811,24 @@ def assemble_lego_podcast(
             "summary_text": f"Keernel {format_type} avec {len(sources_data)} sources"
         }).execute()
         
-        # Mark as processed
+        # Mark USED articles as processed
         processed_urls = [s["url"] for s in sources_data]
         supabase.table("content_queue") \
             .update({"status": "processed"}) \
             .eq("user_id", user_id) \
             .in_("url", processed_urls) \
             .execute()
+        
+        # CLEAR ALL remaining pending articles (they're now stale)
+        # This prevents old articles from accumulating
+        clear_result = supabase.table("content_queue") \
+            .delete() \
+            .eq("user_id", user_id) \
+            .eq("status", "pending") \
+            .execute()
+        
+        cleared_count = len(clear_result.data) if clear_result.data else 0
+        log.info(f"🗑️ Cleared {cleared_count} stale pending articles")
         
         if episode.data:
             episode_id = episode.data[0]["id"]
