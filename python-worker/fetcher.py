@@ -38,6 +38,30 @@ USER_AGENT = (
 )
 
 REQUEST_DELAY = 1.5
+
+# ============================================
+# VERTICAL MAPPING (GSheet → Database)
+# ============================================
+# GSheet uses: TECH, ECONOMICS, WORLD, SCIENCE, CULTURE
+# Database uses: ai_tech, finance, politics, science, culture, world
+
+VERTICAL_MAPPING = {
+    "tech": "ai_tech",
+    "economics": "finance",
+    "world": "world",
+    "science": "science",
+    "culture": "culture",
+    "politics": "politics",
+    "finance": "finance",
+    "ai_tech": "ai_tech",
+}
+
+def map_vertical(gsheet_vertical: str) -> str:
+    """Map GSheet vertical name to database vertical_id."""
+    if not gsheet_vertical:
+        return "ai_tech"  # Default
+    key = gsheet_vertical.strip().lower()
+    return VERTICAL_MAPPING.get(key, key)
 MAX_ARTICLES_PER_VERTICAL = 3
 MAX_ARTICLES_PER_TOPIC = 2
 
@@ -141,7 +165,7 @@ def get_gsheet_sources_for_topics(topic_ids: list[str], include_international: b
                         "source_type": "gsheet_rss",
                         "score": source["score"],
                         "topic": source["topic"],
-                        "vertical_id": source["vertical"]
+                        "vertical_id": map_vertical(source["vertical"])
                     })
             
             time.sleep(0.5)  # Rate limiting
