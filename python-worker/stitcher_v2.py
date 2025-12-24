@@ -1,18 +1,19 @@
 """
-Keernel Stitcher V2 - COMPLETE REWRITE
+Keernel Stitcher V11 - Cartesia TTS with Alice & Bob
 
-FIXES APPLIED:
-1. DIALOGUE: Each segment is a dialogue between Breeze [A] and Vale [B]
-2. DURATION: flash=4min (600 words), digest=15min (2000 words) 
-3. SOURCE DIVERSITY: Diversify by topic/vertical, not just by source type
-4. SOURCE CITATION: Each segment mentions the source name
-5. TTS SPEED: 1.05 (natural, not rushed)
-6. MULTIPLE TOPICS: Ensure we cover different topics user subscribed to
+VOICE SYSTEM:
+- Primary: Cartesia Sonic 3.0
+  - Alice (Helpful French Lady) = Lead, explains
+  - Bob (Pierre) = Challenger, questions
+- Fallback: OpenAI TTS (nova/onyx)
 
-V2.1 ADDITIONS:
-7. AUDIO ARCHIVE: Keep 7 days of cached audio
-8. DATA REPORTS: Generate Markdown reports for each episode
-9. HISTORY: get_user_history() function for past reports
+NO Azure voices - completely removed.
+
+CHANGES:
+- Breeze/Vale → Alice/Bob
+- Azure removed
+- Cartesia as primary TTS
+- OpenAI as fallback only
 """
 import os
 import hashlib
@@ -32,64 +33,123 @@ load_dotenv()
 log = structlog.get_logger()
 
 # ============================================
+# VOICE CONFIGURATION - CARTESIA
+# ============================================
+
+# Cartesia Voice IDs (Sonic 3.0)
+# Alice = "Helpful French Lady" - friendly, helpful, leads the conversation
+# Bob = "Pierre" - French male voice, asks questions
+#
+# ⚠️ IMPORTANT: Find the correct Voice IDs in Cartesia Playground:
+#    1. Go to https://play.cartesia.ai/
+#    2. Search for "Helpful French Lady" → Copy the voice ID
+#    3. Search for "Pierre" (French male) → Copy the voice ID
+#    4. Replace the placeholders below
+#
+# These are placeholder IDs - replace with actual IDs from Cartesia
+CARTESIA_VOICE_ALICE = os.getenv("CARTESIA_VOICE_ALICE", "a3520a8f-226a-428d-9fcd-b0a4711a6829")
+CARTESIA_VOICE_BOB = os.getenv("CARTESIA_VOICE_BOB", "ab7c61f5-3daa-47dd-a23b-4ac0aac5f5c3")
+
+# Fallback OpenAI voices (only used if Cartesia fails)
+OPENAI_VOICE_ALICE = "nova"    # Female
+OPENAI_VOICE_BOB = "onyx"      # Male
+
+# Model
+CARTESIA_MODEL = "sonic-3"
+
+# Speed (Cartesia uses -1.0 to 1.0, 0 = normal)
+CARTESIA_SPEED = 0.0  # Normal speed
+
+# ============================================
+# TTS CLIENTS
+# ============================================
+
+# Cartesia client
+cartesia_client = None
+try:
+    from cartesia import Cartesia
+    if os.getenv("CARTESIA_API_KEY"):
+        cartesia_client = Cartesia(api_key=os.getenv("CARTESIA_API_KEY"))
+        log.info("✅ Cartesia client initialized")
+except ImportError:
+    log.warning("⚠️ Cartesia SDK not installed, will use fallback")
+except Exception as e:
+    log.warning(f"⚠️ Cartesia init failed: {e}")
+
+# OpenAI fallback client
+openai_client = None
+try:
+    from openai import OpenAI
+    if os.getenv("OPENAI_API_KEY"):
+        openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        log.info("✅ OpenAI fallback client initialized")
+except:
+    pass
+
+# Groq for script generation
+groq_client = None
+try:
+    from groq import Groq
+    if os.getenv("GROQ_API_KEY"):
+        groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        log.info("✅ Groq client initialized")
+except:
+    pass
+
+# ============================================
 # CONFIGURATION
 # ============================================
 
-VOICE_BREEZE = "nova"   # Voice A - Expert
-VOICE_VALE = "onyx"     # Voice B - Challenger
-TTS_SPEED = 1.05        # Natural speed (1.0 = normal)
-
 WORDS_PER_MINUTE = 150
-SEGMENT_CACHE_DAYS = 7  # Keep audio cache for 7 days
-REPORT_RETENTION_DAYS = 365  # Keep reports for 1 year
+SEGMENT_CACHE_DAYS = 7
+REPORT_RETENTION_DAYS = 365
 
 # Format configurations - OPTIMIZED FOR DENSITY
-# TTS at 1.05x speed ≈ 160 words/minute
-# More articles with shorter segments = higher information density
 FORMAT_CONFIG = {
     "flash": {
         "duration_minutes": 4,
-        "total_words": 900,           # Target ~4-5 min
-        "max_articles": 7,            # 7 articles for high density
-        "words_per_article": 130,     # ~35-40 seconds per article
+        "total_words": 900,
+        "max_articles": 7,
+        "words_per_article": 130,
         "style": "ultra-concis et percutant"
     },
     "digest": {
         "duration_minutes": 15,
-        "total_words": 2800,          # Target ~15 min
-        "max_articles": 12,           # 12 sources for comprehensive coverage
-        "words_per_article": 240,     # ~1 min per article
+        "total_words": 2800,
+        "max_articles": 12,
+        "words_per_article": 240,
         "style": "approfondi et analytique"
     }
 }
 
 # ============================================
-# DIALOGUE PROMPT - THIS IS THE KEY FIX
+# DIALOGUE PROMPT - ALICE & BOB
 # ============================================
 
 DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
 
 ## LES HÔTES
-- [A] = Expert qui explique clairement
-- [B] = Challenger curieux qui pose des questions
+- [A] ALICE = Experte qui mène la conversation, explique clairement
+- [B] BOB = Challenger curieux qui pose des questions pertinentes
 
 ## FORMAT OBLIGATOIRE
 Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
 
 [A]
-Le texte que dit l'expert.
+Alice parle et explique.
 
 [B]
-Le texte que dit le challenger.
+Bob questionne ou réagit.
 
 ## RÈGLES STRICTES
 1. ALTERNER [A] et [B] - jamais deux [A] ou deux [B] de suite
-2. Minimum 6 répliques (3 de chaque)
-3. Style oral naturel: "Écoute,", "En fait,", "Tu vois,"
-4. [B] pose des QUESTIONS
-5. ZÉRO liste, ZÉRO bullet points
-6. CITE LA SOURCE dans la première réplique: "Selon {source_name}..."
-7. INTERDIT: Ne jamais écrire "Breeze répond", "Vale questionne", "(il explique)" ou toute didascalie
+2. ALICE [A] commence TOUJOURS en premier
+3. Minimum 6 répliques (3 de chaque)
+4. Style oral naturel français: "Écoute,", "En fait,", "Tu vois,"
+5. BOB [B] pose des QUESTIONS
+6. ZÉRO liste, ZÉRO bullet points
+7. CITE LA SOURCE dans la première réplique: "Selon {source_name}..."
+8. INTERDIT: Ne jamais écrire "Alice répond", "Bob questionne" ou toute didascalie
 
 ## SOURCE
 Titre: {title}
@@ -100,43 +160,87 @@ Contenu:
 ## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}):"""
 
 # ============================================
-# OPENAI & GROQ CLIENTS
+# TTS GENERATION - CARTESIA PRIMARY
 # ============================================
 
-from groq import Groq
-groq_client = None
-if os.getenv("GROQ_API_KEY"):
-    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-    log.info("✅ Groq client initialized")
-
-from openai import OpenAI
-openai_client = None
-if os.getenv("OPENAI_API_KEY"):
-    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    log.info("✅ OpenAI client initialized")
-
-# ============================================
-# TTS GENERATION
-# ============================================
-
-def generate_tts(text: str, voice: str, output_path: str) -> bool:
-    """Generate TTS with OpenAI."""
-    if not openai_client:
-        log.error("❌ OpenAI client not available!")
+def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
+    """Generate TTS using Cartesia Sonic 3.0"""
+    if not cartesia_client:
         return False
     
     try:
+        log.info(f"🎤 Cartesia TTS: {len(text)} chars, voice={voice_id[:8]}...")
+        
+        # Generate audio bytes
+        audio_bytes = b""
+        for chunk in cartesia_client.tts.bytes(
+            model_id=CARTESIA_MODEL,
+            transcript=text,
+            voice={"mode": "id", "id": voice_id},
+            language="fr",
+            output_format={
+                "container": "mp3",
+                "bit_rate": 192000,
+                "sample_rate": 44100
+            }
+        ):
+            audio_bytes += chunk
+        
+        # Save to file
+        with open(output_path, "wb") as f:
+            f.write(audio_bytes)
+        
+        log.info(f"✅ Cartesia audio saved: {len(audio_bytes)} bytes")
+        return True
+        
+    except Exception as e:
+        log.error(f"❌ Cartesia TTS failed: {e}")
+        return False
+
+
+def generate_tts_openai(text: str, voice: str, output_path: str) -> bool:
+    """Fallback: Generate TTS using OpenAI"""
+    if not openai_client:
+        return False
+    
+    try:
+        log.info(f"🎤 OpenAI TTS (fallback): {len(text)} chars, voice={voice}")
+        
         response = openai_client.audio.speech.create(
             model="tts-1-hd",
             voice=voice,
             input=text,
-            speed=TTS_SPEED
+            speed=1.0
         )
         response.stream_to_file(output_path)
         return True
+        
     except Exception as e:
-        log.error(f"❌ TTS failed: {e}")
+        log.error(f"❌ OpenAI TTS failed: {e}")
         return False
+
+
+def generate_tts(text: str, voice_type: str, output_path: str) -> bool:
+    """
+    Generate TTS with Cartesia (primary) or OpenAI (fallback).
+    
+    voice_type: "alice" or "bob"
+    """
+    # Map voice type to voice IDs
+    if voice_type == "alice":
+        cartesia_voice = CARTESIA_VOICE_ALICE
+        openai_voice = OPENAI_VOICE_ALICE
+    else:  # bob
+        cartesia_voice = CARTESIA_VOICE_BOB
+        openai_voice = OPENAI_VOICE_BOB
+    
+    # Try Cartesia first
+    if cartesia_client and generate_tts_cartesia(text, cartesia_voice, output_path):
+        return True
+    
+    # Fallback to OpenAI
+    log.warning(f"⚠️ Falling back to OpenAI TTS")
+    return generate_tts_openai(text, openai_voice, output_path)
 
 
 def get_audio_duration(path: str) -> int:
@@ -147,29 +251,28 @@ def get_audio_duration(path: str) -> int:
     except:
         return 0
 
+
 # ============================================
-# DIALOGUE PARSING - GUARANTEED ALTERNATION
+# DIALOGUE PARSING - ALICE [A] / BOB [B]
 # ============================================
 
 def clean_stage_directions(text: str) -> str:
-    """Remove stage directions like 'Breeze répond', 'Vale questionne', etc."""
-    # Remove common stage directions at the start
+    """Remove stage directions like 'Alice répond', 'Bob questionne', etc."""
     patterns_to_remove = [
-        r'^Breeze\s+(répond|explique|continue|ajoute|conclut|questionne|demande|s\'exclame|lance|commente)\s*[:\.\,]?\s*',
-        r'^Vale\s+(répond|explique|continue|ajoute|conclut|questionne|demande|s\'exclame|lance|commente)\s*[:\.\,]?\s*',
-        r'^\(Breeze[^)]*\)\s*',
-        r'^\(Vale[^)]*\)\s*',
-        r'^\*Breeze[^*]*\*\s*',
-        r'^\*Vale[^*]*\*\s*',
-        r'^Breeze\s*:\s*',
-        r'^Vale\s*:\s*',
+        r'^Alice\s+(répond|explique|continue|ajoute|conclut|questionne|demande|s\'exclame|lance|commente)\s*[:\.\,]?\s*',
+        r'^Bob\s+(répond|explique|continue|ajoute|conclut|questionne|demande|s\'exclame|lance|commente)\s*[:\.\,]?\s*',
+        r'^\(Alice[^)]*\)\s*',
+        r'^\(Bob[^)]*\)\s*',
+        r'^\*Alice[^*]*\*\s*',
+        r'^\*Bob[^*]*\*\s*',
+        r'^Alice\s*:\s*',
+        r'^Bob\s*:\s*',
     ]
     
     cleaned = text
     for pattern in patterns_to_remove:
         cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
     
-    # Also remove inline stage directions
     cleaned = re.sub(r'\(il\s+[^)]+\)', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'\(elle\s+[^)]+\)', '', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'\(en\s+[^)]+\)', '', cleaned, flags=re.IGNORECASE)
@@ -187,10 +290,12 @@ def parse_dialogue_to_segments(script: str) -> list[dict]:
     replacements = [
         (r'\[VOICE_A\]', '\n[A]\n'),
         (r'\[VOICE_B\]', '\n[B]\n'),
-        (r'Breeze\s*:', '\n[A]\n'),
-        (r'Vale\s*:', '\n[B]\n'),
-        (r'\*\*Breeze\*\*', '\n[A]\n'),
-        (r'\*\*Vale\*\*', '\n[B]\n'),
+        (r'Alice\s*:', '\n[A]\n'),
+        (r'Bob\s*:', '\n[B]\n'),
+        (r'\*\*Alice\*\*', '\n[A]\n'),
+        (r'\*\*Bob\*\*', '\n[B]\n'),
+        (r'Breeze\s*:', '\n[A]\n'),  # Legacy support
+        (r'Vale\s*:', '\n[B]\n'),    # Legacy support
     ]
     
     for pattern, repl in replacements:
@@ -207,7 +312,7 @@ def parse_dialogue_to_segments(script: str) -> list[dict]:
         text = parts[i + 1].strip()
         text = re.sub(r'^\s*\n+', '', text).strip()
         
-        # CLEAN stage directions
+        # Clean stage directions
         text = clean_stage_directions(text)
         
         if voice in ('A', 'B') and text and len(text) > 10:
@@ -226,7 +331,7 @@ def parse_dialogue_to_segments(script: str) -> list[dict]:
             if cleaned and len(cleaned) > 10:
                 segments.append({'voice': 'A' if i % 2 == 0 else 'B', 'text': cleaned})
     
-    # FORCE alternation - GUARANTEES dialogue
+    # FORCE alternation - Alice always starts
     for i in range(len(segments)):
         segments[i]['voice'] = 'A' if i % 2 == 0 else 'B'
     
@@ -234,7 +339,7 @@ def parse_dialogue_to_segments(script: str) -> list[dict]:
 
 
 def generate_dialogue_audio(script: str, output_path: str) -> str | None:
-    """Generate dialogue audio with BOTH voices."""
+    """Generate dialogue audio with Alice [A] and Bob [B] voices."""
     
     segments = parse_dialogue_to_segments(script)
     
@@ -242,17 +347,19 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
         log.error("❌ No segments!")
         return None
     
-    voice_a = sum(1 for s in segments if s['voice'] == 'A')
-    voice_b = sum(1 for s in segments if s['voice'] == 'B')
-    log.info(f"🎙️ Generating dialogue: {len(segments)} segments, A={voice_a}, B={voice_b}")
+    alice_count = sum(1 for s in segments if s['voice'] == 'A')
+    bob_count = sum(1 for s in segments if s['voice'] == 'B')
+    log.info(f"🎙️ Generating dialogue: {len(segments)} segments, Alice={alice_count}, Bob={bob_count}")
     
     audio_files = []
     
     for i, seg in enumerate(segments):
-        voice = VOICE_BREEZE if seg['voice'] == 'A' else VOICE_VALE
+        voice_type = "alice" if seg['voice'] == 'A' else "bob"
         seg_path = output_path.replace('.mp3', f'_seg{i:03d}.mp3')
         
-        if generate_tts(seg['text'], voice, seg_path):
+        log.info(f"🎤 Segment {i+1}/{len(segments)}: {voice_type.upper()}")
+        
+        if generate_tts(seg['text'], voice_type, seg_path):
             audio_files.append(seg_path)
     
     if not audio_files:
@@ -287,7 +394,7 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
 
 
 # ============================================
-# SCRIPT GENERATION - DIALOGUE FORMAT
+# SCRIPT GENERATION
 # ============================================
 
 def generate_dialogue_segment_script(
@@ -327,10 +434,8 @@ def generate_dialogue_segment_script(
                 log.info(f"✅ Dialogue script generated: {len(script.split())} words")
                 return script
             
-            # Retry with stronger instruction
             prompt += "\n\nATTENTION: Tu DOIS utiliser [A] et [B] pour chaque réplique!"
         
-        # Return anyway, fallback will handle it
         return script
         
     except Exception as e:
@@ -360,7 +465,6 @@ def get_cached_segment(content_hash: str, target_date: date, edition: str) -> Op
             .execute()
         
         if result.data:
-            # Increment use count
             supabase.table("audio_segments") \
                 .update({"use_count": result.data.get("use_count", 1) + 1}) \
                 .eq("id", result.data["id"]) \
@@ -417,7 +521,7 @@ def upload_segment(local_path: str, remote_path: str) -> Optional[str]:
 
 
 # ============================================
-# SEGMENT CREATION - WITH DIALOGUE
+# SEGMENT CREATION
 # ============================================
 
 def get_or_create_segment(
@@ -447,7 +551,6 @@ def get_or_create_segment(
     if not title and extracted_title:
         title = extracted_title
     
-    # Get source name from URL
     source_name = urlparse(url).netloc.replace("www.", "")
     
     # 2. Check cache
@@ -464,7 +567,7 @@ def get_or_create_segment(
             "cached": True
         }
     
-    # 3. Generate DIALOGUE script (not monologue!)
+    # 3. Generate DIALOGUE script
     script = generate_dialogue_segment_script(
         title=title,
         content=content,
@@ -524,25 +627,12 @@ def get_or_create_segment(
 # INTRO WITH MUSIC MIXING
 # ============================================
 
-# Path to intro music file (should be in the worker directory)
 INTRO_MUSIC_PATH = os.path.join(os.path.dirname(__file__), "intro_music.mp3")
 
 def mix_intro_with_music(voice_audio, intro_music_path: str) -> tuple:
-    """
-    Mix voice intro with background music using professional ducking.
-    
-    SEQUENCE (14 seconds):
-    0s-4s:   Music solo at 0dB
-    4s-6s:   Voice enters, music ducks from 0dB to -20dB
-    6s-12s:  Music at -20dB background
-    12s-14s: Music fades out
-    
-    Returns:
-        tuple: (mixed_audio: AudioSegment, duration_seconds: int)
-    """
+    """Mix voice intro with background music using professional ducking."""
     from pydub import AudioSegment
     
-    # Timing constants (milliseconds)
     MUSIC_SOLO_END = 4000
     DUCK_DURATION = 2000
     DUCK_END = 6000
@@ -550,23 +640,19 @@ def mix_intro_with_music(voice_audio, intro_music_path: str) -> tuple:
     MUSIC_END = 14000
     DUCK_DB = -20
     
-    # Load intro music
     if not os.path.exists(intro_music_path):
-        log.warning(f"⚠️ Intro music not found at {intro_music_path}, using voice only")
+        log.warning(f"⚠️ Intro music not found, using voice only")
         return voice_audio, len(voice_audio) // 1000
     
     music = AudioSegment.from_mp3(intro_music_path)
     
-    # Ensure music is exactly 14 seconds
     if len(music) > MUSIC_END:
         music = music[:MUSIC_END]
     elif len(music) < MUSIC_END:
         music = music + AudioSegment.silent(duration=MUSIC_END - len(music))
     
-    # Part 1: Solo music (0s - 4s)
     part1_solo = music[:MUSIC_SOLO_END]
     
-    # Part 2: Progressive ducking (4s - 6s)
     part2_ducking = music[MUSIC_SOLO_END:DUCK_END]
     ducked_part2 = AudioSegment.empty()
     slice_duration = 100
@@ -580,28 +666,20 @@ def mix_intro_with_music(voice_audio, intro_music_path: str) -> tuple:
         db_reduction = DUCK_DB * progress
         ducked_part2 += slice_audio + db_reduction
     
-    # Part 3: Background (6s - 12s) at -20dB
     part3_background = music[DUCK_END:FADE_START] + DUCK_DB
-    
-    # Part 4: Fade out (12s - 14s)
     part4_fadeout = (music[FADE_START:MUSIC_END] + DUCK_DB).fade_out(2000)
     
-    # Combine music parts
     processed_music = part1_solo + ducked_part2 + part3_background + part4_fadeout
     
-    # Position voice starting at 4s
     voice_with_padding = AudioSegment.silent(duration=MUSIC_SOLO_END) + voice_audio
     
-    # Total duration
     total_duration = max(MUSIC_END, MUSIC_SOLO_END + len(voice_audio))
     
-    # Extend tracks to same length
     if len(processed_music) < total_duration:
         processed_music += AudioSegment.silent(duration=total_duration - len(processed_music))
     if len(voice_with_padding) < total_duration:
         voice_with_padding += AudioSegment.silent(duration=total_duration - len(voice_with_padding))
     
-    # Mix and apply fade in
     mixed = processed_music.overlay(voice_with_padding).fade_in(500)
     
     return mixed, len(mixed) // 1000
@@ -617,11 +695,10 @@ def get_or_create_intro(first_name: str) -> Optional[dict]:
     log.info(f"🎤 Creating intro for {display_name}")
     
     timestamp = datetime.now().strftime("%H%M%S")
-    
-    # Generate voice TTS
     voice_path = os.path.join(tempfile.gettempdir(), f"intro_voice_{timestamp}.mp3")
     
-    if not generate_tts(intro_text, VOICE_BREEZE, voice_path):
+    # Use Alice's voice for intro
+    if not generate_tts(intro_text, "alice", voice_path):
         log.error("❌ Failed to generate intro voice")
         return None
     
@@ -629,16 +706,13 @@ def get_or_create_intro(first_name: str) -> Optional[dict]:
     voice_duration = len(voice_audio) // 1000
     log.info(f"🎤 Voice generated: {voice_duration}s")
     
-    # Check if intro music exists
     if os.path.exists(INTRO_MUSIC_PATH):
         log.info(f"🎵 Mixing with intro music")
         mixed_audio, total_duration = mix_intro_with_music(voice_audio, INTRO_MUSIC_PATH)
         
-        # Save mixed intro
         final_path = os.path.join(tempfile.gettempdir(), f"intro_mixed_{timestamp}.mp3")
         mixed_audio.export(final_path, format="mp3", bitrate="192k")
         
-        # Cleanup voice-only file
         try:
             os.remove(voice_path)
         except:
@@ -652,8 +726,7 @@ def get_or_create_intro(first_name: str) -> Optional[dict]:
             "audio_duration": total_duration
         }
     else:
-        # No music file - use voice only (fallback)
-        log.warning(f"⚠️ No intro music at {INTRO_MUSIC_PATH}, using voice only")
+        log.warning(f"⚠️ No intro music, using voice only")
         return {
             "local_path": voice_path,
             "duration": voice_duration,
@@ -675,13 +748,13 @@ def get_or_create_outro() -> Optional[dict]:
     except:
         pass
     
-    # Generate outro
     outro_text = "C'était votre Keernel du jour. À demain pour de nouvelles découvertes!"
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_path = os.path.join(tempfile.gettempdir(), f"outro_{timestamp}.mp3")
     
-    if not generate_tts(outro_text, VOICE_BREEZE, temp_path):
+    # Use Alice's voice for outro
+    if not generate_tts(outro_text, "alice", temp_path):
         return None
     
     duration = get_audio_duration(temp_path)
@@ -703,18 +776,12 @@ def get_or_create_outro() -> Optional[dict]:
 
 
 # ============================================
-# CONTENT SELECTION - PRIORITIZE GSHEET + DIVERSIFY
+# CONTENT SELECTION - PRIORITIZE GSHEET
 # ============================================
 
 def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
-    """
-    Select content with:
-    1. PRIORITY to gsheet/rss/library sources (NOT bing)
-    2. DIVERSITY across topics
-    3. Fill remaining with bing_news ONLY if needed
-    """
+    """Select content prioritizing GSheet sources."""
     try:
-        # Get all pending content
         result = supabase.table("content_queue") \
             .select("url, title, keyword, source, vertical_id") \
             .eq("user_id", user_id) \
@@ -729,27 +796,21 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
         
         items = result.data
         
-        # Log all unique source values for debugging
         unique_sources = set(i.get("source", "NONE") for i in items)
         log.info(f"📋 Queue has {len(items)} items, sources: {unique_sources}")
         
-        # Separate by source type - ANYTHING that's NOT bing is priority
-        # GSheet RSS typically has source="gsheet_rss" or similar
         priority_items = []
         bing_items = []
         
         for item in items:
             source = (item.get("source") or "").lower()
-            # Bing sources contain "bing" in the name
             if "bing" in source:
                 bing_items.append(item)
             else:
-                # Everything else is priority (gsheet, rss, manual, library, etc.)
                 priority_items.append(item)
         
         log.info(f"📊 Priority (non-bing): {len(priority_items)}, Bing: {len(bing_items)}")
         
-        # Group priority items by topic for diversity
         priority_by_topic = {}
         for item in priority_items:
             topic = item.get("keyword") or item.get("vertical_id") or "general"
@@ -757,12 +818,10 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
                 priority_by_topic[topic] = []
             priority_by_topic[topic].append(item)
         
-        # Select from priority sources first, round-robin by topic
         selected = []
         topic_list = list(priority_by_topic.keys())
         idx = 0
         
-        # Take from priority until we have enough or run out
         while len(selected) < max_articles and topic_list:
             topic = topic_list[idx % len(topic_list)]
             if priority_by_topic.get(topic):
@@ -772,7 +831,6 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
             idx += 1
             topic_list = [t for t in topic_list if priority_by_topic.get(t)]
         
-        # Fill remaining slots with bing_news ONLY if we don't have enough
         remaining = max_articles - len(selected)
         if remaining > 0 and bing_items:
             log.info(f"📰 Need {remaining} more, filling from Bing...")
@@ -795,7 +853,6 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
                 idx += 1
                 topic_list = [t for t in topic_list if bing_by_topic.get(t)]
         
-        # Final count
         priority_count = sum(1 for s in selected if "bing" not in (s.get("source") or "").lower())
         bing_count = len(selected) - priority_count
         
@@ -808,7 +865,7 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
 
 
 # ============================================
-# MAIN ASSEMBLY - LEGO ARCHITECTURE
+# MAIN ASSEMBLY
 # ============================================
 
 def assemble_lego_podcast(
@@ -816,25 +873,19 @@ def assemble_lego_podcast(
     target_duration: int = 15,
     format_type: str = "digest"
 ) -> Optional[dict]:
-    """
-    Assemble podcast with DIALOGUE segments.
-    
-    Structure:
-    [Intro] + [Dialogue Segment 1] + [Dialogue Segment 2] + ... + [Outro]
-    """
+    """Assemble podcast with DIALOGUE segments (Alice & Bob)."""
     
     config = FORMAT_CONFIG.get(format_type, FORMAT_CONFIG["digest"])
     target_minutes = config["duration_minutes"]
     max_articles = config["max_articles"]
     
     log.info("=" * 60)
-    log.info(f"🎙️ ASSEMBLING LEGO PODCAST")
+    log.info(f"🎙️ ASSEMBLING PODCAST (Alice & Bob)")
     log.info(f"   Format: {format_type}")
     log.info(f"   Target: {target_minutes} minutes")
     log.info(f"   Max articles: {max_articles}")
     log.info("=" * 60)
     
-    # Get user info
     try:
         user_result = supabase.table("users") \
             .select("first_name") \
@@ -845,7 +896,6 @@ def assemble_lego_podcast(
     except:
         first_name = "Ami"
     
-    # Get DIVERSE content
     items = select_diverse_content(user_id, max_articles)
     
     if not items:
@@ -872,7 +922,7 @@ def assemble_lego_podcast(
         total_duration += intro.get("audio_duration", intro.get("duration", 5))
         log.info(f"✅ Intro: {total_duration}s")
     
-    # 2. NEWS SEGMENTS (DIALOGUE format) - Process ALL selected articles
+    # 2. NEWS SEGMENTS
     for idx, item in enumerate(items):
         log.info(f"🎯 Processing article {idx+1}/{len(items)}: {item.get('title', 'No title')[:50]}...")
         
@@ -950,8 +1000,7 @@ def assemble_lego_podcast(
             .in_("url", processed_urls) \
             .execute()
         
-        # CLEAR ALL remaining pending articles (they're now stale)
-        # This prevents old articles from accumulating
+        # CLEAR ALL remaining pending articles
         clear_result = supabase.table("content_queue") \
             .delete() \
             .eq("user_id", user_id) \
@@ -964,7 +1013,6 @@ def assemble_lego_podcast(
         if episode.data:
             episode_id = episode.data[0]["id"]
             
-            # 6. GENERATE MARKDOWN REPORT
             report_url = generate_episode_report(
                 user_id=user_id,
                 episode_id=episode_id,
@@ -976,13 +1024,12 @@ def assemble_lego_podcast(
             )
             
             if report_url:
-                # Update episode with report URL
                 supabase.table("episodes") \
                     .update({"report_url": report_url}) \
                     .eq("id", episode_id) \
                     .execute()
             
-            log.info(f"✅ EPISODE CREATED: {total_duration}s, {len(sources_data)} sources, report={bool(report_url)}")
+            log.info(f"✅ EPISODE CREATED: {total_duration}s, {len(sources_data)} sources")
             return episode.data[0]
         
         return None
@@ -999,13 +1046,12 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         import httpx
         
         combined = AudioSegment.empty()
-        transition = AudioSegment.silent(duration=500)  # 500ms between segments
+        transition = AudioSegment.silent(duration=500)
         
         for seg in segments:
             audio_path = seg.get("audio_path")
             audio_url = seg.get("audio_url")
             
-            # Download if URL only
             if not audio_path and audio_url:
                 audio_path = os.path.join(tempfile.gettempdir(), f"temp_{hash(audio_url)}.mp3")
                 try:
@@ -1028,12 +1074,10 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         if len(combined) == 0:
             return None
         
-        # Export
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(tempfile.gettempdir(), f"podcast_{timestamp}.mp3")
         combined.export(output_path, format="mp3", bitrate="192k")
         
-        # Upload
         remote_path = f"{user_id}/keernel_{target_date.isoformat()}_{timestamp}.mp3"
         
         with open(output_path, 'rb') as f:
@@ -1046,7 +1090,6 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         
         final_url = supabase.storage.from_("audio").get_public_url(remote_path)
         
-        # Cleanup
         try:
             os.remove(output_path)
         except:
@@ -1059,21 +1102,8 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         return None
 
 
-def extract_domain(url: str) -> str:
-    """Extract domain from URL."""
-    try:
-        return urlparse(url).netloc.replace("www.", "")
-    except:
-        return ""
-
-
-def record_episode_composition(episode_id: str, segments: list):
-    """Record which segments were used (for analytics)."""
-    pass  # Optional analytics
-
-
 # ============================================
-# MARKDOWN REPORT GENERATION
+# REPORT GENERATION
 # ============================================
 
 def generate_episode_report(
@@ -1085,13 +1115,8 @@ def generate_episode_report(
     total_duration: int,
     target_date: date
 ) -> Optional[str]:
-    """
-    Generate a structured Markdown report for the episode.
+    """Generate Markdown report for the episode."""
     
-    Returns the report URL after uploading to storage.
-    """
-    
-    # Build Markdown content
     duration_str = f"{total_duration // 60}m {total_duration % 60}s"
     
     report_md = f"""---
@@ -1117,30 +1142,19 @@ sources_count: {len(sources_data)}
     for i, source in enumerate(sources_data, 1):
         source_title = source.get("title", "Sans titre")
         source_url = source.get("url", "#")
-        source_domain = source.get("domain", extract_domain(source_url))
+        source_domain = source.get("domain", urlparse(source_url).netloc)
         
         report_md += f"""### {i}. {source_title}
 
 - **Source** : [{source_domain}]({source_url})
-- **URL** : {source_url}
 
 """
     
     report_md += f"""---
 
-## 📊 Résumé
-
-- **Durée totale** : {duration_str}
-- **Format** : {format_type.title()}
-- **Articles couverts** : {len(sources_data)}
-- **Généré le** : {datetime.now().strftime('%d/%m/%Y à %H:%M')}
-
----
-
-*Rapport généré automatiquement par Keernel*
+*Rapport généré par Keernel - {datetime.now().strftime('%d/%m/%Y %H:%M')}*
 """
     
-    # Upload to storage
     try:
         report_filename = f"report_{target_date.isoformat()}_{episode_id[:8]}.md"
         remote_path = f"reports/{user_id}/{target_date.strftime('%Y/%m')}/{report_filename}"
@@ -1153,7 +1167,6 @@ sources_count: {len(sources_data)}
         
         report_url = supabase.storage.from_("reports").get_public_url(remote_path)
         
-        # Save reference in database
         supabase.table("episode_reports").insert({
             "user_id": user_id,
             "episode_id": episode_id,
@@ -1174,17 +1187,11 @@ sources_count: {len(sources_data)}
 
 
 # ============================================
-# USER HISTORY
+# HISTORY & MAINTENANCE
 # ============================================
 
 def get_user_history(user_id: str, limit: int = 20) -> List[dict]:
-    """
-    Get list of past episode reports for a user.
-    
-    Returns list of reports with:
-    - id, episode_id, report_url, report_date
-    - format_type, sources_count, duration_seconds
-    """
+    """Get list of past episode reports for a user."""
     try:
         result = supabase.table("episode_reports") \
             .select("*") \
@@ -1194,97 +1201,37 @@ def get_user_history(user_id: str, limit: int = 20) -> List[dict]:
             .execute()
         
         return result.data if result.data else []
-        
     except Exception as e:
         log.error(f"Failed to get user history: {e}")
         return []
 
 
-def get_user_history_this_week(user_id: str) -> List[dict]:
-    """
-    Get reports from the last 7 days.
-    """
-    try:
-        week_ago = (date.today() - timedelta(days=7)).isoformat()
-        
-        result = supabase.table("episode_reports") \
-            .select("*") \
-            .eq("user_id", user_id) \
-            .gte("report_date", week_ago) \
-            .order("report_date", desc=True) \
-            .execute()
-        
-        return result.data if result.data else []
-        
-    except Exception as e:
-        log.error(f"Failed to get weekly history: {e}")
-        return []
-
-
-# ============================================
-# AUDIO CACHE CLEANUP (Keep 7 days)
-# ============================================
-
 def cleanup_old_audio_cache(days_to_keep: int = SEGMENT_CACHE_DAYS):
-    """
-    Remove audio segments older than specified days.
-    Keeps the last 7 days by default.
-    """
+    """Remove audio segments older than specified days."""
     try:
         cutoff_date = (date.today() - timedelta(days=days_to_keep)).isoformat()
         
-        # Get old segments
         old_segments = supabase.table("audio_segments") \
             .select("id, audio_url, date") \
             .lt("date", cutoff_date) \
             .execute()
         
         if not old_segments.data:
-            log.info("No old segments to clean up")
             return 0
         
         deleted_count = 0
-        
         for segment in old_segments.data:
             try:
-                # Delete from storage if URL is from our bucket
-                audio_url = segment.get("audio_url", "")
-                if "supabase" in audio_url and "/segments/" in audio_url:
-                    # Extract path from URL
-                    path_match = re.search(r'/segments/(.+)$', audio_url)
-                    if path_match:
-                        storage_path = f"segments/{path_match.group(1)}"
-                        supabase.storage.from_("audio").remove([storage_path])
-                
-                # Delete from database
                 supabase.table("audio_segments") \
                     .delete() \
                     .eq("id", segment["id"]) \
                     .execute()
-                
                 deleted_count += 1
-                
-            except Exception as e:
-                log.warning(f"Failed to delete segment {segment['id']}: {e}")
+            except:
+                pass
         
-        log.info(f"🗑️ Cleaned up {deleted_count} old audio segments (older than {days_to_keep} days)")
+        log.info(f"🗑️ Cleaned up {deleted_count} old segments")
         return deleted_count
-        
     except Exception as e:
         log.error(f"Cache cleanup failed: {e}")
         return 0
-
-
-def run_daily_maintenance():
-    """
-    Run daily maintenance tasks:
-    - Clean up old audio cache
-    - Keep reports permanently
-    """
-    log.info("🔧 Running daily maintenance...")
-    
-    # Clean audio cache (keep 7 days)
-    deleted = cleanup_old_audio_cache(SEGMENT_CACHE_DAYS)
-    
-    log.info(f"✅ Maintenance complete. Deleted {deleted} old segments.")
-    return {"deleted_segments": deleted}
