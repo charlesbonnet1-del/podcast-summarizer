@@ -86,7 +86,7 @@ Vale répond ou questionne.
 3. Style oral naturel: "Écoute,", "En fait,", "Tu vois,"
 4. Vale pose des QUESTIONS
 5. ZÉRO liste, ZÉRO bullet points
-6. CITE LA SOURCE au début: "Selon {source}..." ou "D'après {source}..."
+6. CITE LA SOURCE au début: "Selon {source_name}..." ou "D'après {source_name}..."
 
 ## SOURCE
 Titre: {title}
