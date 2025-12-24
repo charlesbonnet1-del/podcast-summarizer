@@ -1,22 +1,28 @@
 """
-Keernel Stitcher V6 - FIXED DURATION + BULLETPROOF DIALOGUE
+Keernel Stitcher V6 - Compatible with stitcher_v2.py
+
+EXPORTS for stitcher_v2:
+- get_or_create_intro(first_name) -> cached/created intro
+- generate_dialogue_audio(script, output_path) -> dialogue audio
+- get_audio_duration(path) -> seconds
 
 FIXES:
-1. Duration: flash=4min, digest=15min (was reading wrong field)
-2. Speed: 1.2x for dynamic delivery (was 1.1)
-3. Dialogue: Strict prompt with examples + guaranteed alternation
+1. Speed: 1.2x for dynamic delivery
+2. Dialogue: Strict alternation with [A]/[B] tags
+3. get_or_create_intro: Added for stitcher_v2 compatibility
 """
 import os
 import re
+import hashlib
 import tempfile
 from datetime import datetime, date
 from urllib.parse import urlparse
+from typing import Optional
 
 import structlog
 from dotenv import load_dotenv
 
 from db import supabase
-from extractor import extract_content
 
 load_dotenv()
 log = structlog.get_logger()
@@ -30,16 +36,12 @@ groq_client = None
 if os.getenv("GROQ_API_KEY"):
     groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     log.info("✅ Groq client initialized")
-else:
-    log.error("❌ GROQ_API_KEY not set!")
 
 from openai import OpenAI
 openai_client = None
 if os.getenv("OPENAI_API_KEY"):
     openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     log.info("✅ OpenAI client initialized")
-else:
-    log.error("❌ OPENAI_API_KEY not set!")
 
 # ============================================
 # CONFIGURATION
@@ -48,17 +50,8 @@ else:
 VOICE_BREEZE = "nova"   # Voice A - Expert
 VOICE_VALE = "onyx"     # Voice B - Challenger
 
-# Duration mapping (in minutes)
-FORMAT_DURATION = {
-    "flash": 4,
-    "digest": 15
-}
-
-# TTS speed (1.0 = normal, 1.2 = 20% faster)
+# TTS speed (1.0 = normal, 1.2 = 20% faster for dynamic delivery)
 TTS_SPEED = 1.2
-
-# Words per minute for estimation
-WORDS_PER_MINUTE = 150
 
 # ============================================
 # DIALOGUE PROMPTS - STRICT FORMAT
@@ -124,12 +117,13 @@ RAPPEL: Utilise [A] et [B], alterne strictement, minimum 6 répliques.
 
 GÉNÈRE LE DIALOGUE:"""
 
+
 # ============================================
 # PARSING - ULTRA ROBUST
 # ============================================
 
 def parse_to_segments(script: str) -> list[dict]:
-    """Parse script into voice segments with guaranteed alternation."""
+    """Parse script into voice segments with GUARANTEED alternation."""
     if not script:
         log.error("❌ Empty script!")
         return []
@@ -155,8 +149,6 @@ def parse_to_segments(script: str) -> list[dict]:
         (r'Host 2:', '\n[B]\n'),
         (r'\[Breeze\]', '\n[A]\n'),
         (r'\[Vale\]', '\n[B]\n'),
-        (r'A:', '\n[A]\n'),
-        (r'B:', '\n[B]\n'),
     ]
     
     for pattern, repl in replacements:
@@ -192,7 +184,7 @@ def parse_to_segments(script: str) -> list[dict]:
                 'text': para
             })
     
-    # FORCE alternation - this guarantees dialogue
+    # FORCE alternation - this GUARANTEES dialogue
     if len(segments) >= 2:
         for i in range(len(segments)):
             segments[i]['voice'] = 'A' if i % 2 == 0 else 'B'
@@ -242,7 +234,7 @@ def get_audio_duration(path: str) -> int:
 
 
 def generate_dialogue_audio(script: str, output_path: str) -> str | None:
-    """Generate dialogue audio with both voices."""
+    """Generate dialogue audio with BOTH voices."""
     
     log.info("🎙️ Generating dialogue audio")
     
@@ -295,7 +287,90 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
 
 
 # ============================================
-# SCRIPT GENERATION
+# INTRO - CACHED (for stitcher_v2 compatibility)
+# ============================================
+
+def get_or_create_intro(first_name: str) -> Optional[dict]:
+    """
+    Get cached intro or create new one.
+    
+    This function is called by stitcher_v2.py
+    
+    Returns:
+        dict with audio_url and audio_duration
+    """
+    display_name = first_name.strip().title() if first_name else "Ami"
+    
+    # Generate a hash for caching
+    intro_hash = hashlib.md5(display_name.encode()).hexdigest()[:16]
+    
+    # Check cache first
+    try:
+        cached = supabase.table("cached_intros") \
+            .select("audio_url, audio_duration") \
+            .eq("name_hash", intro_hash) \
+            .single() \
+            .execute()
+        
+        if cached.data:
+            log.info(f"📦 Using cached intro for {display_name}")
+            return cached.data
+    except:
+        pass
+    
+    # Create new intro
+    log.info(f"🎤 Creating intro for {display_name}")
+    
+    intro_text = f"{display_name}, c'est parti pour votre Keernel!"
+    
+    timestamp = datetime.now().strftime("%H%M%S")
+    temp_path = os.path.join(tempfile.gettempdir(), f"intro_{timestamp}.mp3")
+    
+    if not generate_tts(intro_text, VOICE_BREEZE, temp_path):
+        return None
+    
+    duration = get_audio_duration(temp_path)
+    
+    # Upload to storage
+    remote_path = f"intros/{intro_hash}.mp3"
+    try:
+        with open(temp_path, 'rb') as f:
+            data = f.read()
+        supabase.storage.from_("audio").upload(
+            remote_path, data,
+            {"content-type": "audio/mpeg", "upsert": "true"}
+        )
+        audio_url = supabase.storage.from_("audio").get_public_url(remote_path)
+    except Exception as e:
+        log.error(f"❌ Upload failed: {e}")
+        audio_url = None
+    
+    # Cache the result
+    if audio_url:
+        try:
+            supabase.table("cached_intros").upsert({
+                "name_hash": intro_hash,
+                "first_name": display_name,
+                "audio_url": audio_url,
+                "audio_duration": duration
+            }).execute()
+        except:
+            pass
+    
+    # Cleanup temp file
+    try:
+        os.remove(temp_path)
+    except:
+        pass
+    
+    return {
+        "audio_url": audio_url,
+        "audio_duration": duration
+    }
+
+
+# ============================================
+# SCRIPT GENERATION (for segment creation)
 # ============================================
 
 def generate_dialogue_script(content: str, target_words: int) -> str | None:
@@ -307,7 +382,7 @@ def generate_dialogue_script(content: str, target_words: int) -> str | None:
     
     prompt = USER_PROMPT.format(words=target_words, content=content[:6000])
     
-    log.info(f"📝 Generating {target_words}-word script")
+    log.info(f"📝 Generating {target_words}-word dialogue script")
     
     for attempt in range(3):
         try:
@@ -323,7 +398,7 @@ def generate_dialogue_script(content: str, target_words: int) -> str | None:
             
             script = response.choices[0].message.content
             
-            # Quick validation
+            # Validation
             has_a = '[A]' in script or '[a]' in script.lower()
             has_b = '[B]' in script or '[b]' in script.lower()
             
@@ -332,7 +407,7 @@ def generate_dialogue_script(content: str, target_words: int) -> str | None:
             if has_a or has_b:
                 return script
             
-            # If no tags, try again with stronger instruction
+            # Retry with stronger instruction
             prompt = prompt + "\n\nATTENTION: Tu DOIS utiliser [A] et [B] pour marquer chaque réplique!"
             
         except Exception as e:
@@ -342,79 +417,11 @@ def generate_dialogue_script(content: str, target_words: int) -> str | None:
 
 
 # ============================================
-# SEGMENT CREATION
+# UTILITY EXPORTS
 # ============================================
-
-def create_segment(url: str, target_words: int) -> dict | None:
-    """Create audio segment from URL."""
-    
-    log.info(f"🔗 Processing: {url[:60]}...")
-    
-    extraction = extract_content(url)
-    if not extraction:
-        log.warning(f"⚠️ Extraction failed: {url[:60]}")
-        return None
-    
-    source_type, title, content = extraction
-    log.info(f"📰 Extracted: {title[:50]}, {len(content)} chars")
-    
-    script = generate_dialogue_script(content, target_words)
-    if not script:
-        log.error("❌ Script generation failed")
-        return None
-    
-    timestamp = datetime.now().strftime("%H%M%S")
-    safe_title = re.sub(r'[^a-z0-9]', '', title.lower()[:15])
-    temp_path = os.path.join(tempfile.gettempdir(), f"seg_{safe_title}_{timestamp}.mp3")
-    
-    audio_path = generate_dialogue_audio(script, temp_path)
-    if not audio_path:
-        return None
-    
-    duration = get_audio_duration(audio_path)
-    log.info(f"✅ Segment: {title[:40]}, {duration}s")
-    
-    return {
-        "local_path": audio_path,
-        "duration": duration,
-        "title": title
-    }
-
-
-# ============================================
-# INTRO
-# ============================================
-
-def create_intro(first_name: str) -> dict | None:
-    """Create intro with Breeze voice."""
-    
-    display_name = first_name.strip().title() if first_name else "Ami"
-    intro_text = f"{display_name}, c'est parti pour votre Keernel!"
-    
-    log.info(f"🎤 Creating intro for {display_name}")
-    
-    temp_path = os.path.join(tempfile.gettempdir(), f"intro_{datetime.now().strftime('%H%M%S')}.mp3")
-    
-    if generate_tts(intro_text, VOICE_BREEZE, temp_path):
-        return {
-            "local_path": temp_path,
-            "duration": get_audio_duration(temp_path)
-        }
-    return None
-
-
-# ============================================
-# UTILITIES
-# ============================================
-
-def get_domain(url: str) -> str:
-    try:
-        return urlparse(url).netloc.replace('www.', '')
-    except:
-        return "source"
-
 
 def upload_audio(local_path: str, remote_path: str) -> str | None:
+    """Upload audio to Supabase storage."""
     try:
         with open(local_path, 'rb') as f:
             data = f.read()
@@ -428,169 +435,9 @@ def upload_audio(local_path: str, remote_path: str) -> str | None:
         return None
 
 
-# ============================================
-# MAIN ASSEMBLY
-# ============================================
-
-def assemble_podcast(user_id: str, first_name: str, urls: list[str], target_minutes: int) -> dict | None:
-    """Assemble podcast with correct duration."""
-    
-    log.info("=" * 50)
-    log.info(f"🎙️ ASSEMBLING PODCAST")
-    log.info(f"   Target: {target_minutes} minutes")
-    log.info(f"   URLs: {len(urls)}")
-    log.info("=" * 50)
-    
-    segments = []
-    sources = []
-    temp_files = []
-    total_duration = 0
-    target_seconds = target_minutes * 60
-    
+def get_domain(url: str) -> str:
+    """Extract domain from URL."""
     try:
-        # 1. INTRO (~5 seconds)
-        intro = create_intro(first_name)
-        if intro:
-            segments.append(intro["local_path"])
-            temp_files.append(intro["local_path"])
-            total_duration += intro["duration"]
-            log.info(f"✅ Intro: {intro['duration']}s")
-        
-        # 2. CALCULATE words per segment to hit target duration
-        # Formula: target_seconds * WORDS_PER_MINUTE / 60 = total words needed
-        # Divide by number of URLs
-        remaining_seconds = target_seconds - total_duration
-        total_words_needed = int(remaining_seconds * WORDS_PER_MINUTE / 60)
-        num_urls = min(len(urls), 5)  # Max 5 sources
-        words_per_segment = max(200, total_words_needed // num_urls)
-        
-        log.info(f"📊 Target: {remaining_seconds}s = {total_words_needed} words")
-        log.info(f"📊 Per segment: {words_per_segment} words x {num_urls} URLs")
-        
-        # 3. GENERATE SEGMENTS
-        for url in urls[:num_urls]:
-            # Stop if we've reached target duration
-            if total_duration >= target_seconds * 0.9:
-                log.info(f"⏱️ Reached 90% of target ({total_duration}s), stopping")
-                break
-            
-            seg = create_segment(url, words_per_segment)
-            if seg:
-                segments.append(seg["local_path"])
-                temp_files.append(seg["local_path"])
-                total_duration += seg["duration"]
-                sources.append({
-                    "title": seg["title"],
-                    "url": url,
-                    "domain": get_domain(url)
-                })
-                log.info(f"📊 Running total: {total_duration}s / {target_seconds}s")
-        
-        if len(segments) < 2:
-            log.error("❌ Not enough segments!")
-            return None
-        
-        # 4. COMBINE
-        from pydub import AudioSegment
-        combined = AudioSegment.empty()
-        
-        for path in segments:
-            combined += AudioSegment.from_mp3(path)
-        
-        output_path = os.path.join(tempfile.gettempdir(), f"podcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
-        combined.export(output_path, format="mp3", bitrate="192k")
-        
-        final_duration = len(combined) // 1000
-        
-        # 5. UPLOAD
-        remote = f"{user_id}/keernel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-        audio_url = upload_audio(output_path, remote)
-        
-        # Cleanup
-        os.remove(output_path)
-        for f in temp_files:
-            try:
-                os.remove(f)
-            except:
-                pass
-        
-        log.info(f"✅ PODCAST COMPLETE: {final_duration}s ({final_duration//60}m{final_duration%60}s)")
-        
-        return {
-            "audio_url": audio_url,
-            "duration": final_duration,
-            "sources_data": sources
-        }
-        
-    except Exception as e:
-        log.error(f"❌ Assembly failed: {e}")
-        return None
-
-
-# ============================================
-# ENTRY POINT
-# ============================================
-
-def generate_podcast_for_user(user_id: str) -> dict | None:
-    """Main entry point."""
-    
-    log.info("=" * 60)
-    log.info("🚀 GENERATE PODCAST FOR USER")
-    log.info("=" * 60)
-    
-    # Get user preferences
-    try:
-        user = supabase.table("users").select("first_name, preferred_format").eq("id", user_id).single().execute()
-        first_name = user.data.get("first_name") or "Ami"
-        preferred_format = user.data.get("preferred_format") or "digest"
+        return urlparse(url).netloc.replace('www.', '')
     except:
-        first_name = "Ami"
-        preferred_format = "digest"
-    
-    # Convert format to minutes
-    target_minutes = FORMAT_DURATION.get(preferred_format, 15)
-    
-    log.info(f"👤 User: {first_name}")
-    log.info(f"📻 Format: {preferred_format} = {target_minutes} minutes")
-    
-    # Get content queue
-    try:
-        queue = supabase.table("content_queue").select("url").eq("user_id", user_id).eq("status", "pending").execute()
-        urls = [item["url"] for item in queue.data] if queue.data else []
-    except:
-        urls = []
-    
-    log.info(f"📋 Queue: {len(urls)} URLs")
-    
-    if not urls:
-        log.warning("⚠️ No content in queue!")
-        return None
-    
-    # Assemble podcast
-    result = assemble_podcast(user_id, first_name, urls, target_minutes)
-    
-    if not result:
-        supabase.table("content_queue").update({"status": "failed"}).eq("user_id", user_id).eq("status", "pending").execute()
-        return None
-    
-    # Create episode
-    try:
-        today = date.today()
-        title = f"Keernel - {today.strftime('%d %B %Y')}"
-        
-        episode = supabase.table("episodes").insert({
-            "user_id": user_id,
-            "title": title,
-            "audio_url": result["audio_url"],
-            "audio_duration": result["duration"],
-            "sources_data": result["sources_data"]
-        }).execute()
-        
-        supabase.table("content_queue").update({"status": "processed"}).eq("user_id", user_id).eq("status", "pending").execute()
-        
-        log.info(f"✅ EPISODE CREATED: {result['duration']}s")
-        return episode.data[0] if episode.data else None
-        
-    except Exception as e:
-        log.error(f"❌ Episode creation failed: {e}")
-        return None
+        return "source"
