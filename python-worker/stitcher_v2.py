@@ -629,15 +629,20 @@ def get_or_create_segment(
 
 INTRO_MUSIC_PATH = os.path.join(os.path.dirname(__file__), "intro_music.mp3")
 
-def mix_intro_with_music(voice_audio, intro_music_path: str) -> tuple:
-    """Mix voice intro with background music using professional ducking."""
+def mix_intro_with_music(voice_audio, intro_music_path: str, first_segment_audio=None) -> tuple:
+    """
+    Mix voice intro with background music using professional ducking.
+    
+    If first_segment_audio is provided, it starts playing during the music fade-out
+    to avoid dead air between intro and content.
+    """
     from pydub import AudioSegment
     
-    MUSIC_SOLO_END = 4000
-    DUCK_DURATION = 2000
-    DUCK_END = 6000
-    FADE_START = 12000
-    MUSIC_END = 14000
+    MUSIC_SOLO_END = 4000      # 0-4s: music solo
+    DUCK_DURATION = 2000       # 4-6s: ducking
+    DUCK_END = 6000            # 6s: ducked
+    FADE_START = 10000         # 10s: start fade (was 12s - shortened)
+    MUSIC_END = 14000          # 14s: music ends
     DUCK_DB = -20
     
     if not os.path.exists(intro_music_path):
@@ -651,8 +656,10 @@ def mix_intro_with_music(voice_audio, intro_music_path: str) -> tuple:
     elif len(music) < MUSIC_END:
         music = music + AudioSegment.silent(duration=MUSIC_END - len(music))
     
+    # Part 1: Solo music (0s - 4s)
     part1_solo = music[:MUSIC_SOLO_END]
     
+    # Part 2: Progressive ducking (4s - 6s)
     part2_ducking = music[MUSIC_SOLO_END:DUCK_END]
     ducked_part2 = AudioSegment.empty()
     slice_duration = 100
@@ -666,21 +673,40 @@ def mix_intro_with_music(voice_audio, intro_music_path: str) -> tuple:
         db_reduction = DUCK_DB * progress
         ducked_part2 += slice_audio + db_reduction
     
+    # Part 3: Background (6s - 10s) at -20dB - SHORTENED
     part3_background = music[DUCK_END:FADE_START] + DUCK_DB
-    part4_fadeout = (music[FADE_START:MUSIC_END] + DUCK_DB).fade_out(2000)
     
+    # Part 4: Fade out (10s - 14s) - LONGER FADE
+    part4_fadeout = (music[FADE_START:MUSIC_END] + DUCK_DB).fade_out(4000)
+    
+    # Combine music parts
     processed_music = part1_solo + ducked_part2 + part3_background + part4_fadeout
     
+    # Position intro voice starting at 4s
     voice_with_padding = AudioSegment.silent(duration=MUSIC_SOLO_END) + voice_audio
     
-    total_duration = max(MUSIC_END, MUSIC_SOLO_END + len(voice_audio))
+    # Extend voice track to match music length
+    if len(voice_with_padding) < MUSIC_END:
+        voice_with_padding += AudioSegment.silent(duration=MUSIC_END - len(voice_with_padding))
     
-    if len(processed_music) < total_duration:
-        processed_music += AudioSegment.silent(duration=total_duration - len(processed_music))
-    if len(voice_with_padding) < total_duration:
-        voice_with_padding += AudioSegment.silent(duration=total_duration - len(voice_with_padding))
+    # Mix intro voice on music
+    mixed = processed_music.overlay(voice_with_padding)
     
-    mixed = processed_music.overlay(voice_with_padding).fade_in(500)
+    # Apply gentle fade in
+    mixed = mixed.fade_in(500)
+    
+    # IMPORTANT: Trim to 8 seconds to avoid dead air
+    # The first dialogue segment will start immediately after
+    TRIM_POINT = 8000  # 8 seconds - just after intro voice ends
+    
+    # Only trim if voice is short (< 4 seconds of speech)
+    voice_duration = len(voice_audio)
+    if voice_duration < 4000:
+        # Trim and add quick fade out on music
+        mixed = mixed[:TRIM_POINT]
+        # Quick fade out on last 500ms
+        fade_portion = mixed[-500:].fade_out(500)
+        mixed = mixed[:-500] + fade_portion
     
     return mixed, len(mixed) // 1000
 
