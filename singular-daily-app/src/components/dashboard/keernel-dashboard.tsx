@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Play, Pause, Layers, X, ExternalLink, Link2, Loader2,
-  Settings, LogOut, Sun, Moon, Monitor, User, SkipBack, SkipForward
+  Settings, LogOut, Sun, Moon, Monitor, User, SkipBack, SkipForward,
+  Clock, ChevronDown, FileText, Calendar
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ interface Episode {
   audio_url: string;
   audio_duration: number | null;
   sources_data?: Source[];
+  report_url?: string;
 }
 
 interface Topic {
@@ -41,6 +43,17 @@ interface ManualItem {
   id: string;
   url: string;
   title?: string;
+}
+
+interface HistoryItem {
+  id: string;
+  title: string;
+  audioUrl: string;
+  duration: number;
+  sourcesCount: number;
+  reportUrl?: string;
+  createdAt: string;
+  date: string;
 }
 
 interface KernelDashboardProps {
@@ -59,28 +72,22 @@ interface KernelDashboardProps {
 // UTILITIES
 // ============================================
 
-// Get source type and color from URL
 function getSourceMeta(url: string): { type: "video" | "podcast" | "article"; color: string; bgClass: string } {
   const domain = url.toLowerCase();
   
-  // Video sources
   if (domain.includes("youtube.com") || domain.includes("youtu.be") || 
       domain.includes("vimeo.com") || domain.includes("twitch.tv")) {
     return { type: "video", color: "#C5B358", bgClass: "bg-brass/5 dark:bg-brass/10" };
   }
   
-  // Podcast sources
   if (domain.includes("spotify.com") || domain.includes("podcasts.apple.com") ||
-      domain.includes("podcasts.google.com") || domain.includes("soundcloud.com") ||
-      domain.includes("anchor.fm") || domain.includes("overcast.fm")) {
+      domain.includes("podcasts.google.com") || domain.includes("soundcloud.com")) {
     return { type: "podcast", color: "#C5B358", bgClass: "bg-brass/5 dark:bg-brass/10" };
   }
   
-  // Articles (default)
   return { type: "article", color: "#A855F7", bgClass: "bg-violet-500/5 dark:bg-violet-500/10" };
 }
 
-// Get favicon URL
 function getFaviconUrl(url: string): string {
   try {
     const domain = new URL(url).hostname;
@@ -91,7 +98,7 @@ function getFaviconUrl(url: string): string {
 }
 
 // ============================================
-// FLOATING ORBS (Light mode only)
+// FLOATING ORBS
 // ============================================
 
 function FloatingOrbs() {
@@ -104,7 +111,6 @@ function FloatingOrbs() {
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      {/* Brass orb - top right */}
       <motion.div
         className="absolute w-[500px] h-[500px] rounded-full opacity-30"
         style={{
@@ -121,7 +127,6 @@ function FloatingOrbs() {
         transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
       />
       
-      {/* Brass lighter orb - bottom left */}
       <motion.div
         className="absolute w-[400px] h-[400px] rounded-full opacity-25"
         style={{
@@ -137,23 +142,175 @@ function FloatingOrbs() {
         }}
         transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
       />
-      
-      {/* Sand orb - center */}
-      <motion.div
-        className="absolute w-[300px] h-[300px] rounded-full opacity-20"
-        style={{
-          background: "radial-gradient(circle, rgba(247, 238, 221, 0.5) 0%, transparent 70%)",
-          filter: "blur(40px)",
-          top: "40%",
-          left: "50%",
-          transform: "translateX(-50%)",
-        }}
-        animate={{
-          x: ["-50%", "-45%", "-55%", "-50%"],
-          y: [0, 40, -20, 0],
-        }}
-        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-      />
+    </div>
+  );
+}
+
+// ============================================
+// HISTORY MENU (NEW)
+// ============================================
+
+function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryItem) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && history.length === 0) {
+      fetchHistory();
+    }
+  }, [isOpen]);
+
+  const fetchHistory = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/history?period=week&limit=7");
+      const data = await response.json();
+      setHistory(data.history || []);
+    } catch (error) {
+      console.error("Failed to fetch history:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="relative">
+      <motion.button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(36_50%_92%)] text-[hsl(0_0%_10%)] hover:bg-[hsl(36_45%_88%)] transition-colors text-sm font-display font-medium"
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+      >
+        <Clock className="w-4 h-4" />
+        <span>Cette semaine</span>
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className="w-4 h-4 opacity-60" />
+        </motion.div>
+      </motion.button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+            />
+
+            <motion.div
+              className="absolute top-full left-0 mt-2 w-80 z-50 rounded-2xl bg-card border border-border shadow-xl overflow-hidden"
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="px-4 py-3 border-b border-border bg-secondary/30">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-brass" />
+                  <span className="font-display font-medium">Dernières générations</span>
+                </div>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto">
+                {loading ? (
+                  <div className="p-4 text-center text-muted-foreground">
+                    <div className="animate-spin w-5 h-5 border-2 border-brass border-t-transparent rounded-full mx-auto" />
+                  </div>
+                ) : history.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm">
+                    Aucune génération cette semaine
+                  </div>
+                ) : (
+                  <div className="py-2">
+                    {history.map((item, index) => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="group"
+                      >
+                        <div className="px-4 py-3 hover:bg-secondary/50 transition-colors">
+                          <div className="text-xs text-muted-foreground mb-1 font-mono">
+                            {item.date}
+                          </div>
+                          
+                          <div className="font-display font-medium text-sm mb-2 truncate">
+                            {item.title}
+                          </div>
+                          
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Play className="w-3 h-3" />
+                              {formatDuration(item.duration)}
+                            </span>
+                            <span>{item.sourcesCount} sources</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {onSelectEpisode && (
+                              <button
+                                onClick={() => {
+                                  onSelectEpisode(item);
+                                  setIsOpen(false);
+                                }}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-brass/10 text-brass text-xs hover:bg-brass/20 transition-colors"
+                              >
+                                <Play className="w-3 h-3" />
+                                Écouter
+                              </button>
+                            )}
+                            
+                            {item.reportUrl && (
+                              <a
+                                href={item.reportUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-secondary text-foreground text-xs hover:bg-secondary/80 transition-colors"
+                              >
+                                <FileText className="w-3 h-3" />
+                                Rapport
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {index < history.length - 1 && (
+                          <div className="mx-4 border-b border-border/50" />
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {history.length > 0 && (
+                <div className="px-4 py-3 border-t border-border bg-secondary/30">
+                  <Link 
+                    href="/history"
+                    className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Voir tout l'historique
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -193,7 +350,6 @@ function AvatarMenu({ user }: { user: { firstName: string; email: string; avatar
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               className="fixed inset-0"
               initial={{ opacity: 0 }}
@@ -201,66 +357,53 @@ function AvatarMenu({ user }: { user: { firstName: string; email: string; avatar
               exit={{ opacity: 0 }}
               onClick={() => setIsOpen(false)}
             />
-            
-            {/* Menu */}
+
             <motion.div
-              className="absolute top-12 right-0 w-56 p-2 rounded-2xl bg-card/95 backdrop-blur-xl border border-border/50 shadow-xl"
+              className="absolute top-full right-0 mt-2 w-56 rounded-2xl bg-card border border-border shadow-xl overflow-hidden"
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 400, damping: 30 }}
             >
-              {/* User info */}
-              <div className="px-3 py-2 mb-2">
-                <p className="text-sm font-medium truncate">{user.firstName || "User"}</p>
+              <div className="px-4 py-3 border-b border-border">
+                <p className="font-medium truncate">{user.firstName || "User"}</p>
                 <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
 
-              <div className="h-px bg-border mb-2" />
-
-              {/* Theme selector */}
-              <div className="px-3 py-2">
-                <p className="text-xs text-muted-foreground mb-2">Theme</p>
-                <div className="flex gap-1">
+              <div className="p-2">
+                <div className="px-2 py-1 text-xs text-muted-foreground">Thème</div>
+                <div className="flex gap-1 px-2 pb-2">
                   {[
-                    { value: "light", icon: Sun, label: "Light" },
-                    { value: "dark", icon: Moon, label: "Dark" },
-                    { value: "system", icon: Monitor, label: "System" },
+                    { value: "light", icon: Sun },
+                    { value: "dark", icon: Moon },
+                    { value: "system", icon: Monitor },
                   ].map(({ value, icon: Icon }) => (
                     <button
                       key={value}
                       onClick={() => setTheme(value)}
-                      className={`flex-1 p-2 rounded-lg transition-colors ${
-                        theme === value
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-secondary"
+                      className={`flex-1 p-2 rounded-lg flex items-center justify-center ${
+                        theme === value ? "bg-secondary" : "hover:bg-secondary/50"
                       }`}
                     >
-                      <Icon className="w-4 h-4 mx-auto" />
+                      <Icon className="w-4 h-4" />
                     </button>
                   ))}
                 </div>
+
+                <Link href="/settings">
+                  <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary text-left">
+                    <Settings className="w-4 h-4" />
+                    <span className="text-sm">Settings</span>
+                  </button>
+                </Link>
+
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary text-left text-red-500"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="text-sm">Sign out</span>
+                </button>
               </div>
-
-              <div className="h-px bg-border my-2" />
-
-              {/* Links */}
-              <Link
-                href="/settings"
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                <Settings className="w-4 h-4" />
-                <span className="text-sm">Settings</span>
-              </Link>
-
-              <button
-                onClick={handleSignOut}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary transition-colors text-left"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="text-sm">Sign out</span>
-              </button>
             </motion.div>
           </>
         )}
@@ -274,83 +417,56 @@ function AvatarMenu({ user }: { user: { firstName: string; email: string; avatar
 // ============================================
 
 function MagicBar() {
-  const [input, setInput] = useState("");
+  const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const isUrl = (text: string) => {
-    try {
-      new URL(text);
-      return true;
-    } catch {
-      return text.includes(".") && !text.includes(" ");
-    }
-  };
-
   const handleSubmit = async () => {
-    const value = input.trim();
-    if (!value) return;
-
+    if (!url.trim()) return;
+    
     setLoading(true);
-
     try {
-      if (isUrl(value)) {
-        let url = value;
-        if (!url.startsWith("http")) url = "https://" + url;
+      const response = await fetch("/api/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url.trim() }),
+      });
 
-        const response = await fetch("/api/queue", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
-
-        if (!response.ok) throw new Error("Failed to add URL");
-        toast.success("Link added");
+      if (response.ok) {
+        toast.success("Content added to queue");
+        setUrl("");
+        router.refresh();
       } else {
-        const response = await fetch("/api/interests", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ keyword: value }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || "Failed to add topic");
-        }
-        toast.success(`Topic "${value}" added`);
+        toast.error("Failed to add content");
       }
-
-      setInput("");
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Something went wrong");
+    } catch {
+      toast.error("Something went wrong");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <motion.div
-      className="magic-bar w-full max-w-xl mx-auto px-6 py-4"
-      whileFocus={{ scale: 1.02 }}
+    <motion.div 
+      className="magic-bar w-full max-w-xl mx-auto flex items-center gap-3 px-4 py-3"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
     >
-      <div className="flex items-center gap-3">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          placeholder="Paste a link or add a topic..."
-          className="flex-1 bg-transparent text-center text-base placeholder:text-muted-foreground/50 focus:outline-none"
-          disabled={loading}
-        />
-        <button
-          onClick={handleSubmit}
-          disabled={loading || !input.trim()}
-          className="p-2 text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-30"
-        >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
-        </button>
-      </div>
+      <input
+        type="url"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="Paste a link to add to your podcast..."
+        className="flex-1 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/50"
+        onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+      />
+      <button
+        onClick={handleSubmit}
+        disabled={loading || !url.trim()}
+        className="p-2 rounded-full hover:bg-secondary disabled:opacity-50 transition-colors"
+      >
+        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+      </button>
     </motion.div>
   );
 }
@@ -412,7 +528,7 @@ function TopicPills({ topics }: { topics: Topic[] }) {
 }
 
 // ============================================
-// PLAYER POD + SOURCES PANEL
+// PLAYER POD
 // ============================================
 
 function PlayerPod({ episode }: { episode: Episode }) {
@@ -424,8 +540,6 @@ function PlayerPod({ episode }: { episode: Episode }) {
   const [playbackRate, setPlaybackRate] = useState(1);
 
   const sources = episode.sources_data || [];
-  
-  // Playback speed options
   const SPEED_OPTIONS = [1, 1.25, 1.5, 2];
 
   useEffect(() => {
@@ -439,13 +553,6 @@ function PlayerPod({ episode }: { episode: Episode }) {
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
     audio.addEventListener("ended", handleEnded);
-
-    if ("mediaSession" in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: episode.title,
-        artist: "Keernel",
-      });
-    }
 
     return () => {
       audio.removeEventListener("timeupdate", handleTimeUpdate);
@@ -471,11 +578,9 @@ function PlayerPod({ episode }: { episode: Episode }) {
   const cyclePlaybackRate = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    
     const currentIndex = SPEED_OPTIONS.indexOf(playbackRate);
     const nextIndex = (currentIndex + 1) % SPEED_OPTIONS.length;
     const newRate = SPEED_OPTIONS[nextIndex];
-    
     audio.playbackRate = newRate;
     setPlaybackRate(newRate);
   };
@@ -483,13 +588,10 @@ function PlayerPod({ episode }: { episode: Episode }) {
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-  const springConfig = { type: "spring" as const, stiffness: 300, damping: 30 };
-
   return (
     <>
       <audio ref={audioRef} src={episode.audio_url} preload="metadata" />
 
-      {/* Sources Panel */}
       <AnimatePresence>
         {showSources && (
           <motion.div
@@ -498,15 +600,11 @@ function PlayerPod({ episode }: { episode: Episode }) {
             initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
-            transition={springConfig}
           >
             <div className="sources-panel p-4 max-h-[50vh] overflow-y-auto scrollbar-hide">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-serif text-lg font-medium">Sources</h3>
-                <button
-                  onClick={() => setShowSources(false)}
-                  className="p-2 rounded-full hover:bg-secondary"
-                >
+                <button onClick={() => setShowSources(false)} className="p-2 rounded-full hover:bg-secondary">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -528,67 +626,41 @@ function PlayerPod({ episode }: { episode: Episode }) {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.05 }}
                       >
-                        {/* Favicon */}
-                        <div 
-                          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: `${meta.color}15` }}
-                        >
-                          {favicon ? (
-                            <img src={favicon} alt="" className="w-4 h-4" />
-                          ) : (
-                            <div 
-                              className="w-3 h-3 rounded-full" 
-                              style={{ backgroundColor: meta.color }}
-                            />
-                          )}
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${meta.color}15` }}>
+                          {favicon ? <img src={favicon} alt="" className="w-4 h-4" /> : <div className="w-3 h-3 rounded-full" style={{ backgroundColor: meta.color }} />}
                         </div>
-
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{source.title}</p>
                           <p className="text-xs text-muted-foreground font-mono">{source.domain}</p>
                         </div>
-
-                        <ExternalLink 
-                          className="w-4 h-4 opacity-0 group-hover:opacity-50 flex-shrink-0" 
-                        />
+                        <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-50 flex-shrink-0" />
                       </motion.a>
                     );
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No sources available
-                </p>
+                <p className="text-sm text-muted-foreground text-center py-4">No sources available</p>
               )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Player Pod */}
       <motion.div
         className="fixed bottom-6 left-1/2 z-50"
         style={{ x: "-50%" }}
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={springConfig}
       >
         <div className="player-pod w-[90vw] max-w-[620px] px-4 py-3">
           <div className="flex items-center gap-3">
-            {/* Skip Back 15s */}
-            <motion.button
-              onClick={() => skip(-15)}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              whileTap={{ scale: 0.9 }}
-              title="Reculer 15s"
-            >
+            <motion.button onClick={() => skip(-15)} className="p-2 text-muted-foreground hover:text-foreground transition-colors" whileTap={{ scale: 0.9 }}>
               <SkipBack className="w-4 h-4" />
             </motion.button>
 
-            {/* Play Button - CREAM background */}
             <motion.button
               onClick={togglePlay}
-              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[hsl(36_40%_95%)] dark:bg-[hsl(36_40%_95%)]"
+              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[hsl(36_40%_95%)]"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -597,25 +669,15 @@ function PlayerPod({ episode }: { episode: Episode }) {
               </span>
             </motion.button>
 
-            {/* Skip Forward 15s */}
-            <motion.button
-              onClick={() => skip(15)}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              whileTap={{ scale: 0.9 }}
-              title="Avancer 15s"
-            >
+            <motion.button onClick={() => skip(15)} className="p-2 text-muted-foreground hover:text-foreground transition-colors" whileTap={{ scale: 0.9 }}>
               <SkipForward className="w-4 h-4" />
             </motion.button>
 
-            {/* Title + Progress */}
             <div className="flex-1 min-w-0">
               <p className="font-serif text-sm font-medium truncate">{episode.title}</p>
               <div className="mt-1 flex items-center gap-2">
                 <div className="flex-1 h-1 rounded-full bg-secondary/50 overflow-hidden">
-                  <motion.div
-                    className="h-full rounded-full bg-[hsl(36_40%_95%)]"
-                    style={{ width: `${progress}%` }}
-                  />
+                  <motion.div className="h-full rounded-full bg-[hsl(36_40%_95%)]" style={{ width: `${progress}%` }} />
                 </div>
                 <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
                   {formatTime(currentTime)} / {formatTime(duration)}
@@ -623,24 +685,17 @@ function PlayerPod({ episode }: { episode: Episode }) {
               </div>
             </div>
 
-            {/* Playback Speed */}
             <motion.button
               onClick={cyclePlaybackRate}
               className="px-2 py-1 rounded-md text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
               whileTap={{ scale: 0.95 }}
-              title="Vitesse de lecture"
             >
               {playbackRate}x
             </motion.button>
 
-            {/* Sources Button */}
             <motion.button
               onClick={() => setShowSources(!showSources)}
-              className={`p-2 rounded-full flex-shrink-0 ${
-                showSources
-                  ? "bg-[#C5B358]/20 text-[#C5B358]"
-                  : "hover:bg-secondary text-muted-foreground"
-              }`}
+              className={`p-2 rounded-full flex-shrink-0 ${showSources ? "bg-brass/20 text-brass" : "hover:bg-secondary text-muted-foreground"}`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -677,16 +732,12 @@ function GenerateButton({ pendingCount, hasTopics }: { pendingCount: number; has
 
   if (!hasTopics && pendingCount === 0) {
     return (
-      <button
-        disabled
-        className="w-full max-w-xs mx-auto block px-6 py-3 rounded-full bg-secondary text-muted-foreground text-sm font-mono"
-      >
+      <button disabled className="w-full max-w-xs mx-auto block px-6 py-3 rounded-full bg-secondary text-muted-foreground text-sm font-mono">
         Add topics to get started
       </button>
     );
   }
 
-  // btn-generate: bg charcoal, text laiton, halo charcoal
   return (
     <motion.button
       onClick={handleGenerate}
@@ -720,18 +771,30 @@ export function KernelDashboard({
 }: KernelDashboardProps) {
   const hasTopics = topics.length > 0;
   const { resolvedTheme } = useTheme();
+  const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(episode);
+
+  const handleSelectHistoryEpisode = (historyItem: HistoryItem) => {
+    setCurrentEpisode({
+      id: historyItem.id,
+      title: historyItem.title,
+      audio_url: historyItem.audioUrl,
+      audio_duration: historyItem.duration,
+      sources_data: [],
+      report_url: historyItem.reportUrl
+    });
+  };
 
   return (
     <div className="min-h-screen relative">
-      {/* Floating orbs - light mode only */}
       <FloatingOrbs />
-
-      {/* Avatar menu - top right */}
       <AvatarMenu user={user} />
 
-      {/* Main content - centered */}
+      {/* History Menu - Top Left */}
+      <div className="fixed top-6 left-6 z-50">
+        <HistoryMenu onSelectEpisode={handleSelectHistoryEpisode} />
+      </div>
+
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-20">
-        {/* Logo - SVG based on theme */}
         <motion.div
           className="mb-6"
           initial={{ opacity: 0, y: -20 }}
@@ -745,7 +808,6 @@ export function KernelDashboard({
           />
         </motion.div>
 
-        {/* Greeting - Wittgenstein Semi Bold 600 */}
         <motion.div
           className="text-center mb-10"
           initial={{ opacity: 0, y: -10 }}
@@ -760,7 +822,6 @@ export function KernelDashboard({
           </p>
         </motion.div>
 
-        {/* Magic Bar */}
         <motion.div
           className="w-full mb-6"
           initial={{ opacity: 0, y: 10 }}
@@ -770,7 +831,6 @@ export function KernelDashboard({
           <MagicBar />
         </motion.div>
 
-        {/* Topics */}
         <motion.div
           className="w-full mb-10"
           initial={{ opacity: 0 }}
@@ -780,7 +840,6 @@ export function KernelDashboard({
           <TopicPills topics={topics} />
         </motion.div>
 
-        {/* Generate Button */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -790,8 +849,7 @@ export function KernelDashboard({
         </motion.div>
       </div>
 
-      {/* Player Pod */}
-      {episode && <PlayerPod episode={episode} />}
+      {currentEpisode && <PlayerPod episode={currentEpisode} />}
     </div>
   );
 }

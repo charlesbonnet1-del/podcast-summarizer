@@ -8,12 +8,17 @@ FIXES APPLIED:
 4. SOURCE CITATION: Each segment mentions the source name
 5. TTS SPEED: 1.05 (natural, not rushed)
 6. MULTIPLE TOPICS: Ensure we cover different topics user subscribed to
+
+V2.1 ADDITIONS:
+7. AUDIO ARCHIVE: Keep 7 days of cached audio
+8. DATA REPORTS: Generate Markdown reports for each episode
+9. HISTORY: get_user_history() function for past reports
 """
 import os
 import hashlib
 import tempfile
-from datetime import datetime, date, timezone
-from typing import Optional
+from datetime import datetime, date, timezone, timedelta
+from typing import Optional, List
 from urllib.parse import urlparse
 import re
 
@@ -35,7 +40,8 @@ VOICE_VALE = "onyx"     # Voice B - Challenger
 TTS_SPEED = 1.05        # Natural speed (1.0 = normal)
 
 WORDS_PER_MINUTE = 150
-SEGMENT_CACHE_DAYS = 7
+SEGMENT_CACHE_DAYS = 7  # Keep audio cache for 7 days
+REPORT_RETENTION_DAYS = 365  # Keep reports for 1 year
 
 # Format configurations - FIXED DURATIONS
 FORMAT_CONFIG = {
@@ -738,7 +744,27 @@ def assemble_lego_podcast(
             .execute()
         
         if episode.data:
-            log.info(f"✅ EPISODE CREATED: {total_duration}s, {len(sources_data)} sources")
+            episode_id = episode.data[0]["id"]
+            
+            # 6. GENERATE MARKDOWN REPORT
+            report_url = generate_episode_report(
+                user_id=user_id,
+                episode_id=episode_id,
+                title=title,
+                format_type=format_type,
+                sources_data=sources_data,
+                total_duration=total_duration,
+                target_date=target_date
+            )
+            
+            if report_url:
+                # Update episode with report URL
+                supabase.table("episodes") \
+                    .update({"report_url": report_url}) \
+                    .eq("id", episode_id) \
+                    .execute()
+            
+            log.info(f"✅ EPISODE CREATED: {total_duration}s, {len(sources_data)} sources, report={bool(report_url)}")
             return episode.data[0]
         
         return None
@@ -826,3 +852,221 @@ def extract_domain(url: str) -> str:
 def record_episode_composition(episode_id: str, segments: list):
     """Record which segments were used (for analytics)."""
     pass  # Optional analytics
+
+
+# ============================================
+# MARKDOWN REPORT GENERATION
+# ============================================
+
+def generate_episode_report(
+    user_id: str,
+    episode_id: str,
+    title: str,
+    format_type: str,
+    sources_data: list[dict],
+    total_duration: int,
+    target_date: date
+) -> Optional[str]:
+    """
+    Generate a structured Markdown report for the episode.
+    
+    Returns the report URL after uploading to storage.
+    """
+    
+    # Build Markdown content
+    duration_str = f"{total_duration // 60}m {total_duration % 60}s"
+    
+    report_md = f"""---
+title: "{title}"
+date: {target_date.isoformat()}
+format: {format_type}
+duration: {duration_str}
+sources_count: {len(sources_data)}
+---
+
+# {title}
+
+**Format** : {format_type.title()} ({duration_str})  
+**Date** : {target_date.strftime('%d %B %Y')}  
+**Sources** : {len(sources_data)} articles
+
+---
+
+## 📰 Sources traitées
+
+"""
+    
+    for i, source in enumerate(sources_data, 1):
+        source_title = source.get("title", "Sans titre")
+        source_url = source.get("url", "#")
+        source_domain = source.get("domain", extract_domain(source_url))
+        
+        report_md += f"""### {i}. {source_title}
+
+- **Source** : [{source_domain}]({source_url})
+- **URL** : {source_url}
+
+"""
+    
+    report_md += f"""---
+
+## 📊 Résumé
+
+- **Durée totale** : {duration_str}
+- **Format** : {format_type.title()}
+- **Articles couverts** : {len(sources_data)}
+- **Généré le** : {datetime.now().strftime('%d/%m/%Y à %H:%M')}
+
+---
+
+*Rapport généré automatiquement par Keernel*
+"""
+    
+    # Upload to storage
+    try:
+        report_filename = f"report_{target_date.isoformat()}_{episode_id[:8]}.md"
+        remote_path = f"reports/{user_id}/{target_date.strftime('%Y/%m')}/{report_filename}"
+        
+        supabase.storage.from_("reports").upload(
+            remote_path,
+            report_md.encode('utf-8'),
+            {"content-type": "text/markdown", "upsert": "true"}
+        )
+        
+        report_url = supabase.storage.from_("reports").get_public_url(remote_path)
+        
+        # Save reference in database
+        supabase.table("episode_reports").insert({
+            "user_id": user_id,
+            "episode_id": episode_id,
+            "report_url": report_url,
+            "report_date": target_date.isoformat(),
+            "format_type": format_type,
+            "sources_count": len(sources_data),
+            "duration_seconds": total_duration,
+            "markdown_content": report_md
+        }).execute()
+        
+        log.info(f"📄 Report generated: {report_filename}")
+        return report_url
+        
+    except Exception as e:
+        log.error(f"Failed to generate report: {e}")
+        return None
+
+
+# ============================================
+# USER HISTORY
+# ============================================
+
+def get_user_history(user_id: str, limit: int = 20) -> List[dict]:
+    """
+    Get list of past episode reports for a user.
+    
+    Returns list of reports with:
+    - id, episode_id, report_url, report_date
+    - format_type, sources_count, duration_seconds
+    """
+    try:
+        result = supabase.table("episode_reports") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("report_date", desc=True) \
+            .limit(limit) \
+            .execute()
+        
+        return result.data if result.data else []
+        
+    except Exception as e:
+        log.error(f"Failed to get user history: {e}")
+        return []
+
+
+def get_user_history_this_week(user_id: str) -> List[dict]:
+    """
+    Get reports from the last 7 days.
+    """
+    try:
+        week_ago = (date.today() - timedelta(days=7)).isoformat()
+        
+        result = supabase.table("episode_reports") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .gte("report_date", week_ago) \
+            .order("report_date", desc=True) \
+            .execute()
+        
+        return result.data if result.data else []
+        
+    except Exception as e:
+        log.error(f"Failed to get weekly history: {e}")
+        return []
+
+
+# ============================================
+# AUDIO CACHE CLEANUP (Keep 7 days)
+# ============================================
+
+def cleanup_old_audio_cache(days_to_keep: int = SEGMENT_CACHE_DAYS):
+    """
+    Remove audio segments older than specified days.
+    Keeps the last 7 days by default.
+    """
+    try:
+        cutoff_date = (date.today() - timedelta(days=days_to_keep)).isoformat()
+        
+        # Get old segments
+        old_segments = supabase.table("audio_segments") \
+            .select("id, audio_url, date") \
+            .lt("date", cutoff_date) \
+            .execute()
+        
+        if not old_segments.data:
+            log.info("No old segments to clean up")
+            return 0
+        
+        deleted_count = 0
+        
+        for segment in old_segments.data:
+            try:
+                # Delete from storage if URL is from our bucket
+                audio_url = segment.get("audio_url", "")
+                if "supabase" in audio_url and "/segments/" in audio_url:
+                    # Extract path from URL
+                    path_match = re.search(r'/segments/(.+)$', audio_url)
+                    if path_match:
+                        storage_path = f"segments/{path_match.group(1)}"
+                        supabase.storage.from_("audio").remove([storage_path])
+                
+                # Delete from database
+                supabase.table("audio_segments") \
+                    .delete() \
+                    .eq("id", segment["id"]) \
+                    .execute()
+                
+                deleted_count += 1
+                
+            except Exception as e:
+                log.warning(f"Failed to delete segment {segment['id']}: {e}")
+        
+        log.info(f"🗑️ Cleaned up {deleted_count} old audio segments (older than {days_to_keep} days)")
+        return deleted_count
+        
+    except Exception as e:
+        log.error(f"Cache cleanup failed: {e}")
+        return 0
+
+
+def run_daily_maintenance():
+    """
+    Run daily maintenance tasks:
+    - Clean up old audio cache
+    - Keep reports permanently
+    """
+    log.info("🔧 Running daily maintenance...")
+    
+    # Clean audio cache (keep 7 days)
+    deleted = cleanup_old_audio_cache(SEGMENT_CACHE_DAYS)
+    
+    log.info(f"✅ Maintenance complete. Deleted {deleted} old segments.")
+    return {"deleted_segments": deleted}
