@@ -1,0 +1,2 @@
+# Add to your requirements.txt
+cartesia>=2.0.0
