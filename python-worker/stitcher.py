@@ -50,8 +50,8 @@ if os.getenv("OPENAI_API_KEY"):
 VOICE_BREEZE = "nova"   # Voice A - Expert
 VOICE_VALE = "onyx"     # Voice B - Challenger
 
-# TTS speed (1.0 = normal, 1.2 = 20% faster for dynamic delivery)
-TTS_SPEED = 1.2
+# TTS speed (1.0 = normal, 1.05 = slightly faster but natural)
+TTS_SPEED = 1.05
 
 # ============================================
 # DIALOGUE PROMPTS - STRICT FORMAT
