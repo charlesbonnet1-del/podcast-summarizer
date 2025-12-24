@@ -124,8 +124,7 @@ def get_gsheet_sources_for_topics(topic_ids: list[str], include_international: b
                 # RSS failed - decrement score
                 library.decrement_score(
                     source["row_index"], 
-                    amount=5,
-                    worksheet_name=source.get("worksheet")
+                    amount=5
                 )
                 log.warning("RSS fetch failed, score decremented", 
                            source=source["name"], 
