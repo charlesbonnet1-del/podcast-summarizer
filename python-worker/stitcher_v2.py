@@ -521,13 +521,144 @@ def get_or_create_segment(
 
 
 # ============================================
-# INTRO/OUTRO
+# INTRO WITH MUSIC MIXING
 # ============================================
 
+# Path to intro music file (should be in the worker directory)
+INTRO_MUSIC_PATH = os.path.join(os.path.dirname(__file__), "intro_music.mp3")
+
+def mix_intro_with_music(voice_audio, intro_music_path: str) -> tuple:
+    """
+    Mix voice intro with background music using professional ducking.
+    
+    SEQUENCE (14 seconds):
+    0s-4s:   Music solo at 0dB
+    4s-6s:   Voice enters, music ducks from 0dB to -20dB
+    6s-12s:  Music at -20dB background
+    12s-14s: Music fades out
+    
+    Returns:
+        tuple: (mixed_audio: AudioSegment, duration_seconds: int)
+    """
+    from pydub import AudioSegment
+    
+    # Timing constants (milliseconds)
+    MUSIC_SOLO_END = 4000
+    DUCK_DURATION = 2000
+    DUCK_END = 6000
+    FADE_START = 12000
+    MUSIC_END = 14000
+    DUCK_DB = -20
+    
+    # Load intro music
+    if not os.path.exists(intro_music_path):
+        log.warning(f"⚠️ Intro music not found at {intro_music_path}, using voice only")
+        return voice_audio, len(voice_audio) // 1000
+    
+    music = AudioSegment.from_mp3(intro_music_path)
+    
+    # Ensure music is exactly 14 seconds
+    if len(music) > MUSIC_END:
+        music = music[:MUSIC_END]
+    elif len(music) < MUSIC_END:
+        music = music + AudioSegment.silent(duration=MUSIC_END - len(music))
+    
+    # Part 1: Solo music (0s - 4s)
+    part1_solo = music[:MUSIC_SOLO_END]
+    
+    # Part 2: Progressive ducking (4s - 6s)
+    part2_ducking = music[MUSIC_SOLO_END:DUCK_END]
+    ducked_part2 = AudioSegment.empty()
+    slice_duration = 100
+    num_slices = DUCK_DURATION // slice_duration
+    
+    for i in range(num_slices):
+        start = i * slice_duration
+        end = start + slice_duration
+        slice_audio = part2_ducking[start:end]
+        progress = i / num_slices
+        db_reduction = DUCK_DB * progress
+        ducked_part2 += slice_audio + db_reduction
+    
+    # Part 3: Background (6s - 12s) at -20dB
+    part3_background = music[DUCK_END:FADE_START] + DUCK_DB
+    
+    # Part 4: Fade out (12s - 14s)
+    part4_fadeout = (music[FADE_START:MUSIC_END] + DUCK_DB).fade_out(2000)
+    
+    # Combine music parts
+    processed_music = part1_solo + ducked_part2 + part3_background + part4_fadeout
+    
+    # Position voice starting at 4s
+    voice_with_padding = AudioSegment.silent(duration=MUSIC_SOLO_END) + voice_audio
+    
+    # Total duration
+    total_duration = max(MUSIC_END, MUSIC_SOLO_END + len(voice_audio))
+    
+    # Extend tracks to same length
+    if len(processed_music) < total_duration:
+        processed_music += AudioSegment.silent(duration=total_duration - len(processed_music))
+    if len(voice_with_padding) < total_duration:
+        voice_with_padding += AudioSegment.silent(duration=total_duration - len(voice_with_padding))
+    
+    # Mix and apply fade in
+    mixed = processed_music.overlay(voice_with_padding).fade_in(500)
+    
+    return mixed, len(mixed) // 1000
+
+
 def get_or_create_intro(first_name: str) -> Optional[dict]:
-    """Get or create personalized intro."""
-    from stitcher import get_or_create_intro as legacy_intro
-    return legacy_intro(first_name)
+    """Get or create personalized intro WITH background music."""
+    from pydub import AudioSegment
+    
+    display_name = first_name.strip().title() if first_name else "Ami"
+    intro_text = f"{display_name}, c'est parti pour votre Keernel!"
+    
+    log.info(f"🎤 Creating intro for {display_name}")
+    
+    timestamp = datetime.now().strftime("%H%M%S")
+    
+    # Generate voice TTS
+    voice_path = os.path.join(tempfile.gettempdir(), f"intro_voice_{timestamp}.mp3")
+    
+    if not generate_tts(intro_text, VOICE_BREEZE, voice_path):
+        log.error("❌ Failed to generate intro voice")
+        return None
+    
+    voice_audio = AudioSegment.from_mp3(voice_path)
+    voice_duration = len(voice_audio) // 1000
+    log.info(f"🎤 Voice generated: {voice_duration}s")
+    
+    # Check if intro music exists
+    if os.path.exists(INTRO_MUSIC_PATH):
+        log.info(f"🎵 Mixing with intro music")
+        mixed_audio, total_duration = mix_intro_with_music(voice_audio, INTRO_MUSIC_PATH)
+        
+        # Save mixed intro
+        final_path = os.path.join(tempfile.gettempdir(), f"intro_mixed_{timestamp}.mp3")
+        mixed_audio.export(final_path, format="mp3", bitrate="192k")
+        
+        # Cleanup voice-only file
+        try:
+            os.remove(voice_path)
+        except:
+            pass
+        
+        log.info(f"✅ Intro with music: {total_duration}s")
+        
+        return {
+            "local_path": final_path,
+            "duration": total_duration,
+            "audio_duration": total_duration
+        }
+    else:
+        # No music file - use voice only (fallback)
+        log.warning(f"⚠️ No intro music at {INTRO_MUSIC_PATH}, using voice only")
+        return {
+            "local_path": voice_path,
+            "duration": voice_duration,
+            "audio_duration": voice_duration
+        }
 
 
 def get_or_create_outro() -> Optional[dict]:
