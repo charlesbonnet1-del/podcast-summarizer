@@ -159,6 +159,41 @@ Contenu:
 
 ## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}):"""
 
+
+# Multi-source prompt for topics covered by multiple articles
+DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE ENRICHI de {word_count} mots entre deux hôtes.
+
+## CONTEXTE SPÉCIAL
+Ce sujet est couvert par PLUSIEURS SOURCES - c'est donc un sujet d'actualité majeur !
+Tu dois CROISER et COMPARER les informations des différentes sources.
+
+## LES HÔTES
+- [A] ALICE = Experte qui synthétise les différentes sources
+- [B] BOB = Challenger qui compare et questionne les différents angles
+
+## FORMAT OBLIGATOIRE
+Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
+
+[A]
+Alice synthétise et compare.
+
+[B]
+Bob questionne ou souligne les différences.
+
+## RÈGLES STRICTES
+1. ALTERNER [A] et [B] - jamais deux [A] ou deux [B] de suite
+2. ALICE [A] commence TOUJOURS en premier
+3. Minimum 8 répliques (4 de chaque) - sujet plus riche !
+4. Style oral naturel français
+5. CITE LES DIFFÉRENTES SOURCES: "Selon Le Monde...", "De son côté, Les Échos rapportent..."
+6. COMPARE les points de vue ou informations complémentaires
+7. ZÉRO liste, ZÉRO bullet points
+
+## SOURCES ({source_count} articles sur ce sujet)
+{sources_content}
+
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources):"""
+
 # ============================================
 # DIGEST EXTRACTION PROMPT
 # ============================================
@@ -745,6 +780,122 @@ def get_or_create_segment(
     }
 
 
+def get_or_create_multi_source_segment(
+    articles: list[dict],
+    cluster_theme: str,
+    target_date: date,
+    edition: str,
+    format_config: dict
+) -> Optional[dict]:
+    """Create an enriched segment from multiple articles on the same topic."""
+    
+    log.info(f"🔥 Creating multi-source segment: {cluster_theme[:50]}... ({len(articles)} sources)")
+    
+    # 1. Extract content from all articles
+    extracted_articles = []
+    all_digests = []
+    
+    for article in articles:
+        extraction = extract_content(article["url"])
+        if extraction:
+            source_type, extracted_title, content = extraction
+            source_name = urlparse(article["url"]).netloc.replace("www.", "")
+            
+            extracted_articles.append({
+                "title": article.get("title") or extracted_title,
+                "content": content[:3000],  # Limit per article for multi-source
+                "source_name": source_name,
+                "url": article["url"]
+            })
+            
+            # Extract digest for each article
+            digest = extract_article_digest(
+                title=article.get("title") or extracted_title,
+                content=content,
+                source_name=source_name,
+                url=article["url"]
+            )
+            if digest:
+                all_digests.append({
+                    "title": article.get("title") or extracted_title,
+                    "url": article["url"],
+                    "digest": digest
+                })
+    
+    if not extracted_articles:
+        log.warning("❌ No content extracted from multi-source cluster")
+        return None
+    
+    # 2. Build multi-source content for prompt
+    sources_content = ""
+    for i, art in enumerate(extracted_articles, 1):
+        sources_content += f"\n--- SOURCE {i}: {art['source_name']} ---\n"
+        sources_content += f"Titre: {art['title']}\n"
+        sources_content += f"Contenu:\n{art['content']}\n"
+    
+    # 3. Generate dialogue with multi-source prompt
+    # More words for richer multi-source content
+    word_count = int(format_config["words_per_article"] * 1.5)
+    
+    prompt = DIALOGUE_MULTI_SOURCE_PROMPT.format(
+        word_count=word_count,
+        source_count=len(extracted_articles),
+        sources_content=sources_content,
+        style=format_config["style"]
+    )
+    
+    script = None
+    if groq_client:
+        try:
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "Tu es un scripteur de podcast expert. Tu croises les sources pour créer un dialogue riche et informatif."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=word_count * 4
+            )
+            script = response.choices[0].message.content
+            log.info(f"✅ Multi-source script generated: {len(script)} chars")
+        except Exception as e:
+            log.error(f"❌ Multi-source script generation failed: {e}")
+    
+    if not script:
+        return None
+    
+    # 4. Generate audio
+    content_hash = hashlib.md5(f"{cluster_theme}_{len(articles)}".encode()).hexdigest()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    temp_path = os.path.join(tempfile.gettempdir(), f"multi_{content_hash[:8]}_{timestamp}.mp3")
+    
+    audio_path = generate_dialogue_audio(script, temp_path)
+    if not audio_path:
+        return None
+    
+    duration = get_audio_duration(audio_path)
+    
+    # 5. Upload
+    remote_path = f"segments/{target_date.isoformat()}/{edition}/multi_{content_hash[:16]}.mp3"
+    audio_url = upload_segment(audio_path, remote_path)
+    
+    if not audio_url:
+        audio_url = audio_path
+    
+    log.info(f"✅ Multi-source segment created: {cluster_theme[:40]}, {duration}s, {len(articles)} sources")
+    
+    return {
+        "audio_url": audio_url,
+        "audio_path": audio_path,
+        "duration": duration,
+        "script": script,
+        "title": cluster_theme,
+        "sources": extracted_articles,
+        "cached": False,
+        "digests": all_digests  # All digests from cluster
+    }
+
+
 # ============================================
 # INTRO WITH MUSIC MIXING
 # ============================================
@@ -924,8 +1075,210 @@ def get_or_create_outro() -> Optional[dict]:
 
 
 # ============================================
-# CONTENT SELECTION - PRIORITIZE GSHEET
+# CONTENT SELECTION - SMART CLUSTERING
 # ============================================
+
+CLUSTERING_PROMPT = """Analyse ces titres d'articles et regroupe ceux qui parlent du MÊME SUJET.
+
+TITRES:
+{titles}
+
+RÉPONDS EN JSON UNIQUEMENT (pas de texte avant/après):
+{{
+  "clusters": [
+    {{
+      "theme": "Description courte du sujet commun",
+      "article_indices": [0, 3, 5],
+      "priority": "high/medium/low"
+    }}
+  ]
+}}
+
+RÈGLES:
+- Un article peut être dans UN SEUL cluster
+- Les articles seuls (pas de doublon) = cluster avec 1 seul indice
+- priority "high" = 3+ articles sur le même sujet (actualité majeure)
+- priority "medium" = 2 articles sur le même sujet
+- priority "low" = article seul
+- Les indices commencent à 0
+
+JSON:"""
+
+
+def cluster_articles_by_theme(items: list[dict]) -> list[dict]:
+    """
+    Use LLM to cluster articles by theme/topic.
+    Returns list of clusters with articles grouped by similar subjects.
+    """
+    if not items:
+        return []
+    
+    if len(items) <= 3:
+        # Too few articles to cluster meaningfully
+        return [{"theme": item.get("title", ""), "articles": [item], "priority": "low"} for item in items]
+    
+    if not groq_client:
+        log.warning("❌ Groq client not available for clustering, using fallback")
+        return [{"theme": item.get("title", ""), "articles": [item], "priority": "low"} for item in items]
+    
+    try:
+        # Prepare titles for clustering
+        titles = "\n".join([f"{i}. {item.get('title', 'Sans titre')}" for i, item in enumerate(items)])
+        
+        prompt = CLUSTERING_PROMPT.format(titles=titles)
+        
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=1000
+        )
+        
+        json_text = response.choices[0].message.content.strip()
+        
+        # Clean up response
+        if json_text.startswith("```"):
+            json_text = json_text.split("```")[1]
+            if json_text.startswith("json"):
+                json_text = json_text[4:]
+        json_text = json_text.strip()
+        
+        import json
+        result = json.loads(json_text)
+        
+        clusters = []
+        used_indices = set()
+        
+        for cluster_data in result.get("clusters", []):
+            indices = cluster_data.get("article_indices", [])
+            valid_indices = [i for i in indices if i < len(items) and i not in used_indices]
+            
+            if valid_indices:
+                cluster = {
+                    "theme": cluster_data.get("theme", ""),
+                    "articles": [items[i] for i in valid_indices],
+                    "priority": cluster_data.get("priority", "low"),
+                    "source_count": len(valid_indices)
+                }
+                clusters.append(cluster)
+                used_indices.update(valid_indices)
+        
+        # Add any unclustered articles
+        for i, item in enumerate(items):
+            if i not in used_indices:
+                clusters.append({
+                    "theme": item.get("title", ""),
+                    "articles": [item],
+                    "priority": "low",
+                    "source_count": 1
+                })
+        
+        log.info(f"🎯 Clustering complete: {len(clusters)} clusters from {len(items)} articles")
+        
+        # Log multi-source clusters
+        multi_source = [c for c in clusters if c["source_count"] > 1]
+        if multi_source:
+            log.info(f"🔥 Multi-source topics: {len(multi_source)}")
+            for c in multi_source:
+                log.info(f"   - {c['theme']}: {c['source_count']} sources ({c['priority']})")
+        
+        return clusters
+        
+    except Exception as e:
+        log.error(f"❌ Clustering failed: {e}, using fallback")
+        return [{"theme": item.get("title", ""), "articles": [item], "priority": "low", "source_count": 1} for item in items]
+
+
+def select_smart_content(user_id: str, max_articles: int) -> list[dict]:
+    """
+    Smart content selection with thematic clustering.
+    - Groups similar articles together
+    - Prioritizes multi-source topics
+    - Returns clusters instead of individual articles
+    """
+    try:
+        result = supabase.table("content_queue") \
+            .select("url, title, keyword, source, vertical_id") \
+            .eq("user_id", user_id) \
+            .eq("status", "pending") \
+            .order("created_at") \
+            .limit(100) \
+            .execute()
+        
+        if not result.data:
+            log.warning("❌ No pending content in queue!")
+            return []
+        
+        items = result.data
+        log.info(f"📋 Queue has {len(items)} items")
+        
+        # Separate priority vs bing
+        priority_items = []
+        bing_items = []
+        
+        for item in items:
+            source = (item.get("source") or "").lower()
+            if "bing" in source:
+                bing_items.append(item)
+            else:
+                priority_items.append(item)
+        
+        log.info(f"📊 Priority: {len(priority_items)}, Bing: {len(bing_items)}")
+        
+        # Cluster all items together for theme detection
+        all_items = priority_items + bing_items
+        clusters = cluster_articles_by_theme(all_items)
+        
+        # Sort clusters by priority: high > medium > low, then by source_count
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        clusters.sort(key=lambda c: (priority_order.get(c["priority"], 2), -c["source_count"]))
+        
+        # Select clusters until we reach max_articles
+        selected_clusters = []
+        total_articles = 0
+        
+        for cluster in clusters:
+            cluster_size = len(cluster["articles"])
+            
+            # For multi-source clusters, we might include all articles
+            # For single-source, just 1
+            if cluster["source_count"] > 1:
+                # Multi-source: include up to 3 articles from same topic
+                articles_to_take = min(cluster_size, 3)
+            else:
+                articles_to_take = 1
+            
+            if total_articles + articles_to_take <= max_articles + 2:  # Small buffer for rich topics
+                cluster["selected_articles"] = cluster["articles"][:articles_to_take]
+                selected_clusters.append(cluster)
+                total_articles += articles_to_take
+                
+                if cluster["source_count"] > 1:
+                    log.info(f"🔥 MULTI-SOURCE: {cluster['theme'][:50]}... ({articles_to_take} articles)")
+                else:
+                    log.info(f"   ✅ Selected: {cluster['articles'][0].get('title', '')[:40]}...")
+            
+            if total_articles >= max_articles:
+                break
+        
+        # Flatten selected articles with cluster info
+        selected = []
+        for cluster in selected_clusters:
+            for article in cluster.get("selected_articles", []):
+                article["_cluster_theme"] = cluster["theme"]
+                article["_cluster_size"] = cluster["source_count"]
+                article["_cluster_priority"] = cluster["priority"]
+                selected.append(article)
+        
+        multi_count = sum(1 for c in selected_clusters if c["source_count"] > 1)
+        log.info(f"✅ FINAL: {len(selected)} articles in {len(selected_clusters)} topics ({multi_count} multi-source)")
+        
+        return selected
+        
+    except Exception as e:
+        log.error(f"Smart content selection failed: {e}")
+        return []
+
 
 def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
     """Select content prioritizing GSheet sources."""
@@ -1044,7 +1397,8 @@ def assemble_lego_podcast(
     except:
         first_name = "Ami"
     
-    items = select_diverse_content(user_id, max_articles)
+    # Use smart clustering selection
+    items = select_smart_content(user_id, max_articles)
     
     if not items:
         log.warning("❌ No content to process")
@@ -1059,6 +1413,14 @@ def assemble_lego_podcast(
     total_duration = 0
     target_seconds = target_minutes * 60
     
+    # Group items by cluster for multi-source processing
+    clusters = {}
+    for item in items:
+        cluster_theme = item.get("_cluster_theme", item.get("title", ""))
+        if cluster_theme not in clusters:
+            clusters[cluster_theme] = []
+        clusters[cluster_theme].append(item)
+    
     # 1. INTRO
     intro = get_or_create_intro(first_name)
     if intro:
@@ -1071,47 +1433,90 @@ def assemble_lego_podcast(
         total_duration += intro.get("audio_duration", intro.get("duration", 5))
         log.info(f"✅ Intro: {total_duration}s")
     
-    # 2. NEWS SEGMENTS
-    for idx, item in enumerate(items):
-        log.info(f"🎯 Processing article {idx+1}/{len(items)}: {item.get('title', 'No title')[:50]}...")
+    # 2. NEWS SEGMENTS - Process by cluster
+    cluster_idx = 0
+    for cluster_theme, cluster_items in clusters.items():
+        cluster_idx += 1
         
-        segment = get_or_create_segment(
-            url=item["url"],
-            title=item.get("title", ""),
-            topic_slug=item.get("keyword", "general"),
-            target_date=target_date,
-            edition=edition,
-            format_config=config
-        )
-        
-        if segment:
-            segments.append({
-                "type": "news",
-                "audio_path": segment.get("audio_path"),
-                "audio_url": segment.get("audio_url"),
-                "duration": segment.get("duration", 60),
-                "title": segment.get("title"),
-                "url": segment.get("url")
-            })
-            total_duration += segment.get("duration", 60)
+        if len(cluster_items) > 1:
+            # Multi-source topic - create enriched segment
+            log.info(f"🔥 Processing MULTI-SOURCE cluster {cluster_idx}: {cluster_theme[:50]}... ({len(cluster_items)} articles)")
             
-            sources_data.append({
-                "title": segment.get("title"),
-                "url": segment.get("url"),
-                "domain": segment.get("source_name", urlparse(item["url"]).netloc)
-            })
+            segment = get_or_create_multi_source_segment(
+                articles=cluster_items,
+                cluster_theme=cluster_theme,
+                target_date=target_date,
+                edition=edition,
+                format_config=config
+            )
             
-            # Collect digest for this article
-            if segment.get("digest"):
-                digests_data.append({
+            if segment:
+                segments.append({
+                    "type": "news",
+                    "audio_path": segment.get("audio_path"),
+                    "audio_url": segment.get("audio_url"),
+                    "duration": segment.get("duration", 90),
+                    "title": f"[MULTI] {cluster_theme}",
+                    "url": cluster_items[0]["url"]
+                })
+                total_duration += segment.get("duration", 90)
+                
+                # Add all sources
+                for article in cluster_items:
+                    sources_data.append({
+                        "title": article.get("title"),
+                        "url": article.get("url"),
+                        "domain": urlparse(article["url"]).netloc.replace("www.", ""),
+                        "cluster": cluster_theme
+                    })
+                
+                # Collect digests for all articles in cluster
+                for digest_item in segment.get("digests", []):
+                    digests_data.append(digest_item)
+                
+                log.info(f"📊 Multi-source segment: {segment.get('duration', 0)}s | Total: {total_duration}s")
+        else:
+            # Single source - regular processing
+            item = cluster_items[0]
+            log.info(f"🎯 Processing article {cluster_idx}: {item.get('title', 'No title')[:50]}...")
+            
+            segment = get_or_create_segment(
+                url=item["url"],
+                title=item.get("title", ""),
+                topic_slug=item.get("keyword", "general"),
+                target_date=target_date,
+                edition=edition,
+                format_config=config
+            )
+            
+            if segment:
+                segments.append({
+                    "type": "news",
+                    "audio_path": segment.get("audio_path"),
+                    "audio_url": segment.get("audio_url"),
+                    "duration": segment.get("duration", 60),
+                    "title": segment.get("title"),
+                    "url": segment.get("url")
+                })
+                total_duration += segment.get("duration", 60)
+                
+                sources_data.append({
                     "title": segment.get("title"),
                     "url": segment.get("url"),
-                    "digest": segment.get("digest")
+                    "domain": segment.get("source_name", urlparse(item["url"]).netloc)
                 })
-            
-            log.info(f"📊 Segment {idx+1}: {segment.get('duration', 0)}s | Total: {total_duration}s / {target_seconds}s")
-        else:
-            log.warning(f"⚠️ Failed to create segment for: {item.get('title', 'No title')[:40]}")
+                
+                # Collect digest for this article
+                if segment.get("digest"):
+                    digests_data.append({
+                        "title": segment.get("title"),
+                        "url": segment.get("url"),
+                        "digest": segment.get("digest")
+                    })
+                
+                log.info(f"📊 Segment {cluster_idx}: {segment.get('duration', 0)}s | Total: {total_duration}s / {target_seconds}s")
+            else:
+                log.warning(f"⚠️ Failed to create segment for: {item.get('title', 'No title')[:40]}")
     
     if not sources_data:
         log.error("❌ No segments generated!")
