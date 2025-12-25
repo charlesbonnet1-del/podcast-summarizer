@@ -160,6 +160,118 @@ Contenu:
 ## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}):"""
 
 # ============================================
+# DIGEST EXTRACTION PROMPT
+# ============================================
+
+DIGEST_EXTRACTION_PROMPT = """Analyse cet article et extrais les métadonnées suivantes en JSON.
+
+## ARTICLE
+Titre: {title}
+Source: {source_name}
+URL: {url}
+Contenu:
+{content}
+
+## FORMAT DE RÉPONSE (JSON uniquement, pas de texte avant/après)
+{{
+  "author": "Nom de l'auteur si mentionné, sinon null",
+  "published_date": "YYYY-MM-DD si mentionné, sinon null",
+  "summary": "Résumé factuel en 2-3 phrases (max 150 mots)",
+  "key_insights": ["Insight 1", "Insight 2", "Insight 3"],
+  "historical_context": "Événement historique lié ou contexte important si pertinent, sinon null"
+}}
+
+## RÈGLES
+- key_insights: 2-4 points clés, phrases courtes et percutantes
+- summary: factuel, informatif, pas de jugement
+- historical_context: uniquement si vraiment pertinent (anniversaire, précédent historique, etc.)
+- Réponds UNIQUEMENT avec le JSON, rien d'autre
+
+JSON:"""
+
+
+def extract_article_digest(
+    title: str,
+    content: str,
+    source_name: str,
+    url: str
+) -> Optional[dict]:
+    """Extract structured digest from article using Groq/Llama."""
+    
+    if not groq_client:
+        log.warning("❌ Groq client not available for digest extraction")
+        return None
+    
+    try:
+        prompt = DIGEST_EXTRACTION_PROMPT.format(
+            title=title,
+            source_name=source_name,
+            url=url,
+            content=content[:4000]  # Limit content size
+        )
+        
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,  # Lower temp for more consistent extraction
+            max_tokens=500
+        )
+        
+        json_text = response.choices[0].message.content.strip()
+        
+        # Clean up response - remove markdown code blocks if present
+        if json_text.startswith("```"):
+            json_text = json_text.split("```")[1]
+            if json_text.startswith("json"):
+                json_text = json_text[4:]
+        json_text = json_text.strip()
+        
+        import json
+        digest = json.loads(json_text)
+        
+        log.info(f"✅ Digest extracted: {len(digest.get('key_insights', []))} insights")
+        return digest
+        
+    except Exception as e:
+        log.error(f"❌ Digest extraction failed: {e}")
+        return None
+
+
+def save_episode_digest(
+    episode_id: str,
+    source_url: str,
+    title: str,
+    digest: dict
+) -> bool:
+    """Save extracted digest to episode_digests table."""
+    
+    try:
+        data = {
+            "episode_id": episode_id,
+            "source_url": source_url,
+            "title": title,
+            "author": digest.get("author"),
+            "published_date": digest.get("published_date"),
+            "summary": digest.get("summary"),
+            "key_insights": digest.get("key_insights", []),
+            "historical_context": digest.get("historical_context")
+        }
+        
+        result = supabase.table("episode_digests").insert(data).execute()
+        
+        if result.data:
+            log.info(f"✅ Digest saved for: {title[:40]}...")
+            return True
+        return False
+        
+    except Exception as e:
+        log.error(f"❌ Failed to save digest: {e}")
+        return False
+
+
+# ============================================
 # TTS GENERATION - CARTESIA PRIMARY
 # ============================================
 
@@ -553,7 +665,15 @@ def get_or_create_segment(
     
     source_name = urlparse(url).netloc.replace("www.", "")
     
-    # 2. Check cache
+    # 2. Extract digest metadata (for episode_digests)
+    digest = extract_article_digest(
+        title=title,
+        content=content,
+        source_name=source_name,
+        url=url
+    )
+    
+    # 3. Check cache
     content_hash = get_content_hash(url, content)
     cached = get_cached_segment(content_hash, target_date, edition)
     if cached:
@@ -564,10 +684,11 @@ def get_or_create_segment(
             "title": title,
             "url": url,
             "source_name": source_name,
-            "cached": True
+            "cached": True,
+            "digest": digest  # Include digest even for cached segments
         }
     
-    # 3. Generate DIALOGUE script
+    # 4. Generate DIALOGUE script
     script = generate_dialogue_segment_script(
         title=title,
         content=content,
@@ -619,7 +740,8 @@ def get_or_create_segment(
         "title": title,
         "url": url,
         "source_name": source_name,
-        "cached": False
+        "cached": False,
+        "digest": digest  # Include extracted digest
     }
 
 
@@ -933,6 +1055,7 @@ def assemble_lego_podcast(
     
     segments = []
     sources_data = []
+    digests_data = []  # Collect digests for later saving
     total_duration = 0
     target_seconds = target_minutes * 60
     
@@ -977,6 +1100,14 @@ def assemble_lego_podcast(
                 "url": segment.get("url"),
                 "domain": segment.get("source_name", urlparse(item["url"]).netloc)
             })
+            
+            # Collect digest for this article
+            if segment.get("digest"):
+                digests_data.append({
+                    "title": segment.get("title"),
+                    "url": segment.get("url"),
+                    "digest": segment.get("digest")
+                })
             
             log.info(f"📊 Segment {idx+1}: {segment.get('duration', 0)}s | Total: {total_duration}s / {target_seconds}s")
         else:
@@ -1038,6 +1169,18 @@ def assemble_lego_podcast(
         
         if episode.data:
             episode_id = episode.data[0]["id"]
+            
+            # Save digests to episode_digests table
+            if digests_data:
+                log.info(f"📝 Saving {len(digests_data)} digests...")
+                for digest_item in digests_data:
+                    save_episode_digest(
+                        episode_id=episode_id,
+                        source_url=digest_item["url"],
+                        title=digest_item["title"],
+                        digest=digest_item["digest"]
+                    )
+                log.info(f"✅ Digests saved: {len(digests_data)}")
             
             report_url = generate_episode_report(
                 user_id=user_id,
