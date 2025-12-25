@@ -985,13 +985,34 @@ def mix_intro_with_music(voice_audio, intro_music_path: str, first_segment_audio
 
 
 def get_or_create_intro(first_name: str) -> Optional[dict]:
-    """Get or create personalized intro WITH background music."""
+    """Get or create personalized intro WITH background music (CACHED per name)."""
     from pydub import AudioSegment
     
     display_name = first_name.strip().title() if first_name else "Ami"
+    
+    # Check cache first
+    cache_key = f"intro_{display_name.lower()}"
+    try:
+        cached = supabase.table("cached_intros") \
+            .select("audio_url, audio_duration") \
+            .eq("name_key", cache_key) \
+            .single() \
+            .execute()
+        
+        if cached.data and cached.data.get("audio_url"):
+            log.info(f"✅ Using cached intro for {display_name}")
+            return {
+                "audio_url": cached.data["audio_url"],
+                "duration": cached.data["audio_duration"],
+                "audio_duration": cached.data["audio_duration"]
+            }
+    except:
+        pass
+    
+    # Generate new intro
     intro_text = f"{display_name}, c'est parti pour votre Keernel!"
     
-    log.info(f"🎤 Creating intro for {display_name}")
+    log.info(f"🎤 Creating NEW intro for {display_name}")
     
     timestamp = datetime.now().strftime("%H%M%S")
     voice_path = os.path.join(tempfile.gettempdir(), f"intro_voice_{timestamp}.mp3")
@@ -1017,10 +1038,26 @@ def get_or_create_intro(first_name: str) -> Optional[dict]:
         except:
             pass
         
+        # Upload and cache
+        remote_path = f"intros/{cache_key}.mp3"
+        audio_url = upload_segment(final_path, remote_path)
+        
+        if audio_url:
+            try:
+                supabase.table("cached_intros").upsert({
+                    "name_key": cache_key,
+                    "audio_url": audio_url,
+                    "audio_duration": total_duration
+                }).execute()
+                log.info(f"✅ Intro cached for {display_name}")
+            except Exception as e:
+                log.warning(f"⚠️ Failed to cache intro: {e}")
+        
         log.info(f"✅ Intro with music: {total_duration}s")
         
         return {
             "local_path": final_path,
+            "audio_url": audio_url,
             "duration": total_duration,
             "audio_duration": total_duration
         }
@@ -1031,6 +1068,50 @@ def get_or_create_intro(first_name: str) -> Optional[dict]:
             "duration": voice_duration,
             "audio_duration": voice_duration
         }
+
+
+def get_or_create_ephemeride() -> Optional[dict]:
+    """Generate daily ephemeride segment (NOT cached - changes daily)."""
+    from sourcing import get_best_ephemeride_fact
+    
+    # Get today's date in French
+    today = datetime.now()
+    months_fr = ["janvier", "février", "mars", "avril", "mai", "juin", 
+                 "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+    date_str = f"{today.day} {months_fr[today.month - 1]}"
+    
+    # Get ephemeride fact from Wikipedia
+    ephemeride = get_best_ephemeride_fact()
+    
+    if ephemeride:
+        year = ephemeride.get("year", "")
+        fact_text = ephemeride.get("text", "")
+        # Shorten if too long
+        if len(fact_text) > 150:
+            fact_text = fact_text[:147] + "..."
+        
+        ephemeride_text = f"Nous sommes le {date_str}. En ce jour, en {year}, {fact_text}"
+        log.info(f"📅 Ephemeride: {year} - {fact_text[:50]}...")
+    else:
+        ephemeride_text = f"Nous sommes le {date_str}."
+        log.warning("⚠️ No ephemeride fact available")
+    
+    timestamp = datetime.now().strftime("%H%M%S")
+    ephemeride_path = os.path.join(tempfile.gettempdir(), f"ephemeride_{timestamp}.mp3")
+    
+    # Use Alice's voice
+    if not generate_tts(ephemeride_text, "alice", ephemeride_path):
+        log.error("❌ Failed to generate ephemeride")
+        return None
+    
+    duration = get_audio_duration(ephemeride_path)
+    log.info(f"✅ Ephemeride generated: {duration}s")
+    
+    return {
+        "local_path": ephemeride_path,
+        "duration": duration,
+        "audio_duration": duration
+    }
 
 
 def get_or_create_outro() -> Optional[dict]:
@@ -1421,7 +1502,7 @@ def assemble_lego_podcast(
             clusters[cluster_theme] = []
         clusters[cluster_theme].append(item)
     
-    # 1. INTRO
+    # 1. INTRO (cached per name)
     intro = get_or_create_intro(first_name)
     if intro:
         segments.append({
@@ -1433,7 +1514,18 @@ def assemble_lego_podcast(
         total_duration += intro.get("audio_duration", intro.get("duration", 5))
         log.info(f"✅ Intro: {total_duration}s")
     
-    # 2. NEWS SEGMENTS - Process by cluster
+    # 2. EPHEMERIDE (generated daily - NOT cached)
+    ephemeride = get_or_create_ephemeride()
+    if ephemeride:
+        segments.append({
+            "type": "ephemeride",
+            "audio_path": ephemeride.get("local_path"),
+            "duration": ephemeride.get("audio_duration", ephemeride.get("duration", 10))
+        })
+        total_duration += ephemeride.get("audio_duration", ephemeride.get("duration", 10))
+        log.info(f"✅ Ephemeride: {ephemeride.get('duration', 0)}s | Total: {total_duration}s")
+    
+    # 3. NEWS SEGMENTS - Process by cluster
     cluster_idx = 0
     for cluster_theme, cluster_items in clusters.items():
         cluster_idx += 1
