@@ -168,6 +168,9 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
   const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showDigest, setShowDigest] = useState<string | null>(null);
+  const [digestData, setDigestData] = useState<Record<string, any[]>>({});
+  const [loadingDigest, setLoadingDigest] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && history.length === 0) {
@@ -178,7 +181,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/history?period=week&limit=7");
+      const response = await fetch("/api/history?period=month&limit=30");
       const data = await response.json();
       setHistory(data.history || []);
     } catch (error) {
@@ -188,10 +191,36 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
     }
   };
 
+  const fetchDigest = async (episodeId: string) => {
+    if (digestData[episodeId]) {
+      setShowDigest(showDigest === episodeId ? null : episodeId);
+      return;
+    }
+    
+    setLoadingDigest(episodeId);
+    try {
+      const response = await fetch(`/api/digests?episode_id=${episodeId}`);
+      const data = await response.json();
+      setDigestData(prev => ({ ...prev, [episodeId]: data.digests || [] }));
+      setShowDigest(episodeId);
+    } catch (error) {
+      console.error("Failed to fetch digest:", error);
+    } finally {
+      setLoadingDigest(null);
+    }
+  };
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const isOlderThan7Days = (dateStr: string) => {
+    const episodeDate = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - episodeDate.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays > 7;
   };
 
   return (
@@ -203,7 +232,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
         whileTap={{ scale: 0.98 }}
       >
         <Clock className="w-4 h-4" />
-        <span>Cette semaine</span>
+        <span>Historique</span>
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2 }}
@@ -224,7 +253,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
             />
 
             <motion.div
-              className="absolute top-full left-0 mt-2 w-80 z-50 rounded-2xl bg-card border border-border shadow-xl overflow-hidden"
+              className="absolute top-full left-0 mt-2 w-96 z-50 rounded-2xl bg-card border border-border shadow-xl overflow-hidden"
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -233,94 +262,177 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
               <div className="px-4 py-3 border-b border-border bg-secondary/30">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-brass" />
-                  <span className="font-display font-medium">Dernières générations</span>
+                  <span className="font-display font-medium">Vos épisodes</span>
                 </div>
               </div>
 
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-[60vh] overflow-y-auto">
                 {loading ? (
                   <div className="p-4 text-center text-muted-foreground">
                     <div className="animate-spin w-5 h-5 border-2 border-brass border-t-transparent rounded-full mx-auto" />
                   </div>
                 ) : history.length === 0 ? (
                   <div className="p-4 text-center text-muted-foreground text-sm">
-                    Aucune génération cette semaine
+                    Aucun épisode
                   </div>
                 ) : (
                   <div className="py-2">
-                    {history.map((item, index) => (
-                      <motion.div
-                        key={item.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="group"
-                      >
-                        <div className="px-4 py-3 hover:bg-secondary/50 transition-colors">
-                          <div className="text-xs text-muted-foreground mb-1 font-mono">
-                            {item.date}
-                          </div>
-                          
-                          <div className="font-display font-medium text-sm mb-2 truncate">
-                            {item.title}
-                          </div>
-                          
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Play className="w-3 h-3" />
-                              {formatDuration(item.duration)}
-                            </span>
-                            <span>{item.sourcesCount} sources</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {onSelectEpisode && (
-                              <button
-                                onClick={() => {
-                                  onSelectEpisode(item);
-                                  setIsOpen(false);
-                                }}
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-brass/10 text-brass text-xs hover:bg-brass/20 transition-colors"
-                              >
-                                <Play className="w-3 h-3" />
-                                Écouter
-                              </button>
-                            )}
+                    {history.map((item, index) => {
+                      const isOld = isOlderThan7Days(item.createdAt);
+                      const digests = digestData[item.id] || [];
+                      const isDigestOpen = showDigest === item.id;
+                      
+                      return (
+                        <motion.div
+                          key={item.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.03 }}
+                          className="group"
+                        >
+                          <div className="px-4 py-3 hover:bg-secondary/50 transition-colors">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="text-xs text-muted-foreground font-mono">
+                                {item.date}
+                              </div>
+                              {isOld && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EDE8E0] dark:bg-[#333] text-[#6B5B4F] dark:text-[#999]">
+                                  Archive
+                                </span>
+                              )}
+                            </div>
                             
-                            {item.reportUrl && (
-                              <a
-                                href={item.reportUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-secondary text-foreground text-xs hover:bg-secondary/80 transition-colors"
+                            <div className="font-display font-medium text-sm mb-2 truncate">
+                              {item.title}
+                            </div>
+                            
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
+                              <span className="flex items-center gap-1">
+                                <Play className="w-3 h-3" />
+                                {formatDuration(item.duration)}
+                              </span>
+                              <span>{item.sourcesCount} sources</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              {/* Écouter - seulement si < 7 jours */}
+                              {!isOld && onSelectEpisode && (
+                                <button
+                                  onClick={() => {
+                                    onSelectEpisode(item);
+                                    setIsOpen(false);
+                                  }}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brass/10 text-brass text-xs hover:bg-brass/20 transition-colors"
+                                >
+                                  <Play className="w-3 h-3" />
+                                  Écouter
+                                </button>
+                              )}
+                              
+                              {/* Digest - toujours visible */}
+                              <button
+                                onClick={() => fetchDigest(item.id)}
+                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                                  isDigestOpen 
+                                    ? "bg-[#2D2D2D] text-white" 
+                                    : "bg-[#F5F0E8] dark:bg-[#333] text-[#3D3D3D] dark:text-[#DDD] hover:bg-[#EDE8E0] dark:hover:bg-[#444]"
+                                }`}
                               >
-                                <FileText className="w-3 h-3" />
-                                Rapport
-                              </a>
-                            )}
+                                {loadingDigest === item.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <FileText className="w-3 h-3" />
+                                )}
+                                Digest
+                              </button>
+                              
+                              {/* Rapport si disponible */}
+                              {item.reportUrl && (
+                                <a
+                                  href={item.reportUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary text-foreground text-xs hover:bg-secondary/80 transition-colors"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        
-                        {index < history.length - 1 && (
-                          <div className="mx-4 border-b border-border/50" />
-                        )}
-                      </motion.div>
-                    ))}
+                          
+                          {/* Digest panel */}
+                          <AnimatePresence>
+                            {isDigestOpen && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden bg-[#FAF9F7] dark:bg-[#1A1A1A] border-y border-border/50"
+                              >
+                                <div className="px-4 py-3 space-y-3">
+                                  {digests.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground text-center py-2">
+                                      Pas de digest disponible
+                                    </p>
+                                  ) : (
+                                    digests.map((digest: any, idx: number) => (
+                                      <div 
+                                        key={digest.id}
+                                        className={`p-3 rounded-xl ${SOURCE_COLORS[idx % SOURCE_COLORS.length].bg}`}
+                                      >
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                          <p className={`text-sm font-medium ${SOURCE_COLORS[idx % SOURCE_COLORS.length].text}`}>
+                                            {digest.title}
+                                          </p>
+                                          <a
+                                            href={digest.source_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="p-1 rounded hover:bg-black/5 transition-colors flex-shrink-0"
+                                          >
+                                            <ExternalLink className={`w-3 h-3 ${SOURCE_COLORS[idx % SOURCE_COLORS.length].domain}`} />
+                                          </a>
+                                        </div>
+                                        
+                                        {digest.author && (
+                                          <p className={`text-xs mb-1 ${SOURCE_COLORS[idx % SOURCE_COLORS.length].domain}`}>
+                                            Par {digest.author}
+                                          </p>
+                                        )}
+                                        
+                                        {digest.summary && (
+                                          <p className={`text-xs leading-relaxed mb-2 ${SOURCE_COLORS[idx % SOURCE_COLORS.length].text} opacity-80`}>
+                                            {digest.summary}
+                                          </p>
+                                        )}
+                                        
+                                        {digest.key_insights && digest.key_insights.length > 0 && (
+                                          <div className="space-y-1">
+                                            {digest.key_insights.slice(0, 3).map((insight: string, i: number) => (
+                                              <div key={i} className={`flex items-start gap-1.5 text-xs ${SOURCE_COLORS[idx % SOURCE_COLORS.length].text}`}>
+                                                <span className="mt-1.5 w-1 h-1 rounded-full bg-current opacity-40 flex-shrink-0" />
+                                                {insight}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                          
+                          {index < history.length - 1 && !isDigestOpen && (
+                            <div className="mx-4 border-b border-border/50" />
+                          )}
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-
-              {history.length > 0 && (
-                <div className="px-4 py-3 border-t border-border bg-secondary/30">
-                  <Link 
-                    href="/history"
-                    className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Voir tout l'historique
-                    <ExternalLink className="w-3 h-3" />
-                  </Link>
-                </div>
-              )}
             </motion.div>
           </>
         )}
