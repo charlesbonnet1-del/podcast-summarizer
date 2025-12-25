@@ -72,6 +72,20 @@ interface KernelDashboardProps {
 // UTILITIES
 // ============================================
 
+// Elegant color palette for sources - alternating warm neutrals
+const SOURCE_COLORS = [
+  { bg: "bg-[#F5F0E8]", text: "text-[#3D3D3D]", domain: "text-[#6B5B4F]", iconBg: "#E8DFD0" },      // Beige / Cream
+  { bg: "bg-[#FAFAFA]", text: "text-[#2D2D2D]", domain: "text-[#7A7A7A]", iconBg: "#F0F0F0" },      // White / Light gray
+  { bg: "bg-[#EDE8E0]", text: "text-[#4A4A4A]", domain: "text-[#8B7355]", iconBg: "#DDD5C8" },      // Sand / Taupe
+  { bg: "bg-[#F8F6F3]", text: "text-[#3D3D3D]", domain: "text-[#9A8B7A]", iconBg: "#E5E0D8" },      // Off-white / Cream
+  { bg: "bg-[#2D2D2D]", text: "text-[#F5F5F5]", domain: "text-[#A0A0A0]", iconBg: "#404040" },      // Charcoal
+  { bg: "bg-[#1A1A1A]", text: "text-[#FFFFFF]", domain: "text-[#888888]", iconBg: "#333333" },      // Noir / Black
+];
+
+function getSourceColor(index: number) {
+  return SOURCE_COLORS[index % SOURCE_COLORS.length];
+}
+
 function getSourceMeta(url: string): { type: "video" | "podcast" | "article"; color: string; bgClass: string } {
   const domain = url.toLowerCase();
   
@@ -612,7 +626,7 @@ function PlayerPod({ episode }: { episode: Episode }) {
               {sources.length > 0 ? (
                 <div className="space-y-2">
                   {sources.map((source, idx) => {
-                    const meta = getSourceMeta(source.url);
+                    const colors = getSourceColor(idx);
                     const favicon = getFaviconUrl(source.url);
 
                     return (
@@ -621,19 +635,19 @@ function PlayerPod({ episode }: { episode: Episode }) {
                         href={source.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`flex items-center gap-3 p-3 rounded-xl ${meta.bgClass} hover:opacity-80 transition-opacity group`}
+                        className={`flex items-center gap-3 p-3 rounded-xl ${colors.bg} hover:opacity-90 transition-all group shadow-sm`}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.05 }}
                       >
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${meta.color}15` }}>
-                          {favicon ? <img src={favicon} alt="" className="w-4 h-4" /> : <div className="w-3 h-3 rounded-full" style={{ backgroundColor: meta.color }} />}
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: colors.iconBg }}>
+                          {favicon ? <img src={favicon} alt="" className="w-4 h-4" /> : <div className="w-3 h-3 rounded-full bg-current opacity-40" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{source.title}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{source.domain}</p>
+                          <p className={`text-sm font-medium truncate ${colors.text}`}>{source.title}</p>
+                          <p className={`text-xs font-mono ${colors.domain}`}>{source.domain}</p>
                         </div>
-                        <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-50 flex-shrink-0" />
+                        <ExternalLink className={`w-4 h-4 ${colors.text} opacity-0 group-hover:opacity-60 flex-shrink-0`} />
                       </motion.a>
                     );
                   })}
