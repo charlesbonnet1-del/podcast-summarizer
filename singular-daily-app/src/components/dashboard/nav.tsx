@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LayoutDashboard, Settings, LogOut, User as UserIcon } from "lucide-react";
+import { LayoutDashboard, Settings, LogOut, User as UserIcon, BookOpen } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { User } from "@supabase/supabase-js";
 import type { User as UserProfile } from "@/lib/types/database";
@@ -36,6 +36,7 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/library", label: "Library", icon: BookOpen },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
 
