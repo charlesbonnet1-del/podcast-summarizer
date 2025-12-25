@@ -2,8 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Settings, Volume2, User, Rss, Hash, Clock, Globe } from "lucide-react";
-import { SettingsForm } from "@/components/settings/settings-form";
+import { Settings, User, Rss, Hash, Clock, Globe } from "lucide-react";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { TopicPicker } from "@/components/settings/topic-picker";
 import { FormatToggle } from "@/components/settings/format-toggle";
@@ -122,24 +121,6 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Podcast Settings (Voice Duo info) */}
-      <Card className="matte-card border-0">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
-              <Volume2 className="w-5 h-5 text-sand" />
-            </div>
-            <div>
-              <CardTitle className="text-lg font-display">Podcast Hosts</CardTitle>
-              <CardDescription>Votre duo d'experts</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <SettingsForm />
-        </CardContent>
-      </Card>
-
       {/* RSS Feed */}
       <Card className="matte-card border-0">
         <CardHeader>
@@ -157,9 +138,6 @@ export default async function SettingsPage() {
           <RssFeedLink 
             feedUrl={`${appUrl}/api/feed/${profile?.rss_token}`} 
           />
-          <p className="text-xs text-muted-foreground mt-4">
-            Coming soon: Direct links for Spotify, Deezer, Apple Podcasts...
-          </p>
         </CardContent>
       </Card>
 
