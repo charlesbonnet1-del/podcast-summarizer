@@ -150,6 +150,13 @@ Bob questionne ou réagit.
 6. ZÉRO liste, ZÉRO bullet points
 7. CITE LA SOURCE dans la première réplique: "Selon {source_name}..."
 8. INTERDIT: Ne jamais écrire "Alice répond", "Bob questionne" ou toute didascalie
+9. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une phrase conclusive (résumé ou perspective)
+10. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
+
+## STRUCTURE DU DIALOGUE
+- Début: Alice introduit le sujet en citant la source
+- Milieu: Échange questions/réponses
+- Fin: Alice CONCLUT avec une synthèse ou une ouverture (ex: "Voilà qui résume bien...", "On suivra ça de près...", "C'est un sujet à surveiller...")
 
 ## SOURCE
 Titre: {title}
@@ -157,7 +164,7 @@ Source: {source_name}
 Contenu:
 {content}
 
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}):"""
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}) - ALICE DOIT CONCLURE:"""
 
 
 # Multi-source prompt for topics covered by multiple articles
@@ -188,11 +195,18 @@ Bob questionne ou souligne les différences.
 5. CITE LES DIFFÉRENTES SOURCES: "Selon Le Monde...", "De son côté, Les Échos rapportent..."
 6. COMPARE les points de vue ou informations complémentaires
 7. ZÉRO liste, ZÉRO bullet points
+8. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
+9. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
+
+## STRUCTURE DU DIALOGUE
+- Début: Alice présente le sujet multi-sources
+- Milieu: Échange comparant les différents angles
+- Fin: Alice CONCLUT en synthétisant les points de vue (ex: "En résumé, les sources s'accordent sur...", "Ce qui ressort de tout ça...")
 
 ## SOURCES ({source_count} articles sur ce sujet)
 {sources_content}
 
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources):"""
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources) - ALICE DOIT CONCLURE:"""
 
 # ============================================
 # DIGEST EXTRACTION PROMPT
@@ -578,6 +592,8 @@ def generate_dialogue_segment_script(
             # Validate dialogue format
             has_tags = '[A]' in script or '[B]' in script
             if has_tags:
+                # Ensure dialogue ends with Alice [A]
+                script = ensure_alice_conclusion(script)
                 log.info(f"✅ Dialogue script generated: {len(script.split())} words")
                 return script
             
@@ -588,6 +604,44 @@ def generate_dialogue_segment_script(
     except Exception as e:
         log.error(f"Failed to generate script: {e}")
         return None
+
+
+def ensure_alice_conclusion(script: str) -> str:
+    """Ensure the dialogue ends with Alice [A], not Bob [B]."""
+    lines = script.strip().split('\n')
+    
+    # Find the last speaker tag
+    last_a_idx = -1
+    last_b_idx = -1
+    
+    for i, line in enumerate(lines):
+        if line.strip() == '[A]':
+            last_a_idx = i
+        elif line.strip() == '[B]':
+            last_b_idx = i
+    
+    # If Bob speaks last, we need to fix it
+    if last_b_idx > last_a_idx:
+        log.warning("⚠️ Dialogue ended with Bob, adding Alice conclusion")
+        
+        # Find Bob's last block and remove or truncate it
+        # Then add a conclusion from Alice
+        
+        # Option 1: Just append Alice's conclusion
+        conclusion_phrases = [
+            "Voilà qui résume bien la situation.",
+            "On suivra ça de près dans les prochains jours.",
+            "C'est un sujet important à garder en tête.",
+            "Affaire à suivre, comme on dit.",
+            "Voilà pour ce point, c'était important d'en parler."
+        ]
+        import random
+        conclusion = random.choice(conclusion_phrases)
+        
+        script = script.rstrip() + f"\n\n[A]\n{conclusion}"
+        log.info("✅ Added Alice conclusion to dialogue")
+    
+    return script
 
 
 # ============================================
