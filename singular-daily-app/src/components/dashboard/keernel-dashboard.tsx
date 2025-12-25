@@ -394,18 +394,6 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
                                           </a>
                                         </div>
                                         
-                                        {digest.author && (
-                                          <p className={`text-xs mb-1 ${SOURCE_COLORS[idx % SOURCE_COLORS.length].domain}`}>
-                                            Par {digest.author}
-                                          </p>
-                                        )}
-                                        
-                                        {digest.summary && (
-                                          <p className={`text-xs leading-relaxed mb-2 ${SOURCE_COLORS[idx % SOURCE_COLORS.length].text} opacity-80`}>
-                                            {digest.summary}
-                                          </p>
-                                        )}
-                                        
                                         {digest.key_insights && digest.key_insights.length > 0 && (
                                           <div className="space-y-1">
                                             {digest.key_insights.slice(0, 3).map((insight: string, i: number) => (
@@ -930,7 +918,7 @@ export function KernelDashboard({
           <img 
             src={resolvedTheme === "dark" ? "/logo-sable.svg" : "/logo-charcoal.svg"}
             alt="Keernel"
-            className="w-16 h-16"
+            className="w-24 h-24"
           />
         </motion.div>
 
