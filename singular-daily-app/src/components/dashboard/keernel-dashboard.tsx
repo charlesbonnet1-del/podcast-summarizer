@@ -591,9 +591,8 @@ function MagicBar() {
 
 function TopicPills({ topics }: { topics: Topic[] }) {
   const [removing, setRemoving] = useState<string | null>(null);
+  const [showSelector, setShowSelector] = useState(false);
   const router = useRouter();
-
-  if (topics.length === 0) return null;
 
   const removeTopic = async (topic: Topic) => {
     setRemoving(topic.id);
@@ -612,32 +611,261 @@ function TopicPills({ topics }: { topics: Topic[] }) {
   };
 
   return (
-    <div className="flex flex-wrap justify-center gap-2 max-w-xl mx-auto">
-      <AnimatePresence mode="popLayout">
-        {topics.map((topic) => (
-          <motion.span
-            key={topic.id}
-            layout
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="group tag-pill inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm"
-          >
-            <span className="text-[hsl(0_0%_10%)] opacity-60">#</span>
-            <span>{topic.display_name || topic.keyword}</span>
-            <motion.button
-              onClick={() => removeTopic(topic)}
-              disabled={removing === topic.id}
-              className="opacity-0 group-hover:opacity-100 ml-0.5 -mr-1 p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+    <>
+      <div className="flex flex-wrap justify-center gap-2 max-w-xl mx-auto">
+        <AnimatePresence mode="popLayout">
+          {topics.map((topic) => (
+            <motion.span
+              key={topic.id}
+              layout
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="group tag-pill inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm"
             >
-              <X className="w-3 h-3" />
-            </motion.button>
-          </motion.span>
-        ))}
-      </AnimatePresence>
-    </div>
+              <span className="text-[hsl(0_0%_10%)] opacity-60">#</span>
+              <span>{topic.display_name || topic.keyword}</span>
+              <motion.button
+                onClick={() => removeTopic(topic)}
+                disabled={removing === topic.id}
+                className="opacity-0 group-hover:opacity-100 ml-0.5 -mr-1 p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <X className="w-3 h-3" />
+              </motion.button>
+            </motion.span>
+          ))}
+        </AnimatePresence>
+        
+        {/* Add topic button */}
+        <motion.button
+          onClick={() => setShowSelector(true)}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm bg-brass/20 text-brass hover:bg-brass/30 transition-colors"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <Settings className="w-3 h-3" />
+          <span>Modifier</span>
+        </motion.button>
+      </div>
+
+      {/* Topic Selector Modal */}
+      <TopicSelectorModal 
+        isOpen={showSelector}
+        onClose={() => setShowSelector(false)}
+        currentTopics={topics}
+      />
+    </>
+  );
+}
+
+
+// ============================================
+// TOPIC SELECTOR MODAL
+// ============================================
+
+const TOPIC_CATEGORIES = [
+  {
+    id: "tech",
+    name: "Tech",
+    topics: [
+      { id: "ia", label: "IA & LLM" },
+      { id: "quantum", label: "Quantum Computing" },
+      { id: "robotics", label: "Robotique" },
+    ]
+  },
+  {
+    id: "world",
+    name: "Monde",
+    topics: [
+      { id: "asia", label: "Asie" },
+      { id: "resources", label: "Ressources" },
+      { id: "regulation", label: "Régulation" },
+    ]
+  },
+  {
+    id: "economics",
+    name: "Économie",
+    topics: [
+      { id: "stocks", label: "Bourse" },
+      { id: "crypto", label: "Crypto" },
+      { id: "macro", label: "Macro-économie" },
+    ]
+  },
+  {
+    id: "science",
+    name: "Science",
+    topics: [
+      { id: "space", label: "Espace" },
+      { id: "health", label: "Santé" },
+      { id: "energy", label: "Énergie" },
+    ]
+  },
+  {
+    id: "culture",
+    name: "Culture",
+    topics: [
+      { id: "cinema", label: "Cinéma & Séries" },
+      { id: "gaming", label: "Gaming" },
+      { id: "lifestyle", label: "Lifestyle" },
+    ]
+  }
+];
+
+function TopicSelectorModal({ 
+  isOpen, 
+  onClose, 
+  currentTopics 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void;
+  currentTopics: Topic[];
+}) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    setSelectedIds(currentTopics.map(t => t.keyword));
+  }, [currentTopics, isOpen]);
+
+  const toggleTopic = async (topicId: string, topicLabel: string) => {
+    const isSelected = selectedIds.includes(topicId);
+    setSaving(true);
+
+    try {
+      if (isSelected) {
+        const response = await fetch(`/api/interests?keyword=${encodeURIComponent(topicId)}`, {
+          method: "DELETE",
+        });
+        if (!response.ok) throw new Error();
+        setSelectedIds(prev => prev.filter(id => id !== topicId));
+        toast.success(`"${topicLabel}" retiré`);
+      } else {
+        if (selectedIds.length >= 4) {
+          toast.error("Maximum 4 thèmes");
+          setSaving(false);
+          return;
+        }
+        const response = await fetch("/api/interests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            keyword: topicId, 
+            display_name: topicLabel 
+          }),
+        });
+        if (!response.ok) throw new Error();
+        setSelectedIds(prev => [...prev, topicId]);
+        toast.success(`"${topicLabel}" ajouté`);
+      }
+      router.refresh();
+    } catch {
+      toast.error("Erreur");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop with blur */}
+          <motion.div
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
+
+          {/* Modal content */}
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="w-full max-w-lg bg-card rounded-3xl shadow-2xl border border-border overflow-hidden"
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-border">
+                <div>
+                  <h2 className="font-display text-xl font-semibold">Vos Thèmes</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {selectedIds.length}/4 sélectionnés
+                  </p>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-full hover:bg-secondary transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Topics grid */}
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-6">
+                  {TOPIC_CATEGORIES.map((category) => (
+                    <div key={category.id}>
+                      <h3 className="text-sm font-display font-medium text-muted-foreground mb-3">
+                        {category.name}
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {category.topics.map((topic) => {
+                          const isSelected = selectedIds.includes(topic.id);
+                          const isDisabled = !isSelected && selectedIds.length >= 4;
+                          
+                          return (
+                            <motion.button
+                              key={topic.id}
+                              onClick={() => toggleTopic(topic.id, topic.label)}
+                              disabled={saving || isDisabled}
+                              className={`px-4 py-2 rounded-full text-sm font-display transition-all ${
+                                isSelected
+                                  ? "bg-charcoal dark:bg-cream text-cream dark:text-charcoal"
+                                  : isDisabled
+                                    ? "bg-secondary/50 text-muted-foreground/50 cursor-not-allowed"
+                                    : "bg-secondary hover:bg-secondary/80 text-foreground"
+                              }`}
+                              whileHover={!isDisabled ? { scale: 1.02 } : {}}
+                              whileTap={!isDisabled ? { scale: 0.98 } : {}}
+                            >
+                              {isSelected && <span className="mr-1">✓</span>}
+                              {topic.label}
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-border bg-secondary/30">
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity"
+                >
+                  Terminé
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
