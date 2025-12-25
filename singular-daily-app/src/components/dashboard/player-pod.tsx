@@ -23,6 +23,16 @@ interface PlayerPodProps {
   episode: Episode;
 }
 
+// Elegant color palette for sources - alternating warm neutrals
+const SOURCE_COLORS = [
+  { bg: "bg-[#F5F0E8]", text: "text-[#3D3D3D]", domain: "text-[#6B5B4F]" },      // Beige / Cream
+  { bg: "bg-[#FAFAFA]", text: "text-[#2D2D2D]", domain: "text-[#7A7A7A]" },      // White / Light gray
+  { bg: "bg-[#EDE8E0]", text: "text-[#4A4A4A]", domain: "text-[#8B7355]" },      // Sand / Taupe
+  { bg: "bg-[#F8F6F3]", text: "text-[#3D3D3D]", domain: "text-[#9A8B7A]" },      // Off-white / Cream
+  { bg: "bg-[#2D2D2D]", text: "text-[#F5F5F5]", domain: "text-[#A0A0A0]" },      // Charcoal
+  { bg: "bg-[#1A1A1A]", text: "text-[#FFFFFF]", domain: "text-[#888888]" },      // Noir / Black
+];
+
 export function PlayerPod({ episode }: PlayerPodProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -31,6 +41,10 @@ export function PlayerPod({ episode }: PlayerPodProps) {
   const [showSources, setShowSources] = useState(false);
 
   const sources = episode.sources_data || [];
+
+  const getSourceColor = (index: number) => {
+    return SOURCE_COLORS[index % SOURCE_COLORS.length];
+  };
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -132,28 +146,31 @@ export function PlayerPod({ episode }: PlayerPodProps) {
               {/* Sources List */}
               {sources.length > 0 ? (
                 <div className="space-y-2">
-                  {sources.map((source, idx) => (
-                    <motion.a
-                      key={idx}
-                      href={source.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl bg-card hover:bg-card/80 border border-brass/10 transition-colors group"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                    >
-                      <div className="flex-1 min-w-0 mr-3">
-                        <p className="text-sm font-medium truncate font-body">
-                          {source.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground font-mono">
-                          {source.domain}
-                        </p>
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-brass opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                    </motion.a>
-                  ))}
+                  {sources.map((source, idx) => {
+                    const colors = getSourceColor(idx);
+                    return (
+                      <motion.a
+                        key={idx}
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center justify-between p-3 rounded-xl ${colors.bg} hover:opacity-90 transition-all group shadow-sm`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                      >
+                        <div className="flex-1 min-w-0 mr-3">
+                          <p className={`text-sm font-medium truncate font-body ${colors.text}`}>
+                            {source.title}
+                          </p>
+                          <p className={`text-xs font-mono ${colors.domain}`}>
+                            {source.domain}
+                          </p>
+                        </div>
+                        <ExternalLink className={`w-4 h-4 ${colors.text} opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0`} />
+                      </motion.a>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-4 font-mono">
