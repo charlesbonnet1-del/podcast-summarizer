@@ -57,18 +57,18 @@ const TOPIC_CATEGORIES = [
     Icon: FlaskConical,
     topics: [
       { id: "energy", label: "Énergie", description: "Veille sur le mix énergétique du futur, de la renaissance nucléaire aux innovations solaires, pour comprendre les enjeux de la puissance mondiale.", keywords: ["énergie", "nucléaire", "renouvelable", "solaire", "climat"] },
-      { id: "health", label: "Santé", description: "Exploration des frontières du vivant, de la neurotechnologie à la longévité, là où la science répare et augmente le potentiel humain.", keywords: ["santé", "médecine", "biotech", "longévité", "neurotechnologie"] },
+      { id: "health", label: "Santé & Longévité", description: "Exploration des frontières de la biologie et de l'optimisation humaine, de la réparation cellulaire au biohacking, pour étendre la longévité active.", keywords: ["santé", "médecine", "biotech", "longévité", "biohacking", "cellulaire"] },
       { id: "space", label: "Espace", description: "Décryptage de l'économie orbitale et de l'exploration interstellaire, marquant le passage de l'humanité vers une espèce multi-planétaire.", keywords: ["NASA", "SpaceX", "espace", "Mars", "orbite"] },
     ]
   },
   {
-    id: "culture",
-    name: "Culture",
+    id: "influence",
+    name: "Influence",
     Icon: Film,
     topics: [
-      { id: "cinema", label: "Cinéma", description: "Exploration des mutations de l'industrie du septième art, de l'économie des studios aux percées de l'animation et de la narration numérique.", keywords: ["cinéma", "Netflix", "films", "séries", "studios"] },
-      { id: "gaming", label: "Gaming", description: "Veille sur l'économie de l'interaction et les révolutions hardware, là où le divertissement définit les futurs standards technologiques mondiaux.", keywords: ["jeux vidéo", "PlayStation", "Nintendo", "gaming", "hardware"] },
-      { id: "lifestyle", label: "Lifestyle", description: "Synthèse de l'esthétique contemporaine, de l'horlogerie de pointe à l'architecture, incarnant l'excellence et l'art de vivre dans l'ère moderne.", keywords: ["lifestyle", "horlogerie", "architecture", "design", "art de vivre"] },
+      { id: "info", label: "Guerre de l'Info", description: "Décryptage des campagnes d'influence étatiques, de la propagande automatisée et des cyber-opérations redéfinissant la souveraineté numérique mondiale.", keywords: ["propagande", "désinformation", "cyber", "influence", "guerre informationnelle"] },
+      { id: "attention", label: "Marchés de l'Attention", description: "Analyse des algorithmes de recommandation et de l'économie des plateformes pour comprendre les mécanismes de capture et de monétisation de l'attention humaine.", keywords: ["algorithme", "attention", "plateformes", "engagement", "recommandation"] },
+      { id: "persuasion", label: "Stratégies de Persuasion", description: "Étude des sciences comportementales et du design cognitif pour maîtriser les leviers de décision et le leadership d'opinion à l'échelle mondiale.", keywords: ["persuasion", "comportement", "nudge", "influence", "leadership"] },
     ]
   }
 ];

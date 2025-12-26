@@ -770,26 +770,60 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
 
 
 // ============================================
-// SIGNAL MIXER MODAL
+// SIGNAL MIXER MODAL - Vertical-First Design
 // ============================================
 
-const SIGNAL_TOPICS = [
-  { id: "ia", label: "IA", category: "Tech" },
-  { id: "quantum", label: "Quantum", category: "Tech" },
-  { id: "robotics", label: "Robotique", category: "Tech" },
-  { id: "asia", label: "Asie", category: "Monde" },
-  { id: "regulation", label: "Régulation", category: "Monde" },
-  { id: "resources", label: "Ressources", category: "Monde" },
-  { id: "crypto", label: "Crypto", category: "Économie" },
-  { id: "macro", label: "Macro", category: "Économie" },
-  { id: "stocks", label: "Bourse", category: "Économie" },
-  { id: "energy", label: "Énergie", category: "Science" },
-  { id: "health", label: "Santé", category: "Science" },
-  { id: "space", label: "Espace", category: "Science" },
-  { id: "cinema", label: "Cinéma", category: "Culture" },
-  { id: "gaming", label: "Gaming", category: "Culture" },
-  { id: "lifestyle", label: "Lifestyle", category: "Culture" },
+// Verticals with their topics
+const VERTICALS = [
+  {
+    id: "tech",
+    name: "Tech",
+    topics: [
+      { id: "ia", label: "IA", description: "Course vers l'AGI et modèles génératifs" },
+      { id: "quantum", label: "Quantum", description: "Puissance de calcul et cryptographie" },
+      { id: "robotics", label: "Robotique", description: "Systèmes autonomes et humanoïdes" },
+    ]
+  },
+  {
+    id: "world",
+    name: "Monde",
+    topics: [
+      { id: "asia", label: "Asie", description: "Tech chinoise et marchés émergents" },
+      { id: "regulation", label: "Régulation", description: "Souveraineté numérique et législation" },
+      { id: "resources", label: "Ressources", description: "Matières premières et minéraux critiques" },
+    ]
+  },
+  {
+    id: "economics",
+    name: "Économie",
+    topics: [
+      { id: "crypto", label: "Crypto", description: "Décentralisation et blockchain" },
+      { id: "macro", label: "Macro", description: "Géopolitique et flux de capitaux" },
+      { id: "stocks", label: "Bourse", description: "Marchés et valorisations" },
+    ]
+  },
+  {
+    id: "science",
+    name: "Science",
+    topics: [
+      { id: "energy", label: "Énergie", description: "Mix énergétique et nucléaire" },
+      { id: "health", label: "Santé", description: "Longévité, biohacking et réparation cellulaire" },
+      { id: "space", label: "Espace", description: "Économie orbitale et exploration" },
+    ]
+  },
+  {
+    id: "influence",
+    name: "Influence",
+    topics: [
+      { id: "info", label: "Info Wars", description: "Propagande et cyber-opérations" },
+      { id: "attention", label: "Attention", description: "Algorithmes et capture de l'attention" },
+      { id: "persuasion", label: "Persuasion", description: "Sciences comportementales et leadership" },
+    ]
+  }
 ];
+
+// Flatten topics for weight management
+const ALL_TOPICS = VERTICALS.flatMap(v => v.topics.map(t => ({ ...t, category: v.name })));
 
 function getSignalLabel(weight: number) {
   if (weight >= 80) return { label: "Focus", color: "text-[#C5B358]" };
@@ -810,21 +844,46 @@ function SignalMixerModal({
 }) {
   const [weights, setWeights] = useState<Record<string, number>>(() => {
     const defaults: Record<string, number> = {};
-    SIGNAL_TOPICS.forEach(t => defaults[t.id] = 50);
+    ALL_TOPICS.forEach(t => defaults[t.id] = 50);
     return { ...defaults, ...initialWeights };
   });
+  const [expandedVertical, setExpandedVertical] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     if (isOpen) {
       const defaults: Record<string, number> = {};
-      SIGNAL_TOPICS.forEach(t => defaults[t.id] = 50);
+      ALL_TOPICS.forEach(t => defaults[t.id] = 50);
       setWeights({ ...defaults, ...initialWeights });
+      setExpandedVertical(null);
     }
   }, [isOpen, initialWeights]);
 
-  const updateWeight = (topicId: string, value: number) => {
+  // Calculate vertical average weight
+  const getVerticalWeight = (verticalId: string) => {
+    const vertical = VERTICALS.find(v => v.id === verticalId);
+    if (!vertical) return 50;
+    const topicWeights = vertical.topics.map(t => weights[t.id] ?? 50);
+    return Math.round(topicWeights.reduce((a, b) => a + b, 0) / topicWeights.length);
+  };
+
+  // Update all topics in a vertical
+  const updateVerticalWeight = (verticalId: string, value: number) => {
+    const vertical = VERTICALS.find(v => v.id === verticalId);
+    if (!vertical) return;
+    
+    setWeights(prev => {
+      const newWeights = { ...prev };
+      vertical.topics.forEach(t => {
+        newWeights[t.id] = value;
+      });
+      return newWeights;
+    });
+  };
+
+  // Update single topic
+  const updateTopicWeight = (topicId: string, value: number) => {
     setWeights(prev => ({ ...prev, [topicId]: value }));
   };
 
@@ -846,13 +905,6 @@ function SignalMixerModal({
       setSaving(false);
     }
   };
-
-  // Group by category
-  const categories = SIGNAL_TOPICS.reduce((acc, topic) => {
-    if (!acc[topic.category]) acc[topic.category] = [];
-    acc[topic.category].push(topic);
-    return acc;
-  }, {} as Record<string, typeof SIGNAL_TOPICS>);
 
   if (!isOpen) return null;
 
@@ -882,85 +934,148 @@ function SignalMixerModal({
           </motion.button>
 
           {/* Content */}
-          <div className="relative z-10 w-full max-w-2xl max-h-[85vh] overflow-y-auto px-4 py-8">
+          <div className="relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto px-4 py-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               {/* Header */}
-              <div className="text-center mb-8">
+              <div className="text-center mb-6">
                 <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Ajustez l'intensité de chaque signal
+                  Ajustez par verticale, affinez par topic
                 </p>
               </div>
 
-              {/* Categories */}
-              {Object.entries(categories).map(([categoryName, topics]) => (
-                <div key={categoryName} className="space-y-2">
-                  <h3 className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider px-1">
-                    {categoryName}
-                  </h3>
-                  
-                  <div className="space-y-1">
-                    {topics.map((topic) => {
-                      const weight = weights[topic.id] ?? 50;
-                      const signal = getSignalLabel(weight);
-                      
-                      return (
-                        <div
-                          key={topic.id}
-                          className="flex items-center gap-3 p-3 rounded-xl bg-card/60 backdrop-blur-sm border border-border/30"
-                        >
-                          <span className={`font-display font-medium text-sm min-w-[80px] ${
-                            weight > 0 ? "" : "text-muted-foreground/50"
-                          }`}>
-                            {topic.label}
+              {/* Verticals */}
+              {VERTICALS.map((vertical) => {
+                const verticalWeight = getVerticalWeight(vertical.id);
+                const signal = getSignalLabel(verticalWeight);
+                const isExpanded = expandedVertical === vertical.id;
+                
+                return (
+                  <motion.div
+                    key={vertical.id}
+                    className="rounded-xl bg-card/60 backdrop-blur-sm border border-border/30 overflow-hidden"
+                    layout
+                  >
+                    {/* Vertical Header with Slider */}
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-display font-semibold text-base">
+                            {vertical.name}
                           </span>
-
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="10"
-                            value={weight}
-                            onChange={(e) => updateWeight(topic.id, parseInt(e.target.value))}
-                            className="flex-1 h-2 rounded-full appearance-none cursor-pointer bg-muted
-                              [&::-webkit-slider-thumb]:appearance-none
-                              [&::-webkit-slider-thumb]:w-4
-                              [&::-webkit-slider-thumb]:h-4
-                              [&::-webkit-slider-thumb]:rounded-full
-                              [&::-webkit-slider-thumb]:bg-white
-                              [&::-webkit-slider-thumb]:border-2
-                              [&::-webkit-slider-thumb]:border-[#C5B358]
-                              [&::-webkit-slider-thumb]:shadow-sm
-                              [&::-webkit-slider-thumb]:cursor-pointer"
-                            style={{
-                              background: `linear-gradient(to right, 
-                                ${weight >= 80 ? '#C5B358' : weight >= 50 ? '#10b981' : weight >= 20 ? '#60a5fa' : '#9ca3af'} 0%, 
-                                ${weight >= 80 ? '#C5B358' : weight >= 50 ? '#10b981' : weight >= 20 ? '#60a5fa' : '#9ca3af'} ${weight}%, 
-                                hsl(var(--muted)) ${weight}%, 
-                                hsl(var(--muted)) 100%)`
-                            }}
-                          />
-
-                          <div className="flex items-center gap-1 min-w-[60px] justify-end">
-                            <span className={`text-xs font-mono ${signal.color}`}>
-                              {weight}%
-                            </span>
-                          </div>
+                          <span className={`text-xs font-mono ${signal.color}`}>
+                            {verticalWeight}%
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                        <button
+                          onClick={() => setExpandedVertical(isExpanded ? null : vertical.id)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                        >
+                          {isExpanded ? "Réduire" : "Détailler"}
+                          <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                        </button>
+                      </div>
+
+                      {/* Vertical Slider */}
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="10"
+                        value={verticalWeight}
+                        onChange={(e) => updateVerticalWeight(vertical.id, parseInt(e.target.value))}
+                        className="w-full h-2 rounded-full appearance-none cursor-pointer bg-muted
+                          [&::-webkit-slider-thumb]:appearance-none
+                          [&::-webkit-slider-thumb]:w-5
+                          [&::-webkit-slider-thumb]:h-5
+                          [&::-webkit-slider-thumb]:rounded-full
+                          [&::-webkit-slider-thumb]:bg-white
+                          [&::-webkit-slider-thumb]:border-2
+                          [&::-webkit-slider-thumb]:border-[#C5B358]
+                          [&::-webkit-slider-thumb]:shadow-md
+                          [&::-webkit-slider-thumb]:cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, 
+                            ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#10b981' : verticalWeight >= 20 ? '#60a5fa' : '#9ca3af'} 0%, 
+                            ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#10b981' : verticalWeight >= 20 ? '#60a5fa' : '#9ca3af'} ${verticalWeight}%, 
+                            hsl(var(--muted)) ${verticalWeight}%, 
+                            hsl(var(--muted)) 100%)`
+                        }}
+                      />
+                    </div>
+
+                    {/* Expanded Topics */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="border-t border-border/30"
+                        >
+                          <div className="p-3 space-y-2 bg-secondary/30">
+                            {vertical.topics.map((topic) => {
+                              const topicWeight = weights[topic.id] ?? 50;
+                              const topicSignal = getSignalLabel(topicWeight);
+                              
+                              return (
+                                <div key={topic.id} className="flex items-center gap-3">
+                                  <div className="min-w-[90px]">
+                                    <span className="text-sm font-medium">{topic.label}</span>
+                                    <p className="text-[10px] text-muted-foreground leading-tight">
+                                      {topic.description}
+                                    </p>
+                                  </div>
+                                  
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    step="10"
+                                    value={topicWeight}
+                                    onChange={(e) => updateTopicWeight(topic.id, parseInt(e.target.value))}
+                                    className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-muted
+                                      [&::-webkit-slider-thumb]:appearance-none
+                                      [&::-webkit-slider-thumb]:w-4
+                                      [&::-webkit-slider-thumb]:h-4
+                                      [&::-webkit-slider-thumb]:rounded-full
+                                      [&::-webkit-slider-thumb]:bg-white
+                                      [&::-webkit-slider-thumb]:border-2
+                                      [&::-webkit-slider-thumb]:border-[#C5B358]
+                                      [&::-webkit-slider-thumb]:shadow-sm
+                                      [&::-webkit-slider-thumb]:cursor-pointer"
+                                    style={{
+                                      background: `linear-gradient(to right, 
+                                        ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#10b981' : topicWeight >= 20 ? '#60a5fa' : '#9ca3af'} 0%, 
+                                        ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#10b981' : topicWeight >= 20 ? '#60a5fa' : '#9ca3af'} ${topicWeight}%, 
+                                        hsl(var(--muted)) ${topicWeight}%, 
+                                        hsl(var(--muted)) 100%)`
+                                    }}
+                                  />
+                                  
+                                  <span className={`text-xs font-mono min-w-[35px] text-right ${topicSignal.color}`}>
+                                    {topicWeight}%
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
 
               {/* Wildcard info */}
-              <div className="p-4 rounded-xl bg-[#C5B358]/10 border border-[#C5B358]/20">
+              <div className="p-3 rounded-xl bg-[#C5B358]/10 border border-[#C5B358]/20">
                 <p className="text-xs text-center text-muted-foreground">
-                  <span className="text-[#C5B358] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle de filtres
+                  <span className="text-[#C5B358] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle
                 </p>
               </div>
 
@@ -1026,17 +1141,17 @@ const TOPIC_CATEGORIES = [
     name: "Science",
     topics: [
       { id: "energy", label: "Énergie", description: "Mix énergétique du futur, renaissance nucléaire et innovations solaires." },
-      { id: "health", label: "Santé", description: "Frontières du vivant, neurotechnologie et longévité humaine." },
+      { id: "health", label: "Santé", description: "Longévité, biohacking et réparation cellulaire." },
       { id: "space", label: "Espace", description: "Économie orbitale et exploration vers une espèce multi-planétaire." },
     ]
   },
   {
-    id: "culture",
-    name: "Culture",
+    id: "influence",
+    name: "Influence",
     topics: [
-      { id: "cinema", label: "Cinéma", description: "Mutations du 7ème art, économie des studios et narration numérique." },
-      { id: "gaming", label: "Gaming", description: "Économie de l'interaction et révolutions hardware du divertissement." },
-      { id: "lifestyle", label: "Lifestyle", description: "Esthétique contemporaine, horlogerie et art de vivre moderne." },
+      { id: "info", label: "Info Wars", description: "Propagande, cyber-opérations et souveraineté numérique." },
+      { id: "attention", label: "Attention", description: "Algorithmes et capture de l'attention humaine." },
+      { id: "persuasion", label: "Persuasion", description: "Sciences comportementales et leadership d'opinion." },
     ]
   }
 ];
