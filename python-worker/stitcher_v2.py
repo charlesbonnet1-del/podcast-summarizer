@@ -96,6 +96,19 @@ try:
 except:
     pass
 
+# Perplexity for content enrichment (Digest mode only)
+perplexity_client = None
+try:
+    from openai import OpenAI as PerplexityClient
+    if os.getenv("PERPLEXITY_API_KEY"):
+        perplexity_client = PerplexityClient(
+            api_key=os.getenv("PERPLEXITY_API_KEY"),
+            base_url="https://api.perplexity.ai"
+        )
+        log.info("✅ Perplexity client initialized (for Digest enrichment)")
+except:
+    pass
+
 # ============================================
 # CONFIGURATION
 # ============================================
@@ -555,6 +568,63 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
 
 
 # ============================================
+# PERPLEXITY ENRICHMENT (DIGEST MODE ONLY)
+# ============================================
+
+ENRICHMENT_PROMPT = """À partir de cet article, fournis un contexte enrichi pour un podcast tech/actualité approfondi.
+
+ARTICLE:
+Titre: {title}
+Source: {source}
+Contenu: {content}
+
+FOURNIS EN 250 MOTS MAX:
+1. Contexte historique ou évolution récente du sujet
+2. Comparaison avec la concurrence ou autres acteurs
+3. Réactions du marché, analystes ou experts
+4. Enjeux et implications concrètes
+5. Ce que ça change pour le public/consommateurs
+
+Sois factuel, concis et cite tes sources entre crochets [source]."""
+
+
+def enrich_content_with_perplexity(
+    title: str,
+    content: str,
+    source_name: str
+) -> Optional[str]:
+    """
+    Enrich article content using Perplexity's web search.
+    Only used for Digest format (15 min) to add depth.
+    Returns enriched context or None if unavailable.
+    """
+    if not perplexity_client:
+        log.debug("Perplexity not available, skipping enrichment")
+        return None
+    
+    try:
+        prompt = ENRICHMENT_PROMPT.format(
+            title=title,
+            source=source_name,
+            content=content[:2000]  # Limit input size
+        )
+        
+        response = perplexity_client.chat.completions.create(
+            model="sonar",  # Perplexity model with web search
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=400
+        )
+        
+        enriched = response.choices[0].message.content.strip()
+        log.info(f"✅ Perplexity enrichment: +{len(enriched.split())} words context")
+        return enriched
+        
+    except Exception as e:
+        log.warning(f"⚠️ Perplexity enrichment failed: {e}")
+        return None
+
+
+# ============================================
 # SCRIPT GENERATION
 # ============================================
 
@@ -563,20 +633,41 @@ def generate_dialogue_segment_script(
     content: str,
     source_name: str,
     word_count: int = 200,
-    style: str = "dynamique"
+    style: str = "dynamique",
+    use_enrichment: bool = False
 ) -> Optional[str]:
-    """Generate DIALOGUE script for a segment."""
+    """
+    Generate DIALOGUE script for a segment.
+    
+    Args:
+        use_enrichment: If True, uses Perplexity to add context (for Digest mode)
+    """
     if not groq_client:
         log.error("Groq client not available")
         return None
     
     try:
+        # Enrich content with Perplexity for Digest mode
+        enriched_context = None
+        if use_enrichment:
+            enriched_context = enrich_content_with_perplexity(title, content, source_name)
+        
+        # Build content for prompt
+        if enriched_context:
+            full_content = f"""ARTICLE PRINCIPAL:
+{content[:3000]}
+
+CONTEXTE ENRICHI (sources additionnelles):
+{enriched_context}"""
+        else:
+            full_content = content[:4000]
+        
         prompt = DIALOGUE_SEGMENT_PROMPT.format(
             word_count=word_count,
             style=style,
             title=title,
             source_name=source_name,
-            content=content[:4000]
+            content=full_content
         )
         
         for attempt in range(3):
@@ -594,7 +685,8 @@ def generate_dialogue_segment_script(
             if has_tags:
                 # Ensure dialogue ends with Alice [A]
                 script = ensure_alice_conclusion(script)
-                log.info(f"✅ Dialogue script generated: {len(script.split())} words")
+                log.info(f"✅ Dialogue script generated: {len(script.split())} words" + 
+                        (" (enriched)" if enriched_context else ""))
                 return script
             
             prompt += "\n\nATTENTION: Tu DOIS utiliser [A] et [B] pour chaque réplique!"
@@ -731,11 +823,17 @@ def get_or_create_segment(
     topic_slug: str,
     target_date: date,
     edition: str,
-    format_config: dict
+    format_config: dict,
+    use_enrichment: bool = False
 ) -> Optional[dict]:
-    """Create or retrieve a DIALOGUE segment for an article."""
+    """
+    Create or retrieve a DIALOGUE segment for an article.
     
-    log.info(f"📰 Processing: {title[:50]}...")
+    Args:
+        use_enrichment: If True, uses Perplexity for deeper context (Digest mode)
+    """
+    
+    log.info(f"📰 Processing: {title[:50]}..." + (" [enriched]" if use_enrichment else ""))
     
     # 1. Extract content
     extraction = extract_content(url)
@@ -762,28 +860,30 @@ def get_or_create_segment(
         url=url
     )
     
-    # 3. Check cache
+    # 3. Check cache (only if not enriched - enriched content should be fresh)
     content_hash = get_content_hash(url, content)
-    cached = get_cached_segment(content_hash, target_date, edition)
-    if cached:
-        return {
-            "audio_url": cached["audio_url"],
-            "duration": cached["audio_duration"],
-            "script": cached["script_text"],
-            "title": title,
-            "url": url,
-            "source_name": source_name,
-            "cached": True,
-            "digest": digest  # Include digest even for cached segments
-        }
+    if not use_enrichment:
+        cached = get_cached_segment(content_hash, target_date, edition)
+        if cached:
+            return {
+                "audio_url": cached["audio_url"],
+                "duration": cached["audio_duration"],
+                "script": cached["script_text"],
+                "title": title,
+                "url": url,
+                "source_name": source_name,
+                "cached": True,
+                "digest": digest  # Include digest even for cached segments
+            }
     
-    # 4. Generate DIALOGUE script
+    # 4. Generate DIALOGUE script (with Perplexity enrichment for Digest)
     script = generate_dialogue_segment_script(
         title=title,
         content=content,
         source_name=source_name,
         word_count=format_config["words_per_article"],
-        style=format_config["style"]
+        style=format_config["style"],
+        use_enrichment=use_enrichment
     )
     
     if not script:
@@ -1626,13 +1726,17 @@ def assemble_lego_podcast(
             item = cluster_items[0]
             log.info(f"🎯 Processing article {cluster_idx}: {item.get('title', 'No title')[:50]}...")
             
+            # Use Perplexity enrichment for Digest format only
+            use_enrichment = (format_type == "digest")
+            
             segment = get_or_create_segment(
                 url=item["url"],
                 title=item.get("title", ""),
                 topic_slug=item.get("keyword", "general"),
                 target_date=target_date,
                 edition=edition,
-                format_config=config
+                format_config=config,
+                use_enrichment=use_enrichment
             )
             
             if segment:
