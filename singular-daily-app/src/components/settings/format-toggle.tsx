@@ -63,11 +63,6 @@ export function FormatToggle({ initialFormat = "digest", onFormatChange }: Forma
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-foreground">Format du podcast</h3>
-      <p className="text-sm text-muted-foreground">
-        Choisissez la durée de votre briefing quotidien
-      </p>
-      
       <div className="grid grid-cols-2 gap-4">
         {/* Flash Option */}
         <motion.button
@@ -109,9 +104,8 @@ export function FormatToggle({ initialFormat = "digest", onFormatChange }: Forma
             Headlines essentielles pour les matins pressés
           </p>
           
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="px-2 py-1 rounded-full bg-muted text-xs">4 sujets</span>
-            <span className="px-2 py-1 rounded-full bg-muted text-xs">100 mots/sujet</span>
+          <div className="mt-4">
+            <span className="px-3 py-1.5 rounded-full bg-muted text-xs font-medium">4 sujets maximum</span>
           </div>
         </motion.button>
 
@@ -155,9 +149,8 @@ export function FormatToggle({ initialFormat = "digest", onFormatChange }: Forma
             Analyse approfondie pour tout comprendre
           </p>
           
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="px-2 py-1 rounded-full bg-muted text-xs">8 sujets</span>
-            <span className="px-2 py-1 rounded-full bg-muted text-xs">200 mots/sujet</span>
+          <div className="mt-4">
+            <span className="px-3 py-1.5 rounded-full bg-muted text-xs font-medium">8 sujets maximum</span>
           </div>
         </motion.button>
       </div>

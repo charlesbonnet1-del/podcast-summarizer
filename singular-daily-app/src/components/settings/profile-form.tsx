@@ -102,9 +102,9 @@ export function ProfileForm({
             <Globe className="w-5 h-5 text-sand" />
           </div>
           <div>
-            <p className="font-display font-medium">International Sources</p>
+            <p className="font-display font-medium">Sources Internationales</p>
             <p className="text-sm text-muted-foreground">
-              Include news from US, UK, Germany, Spain, Italy
+              Inclure des actualités internationales
             </p>
           </div>
         </div>
@@ -124,16 +124,6 @@ export function ProfileForm({
           />
         </button>
       </div>
-
-      {includeInternational && (
-        <div className="flex flex-wrap gap-2 px-1">
-          {["🇫🇷 France", "🇺🇸 USA", "🇬🇧 UK", "🇩🇪 Germany", "🇪🇸 Spain", "🇮🇹 Italy"].map((country) => (
-            <Badge key={country} variant="secondary" className="text-xs font-display">
-              {country}
-            </Badge>
-          ))}
-        </div>
-      )}
 
       {/* Save button */}
       {hasChanges && (

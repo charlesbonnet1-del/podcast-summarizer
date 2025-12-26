@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Play, Pause, Layers, X, ExternalLink, Link2, Loader2,
   Settings, LogOut, Sun, Moon, Monitor, User, SkipBack, SkipForward,
-  Clock, ChevronDown, FileText, Calendar
+  Clock, ChevronDown, FileText, Calendar, Plus
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -638,15 +638,14 @@ function TopicPills({ topics }: { topics: Topic[] }) {
           ))}
         </AnimatePresence>
         
-        {/* Add topic button */}
+        {/* Add topic button - simple bronze circle with + */}
         <motion.button
           onClick={() => setShowSelector(true)}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm bg-brass/20 text-brass hover:bg-brass/30 transition-colors"
-          whileHover={{ scale: 1.05 }}
+          className="w-8 h-8 rounded-full bg-brass flex items-center justify-center text-white hover:bg-brass-dark transition-colors shadow-sm"
+          whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
         >
-          <Settings className="w-3 h-3" />
-          <span>Modifier</span>
+          <Plus className="w-4 h-4" />
         </motion.button>
       </div>
 

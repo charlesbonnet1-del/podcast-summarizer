@@ -26,9 +26,9 @@ const TOPIC_CATEGORIES = [
     name: "Tech",
     Icon: Bot,
     topics: [
-      { id: "ia", label: "IA & LLM", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT"] },
-      { id: "quantum", label: "Quantum Computing", keywords: ["quantique", "quantum", "qubits", "IBM Quantum"] },
-      { id: "robotics", label: "Robotique", keywords: ["robotique", "robots", "Tesla Bot", "Boston Dynamics"] },
+      { id: "ia", label: "IA & LLM", description: "Intelligence artificielle, ChatGPT, Claude et les dernières avancées en machine learning.", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT"] },
+      { id: "quantum", label: "Quantum Computing", description: "Ordinateurs quantiques, qubits et les percées d'IBM, Google et startups.", keywords: ["quantique", "quantum", "qubits", "IBM Quantum"] },
+      { id: "robotics", label: "Robotique", description: "Robots humanoïdes, automatisation industrielle et véhicules autonomes.", keywords: ["robotique", "robots", "Tesla Bot", "Boston Dynamics"] },
     ]
   },
   {
@@ -36,9 +36,9 @@ const TOPIC_CATEGORIES = [
     name: "Monde",
     Icon: Globe,
     topics: [
-      { id: "asia", label: "Asie", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie"] },
-      { id: "resources", label: "Ressources", keywords: ["pétrole", "gaz", "matières premières", "minerais"] },
-      { id: "regulation", label: "Régulation", keywords: ["régulation", "lois", "RGPD", "antitrust", "gouvernance"] },
+      { id: "asia", label: "Asie", description: "Actualités de Chine, Japon, Corée et tensions géopolitiques en Asie-Pacifique.", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie"] },
+      { id: "resources", label: "Ressources", description: "Marchés du pétrole, gaz, métaux rares et enjeux d'approvisionnement.", keywords: ["pétrole", "gaz", "matières premières", "minerais"] },
+      { id: "regulation", label: "Régulation", description: "Nouvelles lois tech, RGPD, antitrust et décisions des régulateurs.", keywords: ["régulation", "lois", "RGPD", "antitrust", "gouvernance"] },
     ]
   },
   {
@@ -46,9 +46,9 @@ const TOPIC_CATEGORIES = [
     name: "Économie",
     Icon: TrendingUp,
     topics: [
-      { id: "stocks", label: "Bourse", keywords: ["CAC 40", "Wall Street", "bourse", "actions"] },
-      { id: "crypto", label: "Crypto", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain"] },
-      { id: "macro", label: "Macro-économie", keywords: ["BCE", "Fed", "inflation", "économie mondiale"] },
+      { id: "stocks", label: "Bourse", description: "CAC 40, Wall Street, résultats d'entreprises et tendances des marchés.", keywords: ["CAC 40", "Wall Street", "bourse", "actions"] },
+      { id: "crypto", label: "Crypto", description: "Bitcoin, Ethereum, DeFi et évolutions réglementaires des cryptomonnaies.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain"] },
+      { id: "macro", label: "Macro-économie", description: "Décisions de la BCE et Fed, inflation, croissance et emploi.", keywords: ["BCE", "Fed", "inflation", "économie mondiale"] },
     ]
   },
   {
@@ -56,9 +56,9 @@ const TOPIC_CATEGORIES = [
     name: "Science",
     Icon: FlaskConical,
     topics: [
-      { id: "space", label: "Espace", keywords: ["NASA", "SpaceX", "espace", "Mars", "fusée"] },
-      { id: "health", label: "Santé", keywords: ["santé", "médecine", "biotech", "vaccin"] },
-      { id: "energy", label: "Énergie", keywords: ["énergie", "nucléaire", "renouvelable", "climat"] },
+      { id: "space", label: "Espace", description: "Missions NASA et SpaceX, exploration de Mars et satellites.", keywords: ["NASA", "SpaceX", "espace", "Mars", "fusée"] },
+      { id: "health", label: "Santé", description: "Recherche médicale, biotechnologies, vaccins et santé publique.", keywords: ["santé", "médecine", "biotech", "vaccin"] },
+      { id: "energy", label: "Énergie", description: "Transition énergétique, nucléaire, renouvelables et climat.", keywords: ["énergie", "nucléaire", "renouvelable", "climat"] },
     ]
   },
   {
@@ -66,9 +66,9 @@ const TOPIC_CATEGORIES = [
     name: "Culture",
     Icon: Film,
     topics: [
-      { id: "cinema", label: "Cinéma & Séries", keywords: ["cinéma", "Netflix", "films", "séries"] },
-      { id: "gaming", label: "Gaming", keywords: ["jeux vidéo", "PlayStation", "Nintendo", "gaming"] },
-      { id: "lifestyle", label: "Lifestyle", keywords: ["lifestyle", "tendances", "mode", "design"] },
+      { id: "cinema", label: "Cinéma & Séries", description: "Sorties films, séries Netflix/Disney+ et actualités du 7ème art.", keywords: ["cinéma", "Netflix", "films", "séries"] },
+      { id: "gaming", label: "Gaming", description: "Jeux vidéo, consoles, esport et industrie du gaming.", keywords: ["jeux vidéo", "PlayStation", "Nintendo", "gaming"] },
+      { id: "lifestyle", label: "Lifestyle", description: "Tendances, design, mode et innovations du quotidien.", keywords: ["lifestyle", "tendances", "mode", "design"] },
     ]
   }
 ];
@@ -239,10 +239,19 @@ export function TopicPicker({ initialTopics = [], plan = "free" }: TopicPickerPr
                             whileHover={!isDisabled ? { scale: 1.01 } : {}}
                             whileTap={!isDisabled ? { scale: 0.99 } : {}}
                           >
-                            <span className={`text-sm font-display ${isSelected ? "font-semibold" : "font-medium"}`}>
-                              {topic.label}
-                            </span>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                            <div className="flex-1 text-left">
+                              <span className={`text-sm font-display block ${isSelected ? "font-semibold" : "font-medium"}`}>
+                                {topic.label}
+                              </span>
+                              <span className={`text-xs mt-0.5 block leading-tight ${
+                                isSelected 
+                                  ? "text-cream/70 dark:text-charcoal/70" 
+                                  : "text-muted-foreground"
+                              }`}>
+                                {topic.description}
+                              </span>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ml-3 ${
                               isSelected
                                 ? "border-cream dark:border-charcoal bg-brass"
                                 : isDisabled

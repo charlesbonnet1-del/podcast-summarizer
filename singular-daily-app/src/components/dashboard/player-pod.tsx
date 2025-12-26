@@ -234,7 +234,7 @@ export function PlayerPod({ episode }: PlayerPodProps) {
             {/* Center: Title + Progress */}
             <div className="flex-1 min-w-0">
               {/* Episode Title - Display font, Bronze color */}
-              <p className="font-display text-sm font-medium truncate text-brass">
+              <p className="font-display text-sm font-medium truncate text-[#C5B358]">
                 {episode.title}
               </p>
               
@@ -247,7 +247,7 @@ export function PlayerPod({ episode }: PlayerPodProps) {
                   />
                 </div>
                 {/* Time - Bronze color */}
-                <span className="text-[10px] font-mono text-brass/70 flex-shrink-0">
+                <span className="text-[10px] font-mono text-[#C5B358]/70 flex-shrink-0">
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
               </div>
