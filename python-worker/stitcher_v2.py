@@ -1726,8 +1726,9 @@ def assemble_lego_podcast(
             item = cluster_items[0]
             log.info(f"🎯 Processing article {cluster_idx}: {item.get('title', 'No title')[:50]}...")
             
-            # Use Perplexity enrichment for Digest format only
-            use_enrichment = (format_type == "digest")
+            # Use Perplexity enrichment for ALL formats (Flash + Digest)
+            # Cost: ~$0.005/article = $27/month for 15 topics × 2 formats
+            use_enrichment = True
             
             segment = get_or_create_segment(
                 url=item["url"],
