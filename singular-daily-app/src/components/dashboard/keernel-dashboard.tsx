@@ -66,6 +66,7 @@ interface KernelDashboardProps {
   topics: Topic[];
   manualContent: ManualItem[];
   pendingCount: number;
+  signalWeights?: Record<string, number>;
 }
 
 // ============================================
@@ -586,74 +587,182 @@ function MagicBar() {
 }
 
 // ============================================
-// TOPIC PILLS
+// SIGNAL RADAR WIDGET (replaces TopicPills)
 // ============================================
 
-function TopicPills({ topics }: { topics: Topic[] }) {
-  const [removing, setRemoving] = useState<string | null>(null);
-  const [showSelector, setShowSelector] = useState(false);
+function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
+  const [showMixer, setShowMixer] = useState(false);
   const router = useRouter();
 
-  const removeTopic = async (topic: Topic) => {
-    setRemoving(topic.id);
-    try {
-      const response = await fetch(`/api/interests?keyword=${encodeURIComponent(topic.keyword)}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error();
-      toast.success(`"${topic.display_name || topic.keyword}" removed`);
-      router.refresh();
-    } catch {
-      toast.error("Failed to remove topic");
-    } finally {
-      setRemoving(null);
-    }
+  // Get top 5 topics by weight for display
+  const ALL_TOPICS = [
+    { id: "ia", label: "IA", shortLabel: "IA" },
+    { id: "quantum", label: "Quantum", shortLabel: "Quantum" },
+    { id: "robotics", label: "Robotique", shortLabel: "Robot" },
+    { id: "asia", label: "Asie", shortLabel: "Asie" },
+    { id: "regulation", label: "Régulation", shortLabel: "Régul" },
+    { id: "resources", label: "Ressources", shortLabel: "Ress" },
+    { id: "crypto", label: "Crypto", shortLabel: "Crypto" },
+    { id: "macro", label: "Macro", shortLabel: "Macro" },
+    { id: "stocks", label: "Bourse", shortLabel: "Bourse" },
+    { id: "energy", label: "Énergie", shortLabel: "Énergie" },
+    { id: "health", label: "Santé", shortLabel: "Santé" },
+    { id: "space", label: "Espace", shortLabel: "Espace" },
+    { id: "cinema", label: "Cinéma", shortLabel: "Ciné" },
+    { id: "gaming", label: "Gaming", shortLabel: "Gaming" },
+    { id: "lifestyle", label: "Lifestyle", shortLabel: "Life" },
+  ];
+
+  const topTopics = ALL_TOPICS
+    .map(t => ({ ...t, weight: weights[t.id] ?? 50 }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 5);
+
+  // Radar chart calculations
+  const size = 180;
+  const centerX = size / 2;
+  const centerY = size / 2;
+  const maxRadius = (size / 2) - 35;
+
+  const getPoint = (index: number, value: number) => {
+    const angle = (Math.PI * 2 * index) / 5 - Math.PI / 2;
+    const radius = (value / 100) * maxRadius;
+    return {
+      x: centerX + radius * Math.cos(angle),
+      y: centerY + radius * Math.sin(angle),
+    };
   };
+
+  const dataPoints = topTopics.map((topic, i) => getPoint(i, topic.weight));
+  const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
+
+  const labelRadius = maxRadius + 25;
+  const labelPositions = topTopics.map((_, i) => {
+    const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+    return {
+      x: centerX + labelRadius * Math.cos(angle),
+      y: centerY + labelRadius * Math.sin(angle),
+    };
+  });
 
   return (
     <>
-      <div className="flex flex-wrap justify-center gap-2 max-w-xl mx-auto">
-        <AnimatePresence mode="popLayout">
-          {topics.map((topic) => (
-            <motion.span
-              key={topic.id}
-              layout
+      <motion.button
+        onClick={() => setShowMixer(true)}
+        className="relative group mx-auto"
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+      >
+        <div className="relative" style={{ width: size, height: size }}>
+          <svg width={size} height={size} className="overflow-visible">
+            {/* Grid rings */}
+            {[20, 40, 60, 80, 100].map((ring) => {
+              const points = Array.from({ length: 5 }, (_, i) => {
+                const p = getPoint(i, ring);
+                return `${p.x},${p.y}`;
+              }).join(' ');
+              return (
+                <polygon
+                  key={ring}
+                  points={points}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeOpacity={0.1}
+                  strokeWidth={1}
+                />
+              );
+            })}
+
+            {/* Axis lines */}
+            {topTopics.map((_, i) => {
+              const endPoint = getPoint(i, 100);
+              return (
+                <line
+                  key={i}
+                  x1={centerX}
+                  y1={centerY}
+                  x2={endPoint.x}
+                  y2={endPoint.y}
+                  stroke="currentColor"
+                  strokeOpacity={0.1}
+                  strokeWidth={1}
+                />
+              );
+            })}
+
+            {/* Data shape */}
+            <motion.path
+              d={dataPath}
+              fill="rgba(197, 179, 88, 0.15)"
+              stroke="#C5B358"
+              strokeWidth={2}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="group tag-pill inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm"
-            >
-              <span className="text-[hsl(0_0%_10%)] opacity-60">#</span>
-              <span>{topic.display_name || topic.keyword}</span>
-              <motion.button
-                onClick={() => removeTopic(topic)}
-                disabled={removing === topic.id}
-                className="opacity-0 group-hover:opacity-100 ml-0.5 -mr-1 p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10"
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                <X className="w-3 h-3" />
-              </motion.button>
-            </motion.span>
-          ))}
-        </AnimatePresence>
-        
-        {/* Add topic button - simple bronze circle with + */}
-        <motion.button
-          onClick={() => setShowSelector(true)}
-          className="w-8 h-8 rounded-full bg-brass flex items-center justify-center text-white hover:bg-brass-dark transition-colors shadow-sm"
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <Plus className="w-4 h-4" />
-        </motion.button>
-      </div>
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              style={{ transformOrigin: `${centerX}px ${centerY}px` }}
+            />
 
-      {/* Topic Selector Modal */}
-      <TopicSelectorModal 
-        isOpen={showSelector}
-        onClose={() => setShowSelector(false)}
-        currentTopics={topics}
+            {/* Data points */}
+            {dataPoints.map((point, i) => (
+              <motion.circle
+                key={i}
+                cx={point.x}
+                cy={point.y}
+                r={4}
+                fill="#C5B358"
+                stroke="white"
+                strokeWidth={2}
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 * i, duration: 0.3 }}
+              />
+            ))}
+          </svg>
+
+          {/* Labels */}
+          {topTopics.map((topic, i) => {
+            const pos = labelPositions[i];
+            return (
+              <motion.div
+                key={topic.id}
+                className="absolute pointer-events-none"
+                style={{ 
+                  left: pos.x, 
+                  top: pos.y,
+                  transform: 'translate(-50%, -50%)'
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 + i * 0.1 }}
+              >
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] font-display font-medium text-foreground whitespace-nowrap">
+                    {topic.shortLabel}
+                  </span>
+                  <span className="text-[9px] text-[#C5B358] font-mono">
+                    {topic.weight}%
+                  </span>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="px-3 py-1.5 rounded-full bg-charcoal/80 dark:bg-cream/80 backdrop-blur-sm">
+            <span className="text-xs font-display text-cream dark:text-charcoal">
+              Configurer
+            </span>
+          </div>
+        </div>
+      </motion.button>
+
+      {/* Signal Mixer Modal */}
+      <SignalMixerModal 
+        isOpen={showMixer}
+        onClose={() => setShowMixer(false)}
+        weights={weights}
       />
     </>
   );
@@ -661,7 +770,227 @@ function TopicPills({ topics }: { topics: Topic[] }) {
 
 
 // ============================================
-// TOPIC SELECTOR MODAL
+// SIGNAL MIXER MODAL
+// ============================================
+
+const SIGNAL_TOPICS = [
+  { id: "ia", label: "IA", category: "Tech" },
+  { id: "quantum", label: "Quantum", category: "Tech" },
+  { id: "robotics", label: "Robotique", category: "Tech" },
+  { id: "asia", label: "Asie", category: "Monde" },
+  { id: "regulation", label: "Régulation", category: "Monde" },
+  { id: "resources", label: "Ressources", category: "Monde" },
+  { id: "crypto", label: "Crypto", category: "Économie" },
+  { id: "macro", label: "Macro", category: "Économie" },
+  { id: "stocks", label: "Bourse", category: "Économie" },
+  { id: "energy", label: "Énergie", category: "Science" },
+  { id: "health", label: "Santé", category: "Science" },
+  { id: "space", label: "Espace", category: "Science" },
+  { id: "cinema", label: "Cinéma", category: "Culture" },
+  { id: "gaming", label: "Gaming", category: "Culture" },
+  { id: "lifestyle", label: "Lifestyle", category: "Culture" },
+];
+
+function getSignalLabel(weight: number) {
+  if (weight >= 80) return { label: "Focus", color: "text-[#C5B358]" };
+  if (weight >= 50) return { label: "Actif", color: "text-emerald-500" };
+  if (weight >= 20) return { label: "Passif", color: "text-blue-400" };
+  if (weight > 0) return { label: "Faible", color: "text-muted-foreground" };
+  return { label: "Off", color: "text-muted-foreground/50" };
+}
+
+function SignalMixerModal({ 
+  isOpen, 
+  onClose, 
+  weights: initialWeights 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void;
+  weights: Record<string, number>;
+}) {
+  const [weights, setWeights] = useState<Record<string, number>>(() => {
+    const defaults: Record<string, number> = {};
+    SIGNAL_TOPICS.forEach(t => defaults[t.id] = 50);
+    return { ...defaults, ...initialWeights };
+  });
+  const [saving, setSaving] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isOpen) {
+      const defaults: Record<string, number> = {};
+      SIGNAL_TOPICS.forEach(t => defaults[t.id] = 50);
+      setWeights({ ...defaults, ...initialWeights });
+    }
+  }, [isOpen, initialWeights]);
+
+  const updateWeight = (topicId: string, value: number) => {
+    setWeights(prev => ({ ...prev, [topicId]: value }));
+  };
+
+  const saveWeights = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/signal-weights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weights }),
+      });
+      if (!response.ok) throw new Error();
+      toast.success("Signal Mixer sauvegardé");
+      router.refresh();
+      onClose();
+    } catch {
+      toast.error("Erreur lors de la sauvegarde");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Group by category
+  const categories = SIGNAL_TOPICS.reduce((acc, topic) => {
+    if (!acc[topic.category]) acc[topic.category] = [];
+    acc[topic.category].push(topic);
+    return acc;
+  }, {} as Record<string, typeof SIGNAL_TOPICS>);
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          {/* Backdrop */}
+          <motion.div
+            className="absolute inset-0 bg-[#F7EEDD]/95 dark:bg-[#1A1A1A]/95 backdrop-blur-xl"
+            onClick={onClose}
+          />
+
+          {/* Close button */}
+          <motion.button
+            onClick={onClose}
+            className="absolute top-6 left-6 z-10 w-12 h-12 rounded-full bg-card/80 backdrop-blur-sm border border-border/50 flex items-center justify-center hover:bg-card transition-colors shadow-lg"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            <X className="w-5 h-5" />
+          </motion.button>
+
+          {/* Content */}
+          <div className="relative z-10 w-full max-w-2xl max-h-[85vh] overflow-y-auto px-4 py-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              {/* Header */}
+              <div className="text-center mb-8">
+                <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Ajustez l'intensité de chaque signal
+                </p>
+              </div>
+
+              {/* Categories */}
+              {Object.entries(categories).map(([categoryName, topics]) => (
+                <div key={categoryName} className="space-y-2">
+                  <h3 className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider px-1">
+                    {categoryName}
+                  </h3>
+                  
+                  <div className="space-y-1">
+                    {topics.map((topic) => {
+                      const weight = weights[topic.id] ?? 50;
+                      const signal = getSignalLabel(weight);
+                      
+                      return (
+                        <div
+                          key={topic.id}
+                          className="flex items-center gap-3 p-3 rounded-xl bg-card/60 backdrop-blur-sm border border-border/30"
+                        >
+                          <span className={`font-display font-medium text-sm min-w-[80px] ${
+                            weight > 0 ? "" : "text-muted-foreground/50"
+                          }`}>
+                            {topic.label}
+                          </span>
+
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="10"
+                            value={weight}
+                            onChange={(e) => updateWeight(topic.id, parseInt(e.target.value))}
+                            className="flex-1 h-2 rounded-full appearance-none cursor-pointer bg-muted
+                              [&::-webkit-slider-thumb]:appearance-none
+                              [&::-webkit-slider-thumb]:w-4
+                              [&::-webkit-slider-thumb]:h-4
+                              [&::-webkit-slider-thumb]:rounded-full
+                              [&::-webkit-slider-thumb]:bg-white
+                              [&::-webkit-slider-thumb]:border-2
+                              [&::-webkit-slider-thumb]:border-[#C5B358]
+                              [&::-webkit-slider-thumb]:shadow-sm
+                              [&::-webkit-slider-thumb]:cursor-pointer"
+                            style={{
+                              background: `linear-gradient(to right, 
+                                ${weight >= 80 ? '#C5B358' : weight >= 50 ? '#10b981' : weight >= 20 ? '#60a5fa' : '#9ca3af'} 0%, 
+                                ${weight >= 80 ? '#C5B358' : weight >= 50 ? '#10b981' : weight >= 20 ? '#60a5fa' : '#9ca3af'} ${weight}%, 
+                                hsl(var(--muted)) ${weight}%, 
+                                hsl(var(--muted)) 100%)`
+                            }}
+                          />
+
+                          <div className="flex items-center gap-1 min-w-[60px] justify-end">
+                            <span className={`text-xs font-mono ${signal.color}`}>
+                              {weight}%
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {/* Wildcard info */}
+              <div className="p-4 rounded-xl bg-[#C5B358]/10 border border-[#C5B358]/20">
+                <p className="text-xs text-center text-muted-foreground">
+                  <span className="text-[#C5B358] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle de filtres
+                </p>
+              </div>
+
+              {/* Save button */}
+              <motion.button
+                onClick={saveWeights}
+                disabled={saving}
+                className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity shadow-lg disabled:opacity-50"
+                whileTap={{ scale: 0.98 }}
+              >
+                {saving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Sauvegarde...
+                  </span>
+                ) : (
+                  "Sauvegarder"
+                )}
+              </motion.button>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+
+// ============================================
+// TOPIC SELECTOR MODAL (legacy, keeping for reference)
 // ============================================
 
 const TOPIC_CATEGORIES = [
@@ -1179,9 +1508,10 @@ export function KernelDashboard({
   episode, 
   topics, 
   manualContent, 
-  pendingCount 
+  pendingCount,
+  signalWeights = {}
 }: KernelDashboardProps) {
-  const hasTopics = topics.length > 0;
+  const hasTopics = topics.length > 0 || Object.keys(signalWeights).length > 0;
   const { resolvedTheme } = useTheme();
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(episode);
 
@@ -1244,12 +1574,12 @@ export function KernelDashboard({
         </motion.div>
 
         <motion.div
-          className="w-full mb-10"
+          className="w-full mb-10 flex justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <TopicPills topics={topics} />
+          <SignalRadarWidget weights={signalWeights} />
         </motion.div>
 
         <motion.div
