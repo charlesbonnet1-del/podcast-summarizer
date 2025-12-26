@@ -669,45 +669,45 @@ const TOPIC_CATEGORIES = [
     id: "tech",
     name: "Tech",
     topics: [
-      { id: "ia", label: "IA & LLM", description: "ChatGPT, Claude, machine learning" },
-      { id: "quantum", label: "Quantum", description: "Ordinateurs quantiques, qubits" },
-      { id: "robotics", label: "Robotique", description: "Robots, automatisation" },
+      { id: "ia", label: "IA", description: "Course vers l'AGI, infrastructures de calcul et modèles génératifs transformant la société." },
+      { id: "quantum", label: "Quantum", description: "Ingénierie subatomique, rupture de la puissance de calcul et cryptographie." },
+      { id: "robotics", label: "Robotique", description: "Systèmes autonomes et humanoïdes, intégration de l'IA dans le monde physique." },
     ]
   },
   {
     id: "world",
     name: "Monde",
     topics: [
-      { id: "asia", label: "Asie", description: "Chine, Japon, Corée, géopolitique" },
-      { id: "resources", label: "Ressources", description: "Pétrole, gaz, matières premières" },
-      { id: "regulation", label: "Régulation", description: "Lois tech, RGPD, antitrust" },
+      { id: "asia", label: "Asie", description: "Veille stratégique sur la tech chinoise et l'essor des marchés émergents." },
+      { id: "regulation", label: "Régulation", description: "Souveraineté numérique et évolutions législatives mondiales." },
+      { id: "resources", label: "Ressources", description: "Géopolitique des matières premières et minéraux critiques." },
     ]
   },
   {
     id: "economics",
     name: "Économie",
     topics: [
-      { id: "stocks", label: "Bourse", description: "CAC 40, Wall Street, actions" },
-      { id: "crypto", label: "Crypto", description: "Bitcoin, Ethereum, blockchain" },
-      { id: "macro", label: "Macro", description: "BCE, Fed, inflation" },
+      { id: "crypto", label: "Crypto", description: "Décentralisation financière, protocoles blockchain et redéfinition de la valeur." },
+      { id: "macro", label: "Macro", description: "Rapports de force géopolitiques et flux de capitaux mondiaux." },
+      { id: "stocks", label: "Bourse", description: "Marchés publics et valorisations pour identifier les tendances de fond." },
     ]
   },
   {
     id: "science",
     name: "Science",
     topics: [
-      { id: "space", label: "Espace", description: "NASA, SpaceX, exploration" },
-      { id: "health", label: "Santé", description: "Médecine, biotech, vaccins" },
-      { id: "energy", label: "Énergie", description: "Nucléaire, renouvelables, climat" },
+      { id: "energy", label: "Énergie", description: "Mix énergétique du futur, renaissance nucléaire et innovations solaires." },
+      { id: "health", label: "Santé", description: "Frontières du vivant, neurotechnologie et longévité humaine." },
+      { id: "space", label: "Espace", description: "Économie orbitale et exploration vers une espèce multi-planétaire." },
     ]
   },
   {
     id: "culture",
     name: "Culture",
     topics: [
-      { id: "cinema", label: "Cinéma", description: "Films, séries, streaming" },
-      { id: "gaming", label: "Gaming", description: "Jeux vidéo, consoles, esport" },
-      { id: "lifestyle", label: "Lifestyle", description: "Tendances, mode, design" },
+      { id: "cinema", label: "Cinéma", description: "Mutations du 7ème art, économie des studios et narration numérique." },
+      { id: "gaming", label: "Gaming", description: "Économie de l'interaction et révolutions hardware du divertissement." },
+      { id: "lifestyle", label: "Lifestyle", description: "Esthétique contemporaine, horlogerie et art de vivre moderne." },
     ]
   }
 ];
@@ -792,10 +792,10 @@ function TopicSelectorModal({
             onClick={onClose}
           />
 
-          {/* Close button */}
+          {/* Close button - LEFT */}
           <motion.button
             onClick={onClose}
-            className="absolute top-6 right-6 z-10 w-12 h-12 rounded-full bg-card/80 backdrop-blur-sm border border-border/50 flex items-center justify-center hover:bg-card transition-colors shadow-lg"
+            className="absolute top-6 left-6 z-10 w-12 h-12 rounded-full bg-card/80 backdrop-blur-sm border border-border/50 flex items-center justify-center hover:bg-card transition-colors shadow-lg"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
@@ -805,26 +805,84 @@ function TopicSelectorModal({
             <X className="w-5 h-5" />
           </motion.button>
 
-          {/* Counter */}
+          {/* Counter - RIGHT */}
           <motion.div
-            className="absolute top-6 left-6 z-10 px-4 py-2 rounded-full bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg"
-            initial={{ opacity: 0, x: -20 }}
+            className="absolute top-6 right-6 z-10 px-4 py-2 rounded-full bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg"
+            initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            exit={{ opacity: 0, x: 20 }}
           >
             <span className="font-display text-sm font-medium">
               {selectedIds.length}/4 thèmes
             </span>
           </motion.div>
 
-          {/* Floating topics */}
-          <div className="relative z-10 w-full max-w-4xl px-6">
-            <motion.div 
-              className="flex flex-wrap justify-center gap-3"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
-            >
+          {/* Floating topics - Cloud style */}
+          <div className="relative z-10 w-full max-w-5xl px-4 sm:px-6 overflow-y-auto max-h-[70vh] py-8">
+            {/* Desktop: True cloud layout with varied positions */}
+            <div className="hidden sm:block relative min-h-[400px]">
+              {allTopics.map((topic, idx) => {
+                const isSelected = selectedIds.includes(topic.id);
+                const isDisabled = !isSelected && selectedIds.length >= 4;
+                
+                // Cloud positioning - organic scattered layout
+                const positions = [
+                  { top: '5%', left: '15%' },    // IA
+                  { top: '8%', left: '55%' },    // Quantum
+                  { top: '2%', left: '78%' },    // Robotique
+                  { top: '28%', left: '5%' },    // Asie
+                  { top: '25%', left: '38%' },   // Régulation
+                  { top: '22%', left: '70%' },   // Ressources
+                  { top: '48%', left: '12%' },   // Crypto
+                  { top: '45%', left: '45%' },   // Macro
+                  { top: '42%', left: '75%' },   // Bourse
+                  { top: '65%', left: '3%' },    // Énergie
+                  { top: '68%', left: '35%' },   // Santé
+                  { top: '62%', left: '65%' },   // Espace
+                  { top: '85%', left: '18%' },   // Cinéma
+                  { top: '82%', left: '48%' },   // Gaming
+                  { top: '88%', left: '75%' },   // Lifestyle
+                ];
+                const pos = positions[idx] || { top: '50%', left: '50%' };
+                
+                return (
+                  <motion.button
+                    key={topic.id}
+                    onClick={() => toggleTopic(topic.id, topic.label)}
+                    disabled={saving || isDisabled}
+                    style={{ top: pos.top, left: pos.left }}
+                    className={`absolute max-w-[200px] px-4 py-3 rounded-2xl backdrop-blur-sm border transition-all ${
+                      isSelected
+                        ? "bg-[#C5B358] border-[#C5B358] text-white shadow-lg shadow-[#C5B358]/30"
+                        : isDisabled
+                          ? "bg-card/30 border-border/30 text-muted-foreground/50 cursor-not-allowed"
+                          : "bg-card/60 border-border/50 text-foreground hover:bg-card/80 hover:border-border hover:shadow-md"
+                    }`}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ delay: idx * 0.04, type: "spring", stiffness: 200 }}
+                    whileHover={!isDisabled ? { scale: 1.05, zIndex: 10 } : {}}
+                    whileTap={!isDisabled ? { scale: 0.98 } : {}}
+                  >
+                    <div className="flex flex-col items-start text-left">
+                      <span className={`font-display font-semibold text-sm ${isSelected ? "text-white" : ""}`}>
+                        {isSelected && <span className="mr-1">✓</span>}
+                        {topic.label}
+                      </span>
+                      <span className={`text-[11px] mt-1 leading-tight line-clamp-2 ${
+                        isSelected ? "text-white/80" : "text-muted-foreground"
+                      }`}>
+                        {topic.description}
+                      </span>
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            {/* Mobile: Compact cloud grid */}
+            <div className="sm:hidden grid grid-cols-2 gap-2">
               {allTopics.map((topic, idx) => {
                 const isSelected = selectedIds.includes(topic.id);
                 const isDisabled = !isSelected && selectedIds.length >= 4;
@@ -834,41 +892,35 @@ function TopicSelectorModal({
                     key={topic.id}
                     onClick={() => toggleTopic(topic.id, topic.label)}
                     disabled={saving || isDisabled}
-                    className={`group relative px-5 py-3 rounded-2xl backdrop-blur-sm border transition-all ${
+                    className={`px-3 py-2.5 rounded-xl backdrop-blur-sm border transition-all text-left ${
                       isSelected
-                        ? "bg-[#C5B358] border-[#C5B358] text-white shadow-lg shadow-[#C5B358]/30"
+                        ? "bg-[#C5B358] border-[#C5B358] text-white shadow-md shadow-[#C5B358]/20"
                         : isDisabled
-                          ? "bg-card/30 border-border/30 text-muted-foreground/50 cursor-not-allowed"
-                          : "bg-card/60 border-border/50 text-foreground hover:bg-card/80 hover:border-border hover:shadow-md"
+                          ? "bg-card/30 border-border/30 text-muted-foreground/50"
+                          : "bg-card/60 border-border/50 text-foreground active:bg-card/80"
                     }`}
-                    initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.03 }}
-                    whileHover={!isDisabled ? { scale: 1.03, y: -2 } : {}}
-                    whileTap={!isDisabled ? { scale: 0.98 } : {}}
+                    whileTap={!isDisabled ? { scale: 0.97 } : {}}
                   >
-                    <div className="flex flex-col items-center text-center">
-                      <span className={`font-display font-medium text-sm ${isSelected ? "text-white" : ""}`}>
-                        {isSelected && <span className="mr-1">✓</span>}
-                        {topic.label}
-                      </span>
-                      <span className={`text-xs mt-0.5 ${
-                        isSelected 
-                          ? "text-white/70" 
-                          : "text-muted-foreground"
-                      }`}>
-                        {topic.description}
-                      </span>
-                    </div>
+                    <span className={`font-display font-semibold text-sm block ${isSelected ? "text-white" : ""}`}>
+                      {isSelected && <span className="mr-1">✓</span>}
+                      {topic.label}
+                    </span>
+                    <span className={`text-[10px] mt-0.5 leading-tight line-clamp-2 block ${
+                      isSelected ? "text-white/70" : "text-muted-foreground"
+                    }`}>
+                      {topic.description}
+                    </span>
                   </motion.button>
                 );
               })}
-            </motion.div>
+            </div>
 
             {/* Done button at bottom */}
             <motion.div
-              className="flex justify-center mt-8"
+              className="flex justify-center mt-6 sm:mt-8 sticky bottom-0 pb-4"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
