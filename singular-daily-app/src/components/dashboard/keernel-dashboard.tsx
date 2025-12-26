@@ -669,45 +669,45 @@ const TOPIC_CATEGORIES = [
     id: "tech",
     name: "Tech",
     topics: [
-      { id: "ia", label: "IA & LLM" },
-      { id: "quantum", label: "Quantum Computing" },
-      { id: "robotics", label: "Robotique" },
+      { id: "ia", label: "IA & LLM", description: "ChatGPT, Claude, machine learning" },
+      { id: "quantum", label: "Quantum", description: "Ordinateurs quantiques, qubits" },
+      { id: "robotics", label: "Robotique", description: "Robots, automatisation" },
     ]
   },
   {
     id: "world",
     name: "Monde",
     topics: [
-      { id: "asia", label: "Asie" },
-      { id: "resources", label: "Ressources" },
-      { id: "regulation", label: "Régulation" },
+      { id: "asia", label: "Asie", description: "Chine, Japon, Corée, géopolitique" },
+      { id: "resources", label: "Ressources", description: "Pétrole, gaz, matières premières" },
+      { id: "regulation", label: "Régulation", description: "Lois tech, RGPD, antitrust" },
     ]
   },
   {
     id: "economics",
     name: "Économie",
     topics: [
-      { id: "stocks", label: "Bourse" },
-      { id: "crypto", label: "Crypto" },
-      { id: "macro", label: "Macro-économie" },
+      { id: "stocks", label: "Bourse", description: "CAC 40, Wall Street, actions" },
+      { id: "crypto", label: "Crypto", description: "Bitcoin, Ethereum, blockchain" },
+      { id: "macro", label: "Macro", description: "BCE, Fed, inflation" },
     ]
   },
   {
     id: "science",
     name: "Science",
     topics: [
-      { id: "space", label: "Espace" },
-      { id: "health", label: "Santé" },
-      { id: "energy", label: "Énergie" },
+      { id: "space", label: "Espace", description: "NASA, SpaceX, exploration" },
+      { id: "health", label: "Santé", description: "Médecine, biotech, vaccins" },
+      { id: "energy", label: "Énergie", description: "Nucléaire, renouvelables, climat" },
     ]
   },
   {
     id: "culture",
     name: "Culture",
     topics: [
-      { id: "cinema", label: "Cinéma & Séries" },
-      { id: "gaming", label: "Gaming" },
-      { id: "lifestyle", label: "Lifestyle" },
+      { id: "cinema", label: "Cinéma", description: "Films, séries, streaming" },
+      { id: "gaming", label: "Gaming", description: "Jeux vidéo, consoles, esport" },
+      { id: "lifestyle", label: "Lifestyle", description: "Tendances, mode, design" },
     ]
   }
 ];
@@ -767,102 +767,121 @@ function TopicSelectorModal({
     }
   };
 
+  // Flatten all topics for floating display
+  const allTopics = TOPIC_CATEGORIES.flatMap(cat => 
+    cat.topics.map(t => ({ ...t, category: cat.name }))
+  );
+
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
-          {/* Backdrop with blur */}
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          {/* Blurred background matching theme */}
           <motion.div
-            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md"
+            className="absolute inset-0 bg-[#F7EEDD]/90 dark:bg-[#1A1A1A]/90 backdrop-blur-xl"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
           />
 
-          {/* Modal content */}
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+          {/* Close button */}
+          <motion.button
+            onClick={onClose}
+            className="absolute top-6 right-6 z-10 w-12 h-12 rounded-full bg-card/80 backdrop-blur-sm border border-border/50 flex items-center justify-center hover:bg-card transition-colors shadow-lg"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            <motion.div
-              className="w-full max-w-lg bg-card rounded-3xl shadow-2xl border border-border overflow-hidden"
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-border">
-                <div>
-                  <h2 className="font-display text-xl font-semibold">Vos Thèmes</h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {selectedIds.length}/4 sélectionnés
-                  </p>
-                </div>
-                <button
-                  onClick={onClose}
-                  className="p-2 rounded-full hover:bg-secondary transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+            <X className="w-5 h-5" />
+          </motion.button>
 
-              {/* Topics grid */}
-              <div className="p-6 max-h-[60vh] overflow-y-auto">
-                <div className="space-y-6">
-                  {TOPIC_CATEGORIES.map((category) => (
-                    <div key={category.id}>
-                      <h3 className="text-sm font-display font-medium text-muted-foreground mb-3">
-                        {category.name}
-                      </h3>
-                      <div className="flex flex-wrap gap-2">
-                        {category.topics.map((topic) => {
-                          const isSelected = selectedIds.includes(topic.id);
-                          const isDisabled = !isSelected && selectedIds.length >= 4;
-                          
-                          return (
-                            <motion.button
-                              key={topic.id}
-                              onClick={() => toggleTopic(topic.id, topic.label)}
-                              disabled={saving || isDisabled}
-                              className={`px-4 py-2 rounded-full text-sm font-display transition-all ${
-                                isSelected
-                                  ? "bg-charcoal dark:bg-cream text-cream dark:text-charcoal"
-                                  : isDisabled
-                                    ? "bg-secondary/50 text-muted-foreground/50 cursor-not-allowed"
-                                    : "bg-secondary hover:bg-secondary/80 text-foreground"
-                              }`}
-                              whileHover={!isDisabled ? { scale: 1.02 } : {}}
-                              whileTap={!isDisabled ? { scale: 0.98 } : {}}
-                            >
-                              {isSelected && <span className="mr-1">✓</span>}
-                              {topic.label}
-                            </motion.button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-6 border-t border-border bg-secondary/30">
-                <button
-                  onClick={onClose}
-                  className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity"
-                >
-                  Terminé
-                </button>
-              </div>
-            </motion.div>
+          {/* Counter */}
+          <motion.div
+            className="absolute top-6 left-6 z-10 px-4 py-2 rounded-full bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <span className="font-display text-sm font-medium">
+              {selectedIds.length}/4 thèmes
+            </span>
           </motion.div>
-        </>
+
+          {/* Floating topics */}
+          <div className="relative z-10 w-full max-w-4xl px-6">
+            <motion.div 
+              className="flex flex-wrap justify-center gap-3"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+            >
+              {allTopics.map((topic, idx) => {
+                const isSelected = selectedIds.includes(topic.id);
+                const isDisabled = !isSelected && selectedIds.length >= 4;
+                
+                return (
+                  <motion.button
+                    key={topic.id}
+                    onClick={() => toggleTopic(topic.id, topic.label)}
+                    disabled={saving || isDisabled}
+                    className={`group relative px-5 py-3 rounded-2xl backdrop-blur-sm border transition-all ${
+                      isSelected
+                        ? "bg-[#C5B358] border-[#C5B358] text-white shadow-lg shadow-[#C5B358]/30"
+                        : isDisabled
+                          ? "bg-card/30 border-border/30 text-muted-foreground/50 cursor-not-allowed"
+                          : "bg-card/60 border-border/50 text-foreground hover:bg-card/80 hover:border-border hover:shadow-md"
+                    }`}
+                    initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                    transition={{ delay: idx * 0.03 }}
+                    whileHover={!isDisabled ? { scale: 1.03, y: -2 } : {}}
+                    whileTap={!isDisabled ? { scale: 0.98 } : {}}
+                  >
+                    <div className="flex flex-col items-center text-center">
+                      <span className={`font-display font-medium text-sm ${isSelected ? "text-white" : ""}`}>
+                        {isSelected && <span className="mr-1">✓</span>}
+                        {topic.label}
+                      </span>
+                      <span className={`text-xs mt-0.5 ${
+                        isSelected 
+                          ? "text-white/70" 
+                          : "text-muted-foreground"
+                      }`}>
+                        {topic.description}
+                      </span>
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </motion.div>
+
+            {/* Done button at bottom */}
+            <motion.div
+              className="flex justify-center mt-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <button
+                onClick={onClose}
+                className="px-8 py-3 rounded-full bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity shadow-lg"
+              >
+                Terminé
+              </button>
+            </motion.div>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
@@ -1015,12 +1034,12 @@ function PlayerPod({ episode }: { episode: Episode }) {
             </motion.button>
 
             <div className="flex-1 min-w-0">
-              <p className="font-serif text-sm font-medium truncate">{episode.title}</p>
+              <p className="font-serif text-sm font-medium truncate text-[#C5B358]">{episode.title}</p>
               <div className="mt-1 flex items-center gap-2">
                 <div className="flex-1 h-1 rounded-full bg-secondary/50 overflow-hidden">
-                  <motion.div className="h-full rounded-full bg-[hsl(36_40%_95%)]" style={{ width: `${progress}%` }} />
+                  <motion.div className="h-full rounded-full bg-[#C5B358]" style={{ width: `${progress}%` }} />
                 </div>
-                <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
+                <span className="text-[10px] font-mono text-[#C5B358]/70 flex-shrink-0">
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
               </div>
