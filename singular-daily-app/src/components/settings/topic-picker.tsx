@@ -26,9 +26,9 @@ const TOPIC_CATEGORIES = [
     name: "Tech",
     Icon: Bot,
     topics: [
-      { id: "ia", label: "IA & LLM", description: "Intelligence artificielle, ChatGPT, Claude et les dernières avancées en machine learning.", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT"] },
-      { id: "quantum", label: "Quantum Computing", description: "Ordinateurs quantiques, qubits et les percées d'IBM, Google et startups.", keywords: ["quantique", "quantum", "qubits", "IBM Quantum"] },
-      { id: "robotics", label: "Robotique", description: "Robots humanoïdes, automatisation industrielle et véhicules autonomes.", keywords: ["robotique", "robots", "Tesla Bot", "Boston Dynamics"] },
+      { id: "ia", label: "IA", description: "Suivi de la course vers l'AGI, des infrastructures de calcul aux modèles génératifs qui transforment radicalement chaque strate de la société.", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT", "AGI"] },
+      { id: "quantum", label: "Quantum", description: "Immersion dans l'ingénierie subatomique pour anticiper la prochaine rupture majeure de la puissance de calcul et de la cryptographie.", keywords: ["quantique", "quantum", "qubits", "IBM Quantum"] },
+      { id: "robotics", label: "Robotique", description: "Analyse du déploiement des systèmes autonomes et des humanoïdes, marquant l'intégration finale de l'intelligence artificielle dans le monde physique.", keywords: ["robotique", "robots", "Tesla Bot", "Boston Dynamics", "humanoïdes"] },
     ]
   },
   {
@@ -36,9 +36,9 @@ const TOPIC_CATEGORIES = [
     name: "Monde",
     Icon: Globe,
     topics: [
-      { id: "asia", label: "Asie", description: "Actualités de Chine, Japon, Corée et tensions géopolitiques en Asie-Pacifique.", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie"] },
-      { id: "resources", label: "Ressources", description: "Marchés du pétrole, gaz, métaux rares et enjeux d'approvisionnement.", keywords: ["pétrole", "gaz", "matières premières", "minerais"] },
-      { id: "regulation", label: "Régulation", description: "Nouvelles lois tech, RGPD, antitrust et décisions des régulateurs.", keywords: ["régulation", "lois", "RGPD", "antitrust", "gouvernance"] },
+      { id: "asia", label: "Asie", description: "Veille stratégique sur l'épicentre de l'innovation mondiale, décryptant les dynamiques de la tech chinoise et l'essor des marchés émergents asiatiques.", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie"] },
+      { id: "regulation", label: "Régulation", description: "Analyse des enjeux de souveraineté numérique et des évolutions législatives mondiales qui redéfinissent les frontières du permis et de l'interdit.", keywords: ["régulation", "lois", "RGPD", "antitrust", "gouvernance", "souveraineté"] },
+      { id: "resources", label: "Ressources", description: "Décryptage de la géopolitique des matières premières et des minéraux critiques, piliers invisibles de la transition énergétique et technologique.", keywords: ["pétrole", "gaz", "matières premières", "minerais", "lithium"] },
     ]
   },
   {
@@ -46,9 +46,9 @@ const TOPIC_CATEGORIES = [
     name: "Économie",
     Icon: TrendingUp,
     topics: [
-      { id: "stocks", label: "Bourse", description: "CAC 40, Wall Street, résultats d'entreprises et tendances des marchés.", keywords: ["CAC 40", "Wall Street", "bourse", "actions"] },
-      { id: "crypto", label: "Crypto", description: "Bitcoin, Ethereum, DeFi et évolutions réglementaires des cryptomonnaies.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain"] },
-      { id: "macro", label: "Macro-économie", description: "Décisions de la BCE et Fed, inflation, croissance et emploi.", keywords: ["BCE", "Fed", "inflation", "économie mondiale"] },
+      { id: "crypto", label: "Crypto", description: "Au cœur de la décentralisation financière, analysant l'évolution des protocoles, de la blockchain et la redéfinition de la notion même de valeur.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain", "DeFi"] },
+      { id: "macro", label: "Macro", description: "Analyse des rapports de force géopolitiques et des flux de capitaux mondiaux pour anticiper les grandes ruptures économiques de demain.", keywords: ["BCE", "Fed", "inflation", "économie mondiale", "géopolitique"] },
+      { id: "stocks", label: "Bourse", description: "Suivi chirurgical des marchés publics et des valorisations d'entreprises pour identifier les tendances de fond de l'économie globale.", keywords: ["CAC 40", "Wall Street", "bourse", "actions", "valorisation"] },
     ]
   },
   {
@@ -56,9 +56,9 @@ const TOPIC_CATEGORIES = [
     name: "Science",
     Icon: FlaskConical,
     topics: [
-      { id: "space", label: "Espace", description: "Missions NASA et SpaceX, exploration de Mars et satellites.", keywords: ["NASA", "SpaceX", "espace", "Mars", "fusée"] },
-      { id: "health", label: "Santé", description: "Recherche médicale, biotechnologies, vaccins et santé publique.", keywords: ["santé", "médecine", "biotech", "vaccin"] },
-      { id: "energy", label: "Énergie", description: "Transition énergétique, nucléaire, renouvelables et climat.", keywords: ["énergie", "nucléaire", "renouvelable", "climat"] },
+      { id: "energy", label: "Énergie", description: "Veille sur le mix énergétique du futur, de la renaissance nucléaire aux innovations solaires, pour comprendre les enjeux de la puissance mondiale.", keywords: ["énergie", "nucléaire", "renouvelable", "solaire", "climat"] },
+      { id: "health", label: "Santé", description: "Exploration des frontières du vivant, de la neurotechnologie à la longévité, là où la science répare et augmente le potentiel humain.", keywords: ["santé", "médecine", "biotech", "longévité", "neurotechnologie"] },
+      { id: "space", label: "Espace", description: "Décryptage de l'économie orbitale et de l'exploration interstellaire, marquant le passage de l'humanité vers une espèce multi-planétaire.", keywords: ["NASA", "SpaceX", "espace", "Mars", "orbite"] },
     ]
   },
   {
@@ -66,9 +66,9 @@ const TOPIC_CATEGORIES = [
     name: "Culture",
     Icon: Film,
     topics: [
-      { id: "cinema", label: "Cinéma & Séries", description: "Sorties films, séries Netflix/Disney+ et actualités du 7ème art.", keywords: ["cinéma", "Netflix", "films", "séries"] },
-      { id: "gaming", label: "Gaming", description: "Jeux vidéo, consoles, esport et industrie du gaming.", keywords: ["jeux vidéo", "PlayStation", "Nintendo", "gaming"] },
-      { id: "lifestyle", label: "Lifestyle", description: "Tendances, design, mode et innovations du quotidien.", keywords: ["lifestyle", "tendances", "mode", "design"] },
+      { id: "cinema", label: "Cinéma", description: "Exploration des mutations de l'industrie du septième art, de l'économie des studios aux percées de l'animation et de la narration numérique.", keywords: ["cinéma", "Netflix", "films", "séries", "studios"] },
+      { id: "gaming", label: "Gaming", description: "Veille sur l'économie de l'interaction et les révolutions hardware, là où le divertissement définit les futurs standards technologiques mondiaux.", keywords: ["jeux vidéo", "PlayStation", "Nintendo", "gaming", "hardware"] },
+      { id: "lifestyle", label: "Lifestyle", description: "Synthèse de l'esthétique contemporaine, de l'horlogerie de pointe à l'architecture, incarnant l'excellence et l'art de vivre dans l'ère moderne.", keywords: ["lifestyle", "horlogerie", "architecture", "design", "art de vivre"] },
     ]
   }
 ];
