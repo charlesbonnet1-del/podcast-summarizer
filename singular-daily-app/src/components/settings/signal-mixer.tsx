@@ -76,18 +76,18 @@ const ALL_TOPICS = VERTICALS.flatMap(v => v.topics);
 // ============================================
 
 function getSignalLabel(weight: number) {
-  if (weight >= 80) return { label: "Focus", color: "text-[#C5B358]" };
-  if (weight >= 50) return { label: "Actif", color: "text-emerald-500" };
-  if (weight >= 20) return { label: "Passif", color: "text-blue-400" };
+  if (weight >= 80) return { label: "Focus", color: "text-[#C5B358]" };      // brass
+  if (weight >= 50) return { label: "Actif", color: "text-[#8B7355]" };      // sand
+  if (weight >= 20) return { label: "Passif", color: "text-[#6B5B4F]" };     // taupe
   if (weight > 0) return { label: "Faible", color: "text-muted-foreground" };
   return { label: "Off", color: "text-muted-foreground/50" };
 }
 
 function getSliderColor(weight: number): string {
-  if (weight >= 80) return '#C5B358';
-  if (weight >= 50) return '#10b981';
-  if (weight >= 20) return '#60a5fa';
-  return '#9ca3af';
+  if (weight >= 80) return '#C5B358';  // brass - Focus
+  if (weight >= 50) return '#8B7355';  // sand - Actif  
+  if (weight >= 20) return '#6B5B4F';  // taupe - Passif
+  return '#9ca3af';                     // gray - Faible/Off
 }
 
 // ============================================

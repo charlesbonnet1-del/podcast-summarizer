@@ -826,9 +826,9 @@ const VERTICALS = [
 const ALL_TOPICS = VERTICALS.flatMap(v => v.topics.map(t => ({ ...t, category: v.name })));
 
 function getSignalLabel(weight: number) {
-  if (weight >= 80) return { label: "Focus", color: "text-[#C5B358]" };
-  if (weight >= 50) return { label: "Actif", color: "text-emerald-500" };
-  if (weight >= 20) return { label: "Passif", color: "text-blue-400" };
+  if (weight >= 80) return { label: "Focus", color: "text-[#C5B358]" };      // brass
+  if (weight >= 50) return { label: "Actif", color: "text-[#8B7355]" };      // sand
+  if (weight >= 20) return { label: "Passif", color: "text-[#6B5B4F]" };     // taupe
   if (weight > 0) return { label: "Faible", color: "text-muted-foreground" };
   return { label: "Off", color: "text-muted-foreground/50" };
 }
@@ -1000,8 +1000,8 @@ function SignalMixerModal({
                           [&::-webkit-slider-thumb]:cursor-pointer"
                         style={{
                           background: `linear-gradient(to right, 
-                            ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#10b981' : verticalWeight >= 20 ? '#60a5fa' : '#9ca3af'} 0%, 
-                            ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#10b981' : verticalWeight >= 20 ? '#60a5fa' : '#9ca3af'} ${verticalWeight}%, 
+                            ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#8B7355' : verticalWeight >= 20 ? '#6B5B4F' : '#9ca3af'} 0%, 
+                            ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#8B7355' : verticalWeight >= 20 ? '#6B5B4F' : '#9ca3af'} ${verticalWeight}%, 
                             hsl(var(--muted)) ${verticalWeight}%, 
                             hsl(var(--muted)) 100%)`
                         }}
@@ -1051,8 +1051,8 @@ function SignalMixerModal({
                                       [&::-webkit-slider-thumb]:cursor-pointer"
                                     style={{
                                       background: `linear-gradient(to right, 
-                                        ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#10b981' : topicWeight >= 20 ? '#60a5fa' : '#9ca3af'} 0%, 
-                                        ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#10b981' : topicWeight >= 20 ? '#60a5fa' : '#9ca3af'} ${topicWeight}%, 
+                                        ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#8B7355' : topicWeight >= 20 ? '#6B5B4F' : '#9ca3af'} 0%, 
+                                        ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#8B7355' : topicWeight >= 20 ? '#6B5B4F' : '#9ca3af'} ${topicWeight}%, 
                                         hsl(var(--muted)) ${topicWeight}%, 
                                         hsl(var(--muted)) 100%)`
                                     }}
