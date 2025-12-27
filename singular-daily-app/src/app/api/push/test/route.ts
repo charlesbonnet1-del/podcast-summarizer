@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+
+// @ts-ignore - web-push doesn't have type definitions
 import webpush from "web-push";
 
 // Configure web-push with VAPID keys
