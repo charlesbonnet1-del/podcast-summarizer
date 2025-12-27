@@ -2,12 +2,13 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Settings, User, Rss, Hash, Clock, Globe } from "lucide-react";
+import { Settings, User, Rss, Sliders, Clock, Bell } from "lucide-react";
 import { ProfileForm } from "@/components/settings/profile-form";
-import { TopicPicker } from "@/components/settings/topic-picker";
+import SignalMixer from "@/components/settings/signal-mixer";
 import { FormatToggle } from "@/components/settings/format-toggle";
 import { DangerZone } from "@/components/settings/danger-zone";
 import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
+import NotificationSettings from "@/components/settings/notification-settings";
 
 // Force dynamic rendering - requires Supabase auth
 export const dynamic = 'force-dynamic';
@@ -27,15 +28,13 @@ export default async function SettingsPage() {
     .eq("id", user.id)
     .single();
 
-  // Fetch user topics
-  const { data: userTopics } = await supabase
-    .from("user_interests")
-    .select("keyword")
-    .eq("user_id", user.id);
+  // Fetch signal weights
+  const { data: signalWeightsData } = await supabase
+    .from("user_signal_weights")
+    .select("weights")
+    .eq("user_id", user.id)
+    .single();
 
-  const selectedTopicIds = userTopics?.map(t => t.keyword) || [];
-
-  const settings = profile?.settings || {};
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://singular.daily";
 
   return (
@@ -100,24 +99,41 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Topic Picker - Granular Selection */}
+      {/* Signal Mixer - Topic Weights */}
       <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
-              <Hash className="w-5 h-5 text-sand" />
+              <Sliders className="w-5 h-5 text-sand" />
             </div>
             <div>
-              <CardTitle className="text-lg font-display">Topics</CardTitle>
-              <CardDescription>Choose your news categories</CardDescription>
+              <CardTitle className="text-lg font-display">Signal Mixer</CardTitle>
+              <CardDescription>Ajustez l'intensité de chaque thématique</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <TopicPicker 
-            initialTopics={selectedTopicIds}
-            plan={profile?.subscription_status || "free"}
+          <SignalMixer 
+            initialWeights={signalWeightsData?.weights || {}}
           />
+        </CardContent>
+      </Card>
+
+      {/* Notifications */}
+      <Card className="matte-card border-0">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
+              <Bell className="w-5 h-5 text-sand" />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-display">Notifications</CardTitle>
+              <CardDescription>Recevez une alerte quand votre podcast est prêt</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <NotificationSettings />
         </CardContent>
       </Card>
 

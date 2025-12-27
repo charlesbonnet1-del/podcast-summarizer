@@ -52,6 +52,13 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .eq("status", "pending");
 
+  // Fetch signal weights
+  const { data: signalWeightsData } = await supabase
+    .from("user_signal_weights")
+    .select("weights")
+    .eq("user_id", user.id)
+    .single();
+
   return (
     <KernelDashboard
       user={{
@@ -63,6 +70,7 @@ export default async function DashboardPage() {
       topics={interests || []}
       manualContent={manualContent || []}
       pendingCount={pendingCount ?? 0}
+      signalWeights={signalWeightsData?.weights || {}}
     />
   );
 }

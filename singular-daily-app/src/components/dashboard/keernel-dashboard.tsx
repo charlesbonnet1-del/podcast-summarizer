@@ -608,9 +608,9 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
     { id: "energy", label: "Énergie", shortLabel: "Énergie" },
     { id: "health", label: "Santé", shortLabel: "Santé" },
     { id: "space", label: "Espace", shortLabel: "Espace" },
-    { id: "cinema", label: "Cinéma", shortLabel: "Ciné" },
-    { id: "gaming", label: "Gaming", shortLabel: "Gaming" },
-    { id: "lifestyle", label: "Lifestyle", shortLabel: "Life" },
+    { id: "info", label: "Guerre Info", shortLabel: "Info" },
+    { id: "attention", label: "Attention", shortLabel: "Attention" },
+    { id: "persuasion", label: "Persuasion", shortLabel: "Persua" },
   ];
 
   const topTopics = ALL_TOPICS
