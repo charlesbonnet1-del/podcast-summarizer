@@ -1,4 +1,0 @@
--e User-agent: *
-Allow: /
-
-Sitemap: https://singular.daily/sitemap.xml
