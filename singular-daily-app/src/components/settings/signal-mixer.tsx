@@ -331,14 +331,17 @@ export default function SignalMixer({ initialWeights = {} }: SignalMixerProps) {
         </div>
       </div>
 
-      {/* Save button */}
+      {/* Spacer for fixed button on mobile */}
+      <div className="h-20 sm:h-4" />
+
+      {/* Save button - fixed on mobile */}
       <AnimatePresence>
         {hasChanges && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="sticky bottom-4"
+            className="fixed sm:sticky bottom-20 sm:bottom-4 left-0 right-0 sm:left-auto sm:right-auto px-4 sm:px-0 z-20"
           >
             <button
               onClick={saveWeights}

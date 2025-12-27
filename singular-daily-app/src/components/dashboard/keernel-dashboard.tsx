@@ -922,7 +922,7 @@ function SignalMixerModal({
           </motion.button>
 
           {/* Content */}
-          <div className="relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto px-4 py-8">
+          <div className="relative z-10 w-full max-w-lg max-h-[70vh] sm:max-h-[85vh] overflow-y-auto px-4 pt-8 pb-24 sm:pb-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1067,24 +1067,29 @@ function SignalMixerModal({
                 </p>
               </div>
 
-              {/* Save button */}
-              <motion.button
-                onClick={saveWeights}
-                disabled={saving}
-                className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity shadow-lg disabled:opacity-50"
-                whileTap={{ scale: 0.98 }}
-              >
-                {saving ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Sauvegarde...
-                  </span>
-                ) : (
-                  "Sauvegarder"
-                )}
-              </motion.button>
+              {/* Spacer for fixed button on mobile */}
+              <div className="h-16 sm:hidden" />
             </motion.div>
           </div>
+
+          {/* Save button - fixed on mobile */}
+          <motion.button
+            onClick={saveWeights}
+            disabled={saving}
+            className="fixed sm:relative bottom-20 sm:bottom-auto left-4 right-4 sm:left-auto sm:right-auto z-20 w-[calc(100%-2rem)] sm:w-full max-w-lg mx-auto py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity shadow-lg disabled:opacity-50"
+            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            {saving ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Sauvegarde...
+              </span>
+            ) : (
+              "Sauvegarder"
+            )}
+          </motion.button>
         </motion.div>
       )}
     </AnimatePresence>
