@@ -3,16 +3,41 @@ Keernel Playlist Selector - "14+1" Algorithm
 
 Selects 15 segments from a daily pool of 30 based on user signal weights.
 Includes a "wildcard" segment from ignored topics to break filter bubbles.
+
+Scoring Formula: Final_Score = (Relevance * Weight) * (1 / (1 + Age_in_days))
+- Ensures fresh content beats stale content at equal relevance
+- Respects user topic preferences
+- Maintains content quality standards
 """
 
 import random
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import structlog
 from db import supabase
+from content_scorer import (
+    calculate_final_score,
+    calculate_age_decay,
+    filter_expired_content,
+    MAX_CACHE_AGE_DAYS
+)
 
 log = structlog.get_logger()
+
+# Updated topic list with Influence vertical
+DEFAULT_TOPICS = [
+    # Tech
+    "ia", "quantum", "robotics",
+    # Monde
+    "asia", "regulation", "resources",
+    # Économie
+    "crypto", "macro", "stocks",
+    # Science
+    "energy", "health", "space",
+    # Influence (replaces Culture)
+    "info", "attention", "persuasion"
+]
 
 
 def get_user_signal_weights(user_id: str) -> dict[str, int]:
@@ -34,28 +59,32 @@ def get_user_signal_weights(user_id: str) -> dict[str, int]:
         log.warning(f"Could not fetch user weights: {e}")
     
     # Default weights
-    default_topics = [
-        "ia", "quantum", "robotics",
-        "asia", "regulation", "resources",
-        "crypto", "macro", "stocks",
-        "energy", "health", "space",
-        "cinema", "gaming", "lifestyle"
-    ]
-    return {t: 50 for t in default_topics}
+    return {t: 50 for t in DEFAULT_TOPICS}
 
 
-def get_daily_segment_pool(target_date: date) -> list[dict]:
+def get_daily_segment_pool(
+    target_date: date,
+    include_cache: bool = True,
+    max_cache_age: int = MAX_CACHE_AGE_DAYS
+) -> list[dict]:
     """
     Retrieve all available segments for a given date.
-    Each segment has: id, topic_id, audio_url, duration, relevance_score.
+    
+    If include_cache=True, also fetches valid cached segments from previous
+    days (up to max_cache_age) for topics that have no fresh content.
+    
+    Each segment has: id, topic_id, audio_url, duration, relevance_score, created_at.
     """
     try:
+        # Get segments for target date
         result = supabase.table("segment_cache") \
-            .select("id, content_hash, topic_slug, audio_url, audio_duration, relevance_score, source_title") \
+            .select("id, content_hash, topic_slug, audio_url, audio_duration, relevance_score, source_title, created_at") \
             .eq("target_date", target_date.isoformat()) \
             .execute()
         
         segments = []
+        topics_with_content = set()
+        
         for row in result.data or []:
             segments.append({
                 "id": row["id"],
@@ -64,10 +93,52 @@ def get_daily_segment_pool(target_date: date) -> list[dict]:
                 "audio_url": row["audio_url"],
                 "duration": row["audio_duration"] or 60,
                 "relevance_score": row.get("relevance_score", 0.5),
-                "title": row.get("source_title", "")
+                "title": row.get("source_title", ""),
+                "created_at": row.get("created_at", datetime.now().isoformat())
             })
+            topics_with_content.add(row["topic_slug"])
         
-        log.info(f"📦 Segment pool: {len(segments)} segments for {target_date}")
+        log.info(f"📦 Fresh segments: {len(segments)} for {target_date}")
+        
+        # If include_cache, fetch cached content for topics without fresh content
+        if include_cache:
+            missing_topics = set(DEFAULT_TOPICS) - topics_with_content
+            
+            if missing_topics:
+                log.info(f"🔍 Topics without fresh content: {missing_topics}")
+                
+                cutoff_date = (target_date - timedelta(days=max_cache_age)).isoformat()
+                
+                for topic in missing_topics:
+                    cached_result = supabase.table("segment_cache") \
+                        .select("id, content_hash, topic_slug, audio_url, audio_duration, relevance_score, source_title, created_at") \
+                        .eq("topic_slug", topic) \
+                        .gte("created_at", cutoff_date) \
+                        .lt("target_date", target_date.isoformat()) \
+                        .order("relevance_score", desc=True) \
+                        .limit(3) \
+                        .execute()
+                    
+                    for row in cached_result.data or []:
+                        segments.append({
+                            "id": row["id"],
+                            "content_hash": row["content_hash"],
+                            "topic_id": row["topic_slug"],
+                            "audio_url": row["audio_url"],
+                            "duration": row["audio_duration"] or 60,
+                            "relevance_score": row.get("relevance_score", 0.5),
+                            "title": row.get("source_title", ""),
+                            "created_at": row.get("created_at"),
+                            "is_cached": True  # Flag for debugging
+                        })
+                    
+                    if cached_result.data:
+                        log.info(f"📦 Added {len(cached_result.data)} cached segments for '{topic}'")
+        
+        # Filter out expired content
+        segments = filter_expired_content(segments, max_cache_age)
+        
+        log.info(f"📦 Total segment pool: {len(segments)} segments")
         return segments
         
     except Exception as e:
@@ -75,22 +146,50 @@ def get_daily_segment_pool(target_date: date) -> list[dict]:
         return []
 
 
-def calculate_weighted_score(segment: dict, user_weights: dict[str, int]) -> float:
+def calculate_weighted_score(
+    segment: dict,
+    user_weights: dict[str, int],
+    reference_date: Optional[date] = None
+) -> float:
     """
-    Calculate final score for a segment based on user weights.
-    Formula: final_score = relevance_score * (user_weight / 100)
-    """
-    topic_id = segment["topic_id"]
-    user_weight = user_weights.get(topic_id, 50)  # Default to 50 if not set
-    relevance = segment.get("relevance_score", 0.5)
+    Calculate final score for a segment with age decay.
     
-    return relevance * (user_weight / 100)
+    Formula: Final_Score = (Relevance * Weight/100) * (1 / (1 + Age_in_days))
+    
+    This ensures:
+    - A news from today at 80% beats a 3-day-old news at 80%
+    - User preferences are respected
+    - Content quality matters
+    """
+    if reference_date is None:
+        reference_date = date.today()
+    
+    topic_id = segment["topic_id"]
+    user_weight = user_weights.get(topic_id, 50)
+    relevance = segment.get("relevance_score", 0.5)
+    created_at = segment.get("created_at", datetime.now().isoformat())
+    
+    # Parse created_at if string
+    if isinstance(created_at, str):
+        try:
+            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+        except:
+            created_at = datetime.now()
+    
+    return calculate_final_score(
+        relevance_score=relevance,
+        user_weight=user_weight,
+        created_at=created_at,
+        reference_date=reference_date
+    )
 
 
 def select_wildcard(segments: list[dict], user_weights: dict[str, int]) -> Optional[dict]:
     """
     Select a wildcard segment from topics the user has set to 0 (ignored).
     Returns the segment with the highest raw relevance_score among ignored topics.
+    
+    Wildcard = "Surprise" segment to break filter bubble.
     """
     # Find topics with weight = 0
     ignored_topics = {topic for topic, weight in user_weights.items() if weight == 0}
@@ -109,7 +208,7 @@ def select_wildcard(segments: list[dict], user_weights: dict[str, int]) -> Optio
         log.info("🎲 No segments available from ignored topics")
         return None
     
-    # Select the one with highest raw relevance
+    # Select the one with highest raw relevance (freshness matters less for surprise)
     wildcard = max(wildcard_candidates, key=lambda s: s.get("relevance_score", 0))
     log.info(f"🎲 Wildcard selected: {wildcard['title'][:50]} (topic: {wildcard['topic_id']}, relevance: {wildcard['relevance_score']:.2f})")
     
@@ -122,13 +221,20 @@ def get_daily_playlist(
     target_count: int = 15
 ) -> list[dict]:
     """
-    Main algorithm: Select optimal playlist using "14+1" logic.
+    Main algorithm: Select optimal playlist using "14+1" logic with age decay.
     
-    1. Calculate weighted scores for all segments
-    2. Select top 14 by weighted score
-    3. Add wildcard from ignored topics (if any)
-    4. Insert wildcard at random position (5-12)
-    5. Return ordered list of 15 segments
+    1. Fetch segments (fresh + valid cache)
+    2. Calculate weighted scores with age decay
+    3. Select top 14 by weighted score
+    4. Add wildcard from ignored topics (if any)
+    5. Insert wildcard at random position (5-12)
+    6. Return ordered list of 15 segments
+    
+    Age Decay Formula: Final_Score = (Relevance * Weight) * (1 / (1 + Age_days))
+    - Today's news (age=0): 100% score
+    - Yesterday (age=1): 50% score
+    - 3 days ago: 25% score
+    - 7 days ago: 12.5% score (then expires)
     
     Args:
         user_id: User's ID for weight lookup
@@ -143,9 +249,9 @@ def get_daily_playlist(
     
     log.info(f"🎯 Generating playlist for user {user_id[:8]}... ({target_date})")
     
-    # 1. Get user weights and segment pool
+    # 1. Get user weights and segment pool (including cache)
     user_weights = get_user_signal_weights(user_id)
-    segments = get_daily_segment_pool(target_date)
+    segments = get_daily_segment_pool(target_date, include_cache=True)
     
     if not segments:
         log.warning("❌ No segments available in pool")
@@ -158,9 +264,21 @@ def get_daily_playlist(
         segments.sort(key=lambda s: s.get("relevance_score", 0), reverse=True)
         return segments[:target_count]
     
-    # 2. Calculate weighted scores
+    # 2. Calculate weighted scores WITH AGE DECAY
     for segment in segments:
-        segment["final_score"] = calculate_weighted_score(segment, user_weights)
+        segment["final_score"] = calculate_weighted_score(segment, user_weights, target_date)
+        
+        # Log score breakdown for debugging
+        age_decay = calculate_age_decay(
+            segment.get("created_at", datetime.now().isoformat()),
+            target_date
+        )
+        log.debug(
+            f"Score: {segment['title'][:30]} = "
+            f"{segment.get('relevance_score', 0.5):.2f} * "
+            f"{user_weights.get(segment['topic_id'], 50)/100:.2f} * "
+            f"{age_decay:.2f} = {segment['final_score']:.3f}"
+        )
     
     # 3. Sort by final_score (descending)
     segments.sort(key=lambda s: s["final_score"], reverse=True)
@@ -194,11 +312,16 @@ def get_daily_playlist(
     
     # Log topic distribution
     topic_counts = {}
+    cached_count = 0
     for s in playlist:
         topic = s["topic_id"]
         topic_counts[topic] = topic_counts.get(topic, 0) + 1
+        if s.get("is_cached"):
+            cached_count += 1
     
     log.info(f"📊 Topic distribution: {dict(sorted(topic_counts.items(), key=lambda x: -x[1]))}")
+    if cached_count > 0:
+        log.info(f"📦 Includes {cached_count} segments from cache")
     
     return playlist
 
