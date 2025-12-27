@@ -592,31 +592,21 @@ function MagicBar() {
 
 function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
   const [showMixer, setShowMixer] = useState(false);
-  const router = useRouter();
 
-  // Get top 5 topics by weight for display
-  const ALL_TOPICS = [
-    { id: "ia", label: "IA", shortLabel: "IA" },
-    { id: "quantum", label: "Quantum", shortLabel: "Quantum" },
-    { id: "robotics", label: "Robotique", shortLabel: "Robot" },
-    { id: "asia", label: "Asie", shortLabel: "Asie" },
-    { id: "regulation", label: "Régulation", shortLabel: "Régul" },
-    { id: "resources", label: "Ressources", shortLabel: "Ress" },
-    { id: "crypto", label: "Crypto", shortLabel: "Crypto" },
-    { id: "macro", label: "Macro", shortLabel: "Macro" },
-    { id: "stocks", label: "Bourse", shortLabel: "Bourse" },
-    { id: "energy", label: "Énergie", shortLabel: "Énergie" },
-    { id: "health", label: "Santé", shortLabel: "Santé" },
-    { id: "space", label: "Espace", shortLabel: "Espace" },
-    { id: "info", label: "Guerre Info", shortLabel: "Info" },
-    { id: "attention", label: "Attention", shortLabel: "Attention" },
-    { id: "persuasion", label: "Persuasion", shortLabel: "Persua" },
+  // Calculate average weight per vertical
+  const VERTICALS = [
+    { id: "tech", label: "Tech", topics: ["ia", "quantum", "robotics"] },
+    { id: "monde", label: "Monde", topics: ["asia", "regulation", "resources"] },
+    { id: "economie", label: "Économie", topics: ["crypto", "macro", "stocks"] },
+    { id: "science", label: "Science", topics: ["energy", "health", "space"] },
+    { id: "influence", label: "Influence", topics: ["info", "attention", "persuasion"] },
   ];
 
-  const topTopics = ALL_TOPICS
-    .map(t => ({ ...t, weight: weights[t.id] ?? 50 }))
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 5);
+  const verticalWeights = VERTICALS.map(v => {
+    const topicWeights = v.topics.map(t => weights[t] ?? 50);
+    const avg = Math.round(topicWeights.reduce((a, b) => a + b, 0) / topicWeights.length);
+    return { ...v, weight: avg };
+  });
 
   // Radar chart calculations
   const size = 180;
@@ -633,11 +623,11 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
     };
   };
 
-  const dataPoints = topTopics.map((topic, i) => getPoint(i, topic.weight));
+  const dataPoints = verticalWeights.map((v, i) => getPoint(i, v.weight));
   const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
 
   const labelRadius = maxRadius + 25;
-  const labelPositions = topTopics.map((_, i) => {
+  const labelPositions = verticalWeights.map((_, i) => {
     const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2;
     return {
       x: centerX + labelRadius * Math.cos(angle),
@@ -667,14 +657,14 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
                   points={points}
                   fill="none"
                   stroke="currentColor"
-                  strokeOpacity={0.1}
+                  strokeOpacity={0.08}
                   strokeWidth={1}
                 />
               );
             })}
 
             {/* Axis lines */}
-            {topTopics.map((_, i) => {
+            {verticalWeights.map((_, i) => {
               const endPoint = getPoint(i, 100);
               return (
                 <line
@@ -684,7 +674,7 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
                   x2={endPoint.x}
                   y2={endPoint.y}
                   stroke="currentColor"
-                  strokeOpacity={0.1}
+                  strokeOpacity={0.08}
                   strokeWidth={1}
                 />
               );
@@ -720,11 +710,11 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
           </svg>
 
           {/* Labels */}
-          {topTopics.map((topic, i) => {
+          {verticalWeights.map((vertical, i) => {
             const pos = labelPositions[i];
             return (
               <motion.div
-                key={topic.id}
+                key={vertical.id}
                 className="absolute pointer-events-none"
                 style={{ 
                   left: pos.x, 
@@ -737,10 +727,10 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
               >
                 <div className="flex flex-col items-center">
                   <span className="text-[10px] font-display font-medium text-foreground whitespace-nowrap">
-                    {topic.shortLabel}
+                    {vertical.label}
                   </span>
                   <span className="text-[9px] text-[#C5B358] font-mono">
-                    {topic.weight}%
+                    {vertical.weight}%
                   </span>
                 </div>
               </motion.div>
@@ -748,12 +738,10 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
           })}
         </div>
 
-        {/* Hover overlay */}
+        {/* Hover: + button in center */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="px-3 py-1.5 rounded-full bg-charcoal/80 dark:bg-cream/80 backdrop-blur-sm">
-            <span className="text-xs font-display text-cream dark:text-charcoal">
-              Configurer
-            </span>
+          <div className="w-10 h-10 rounded-full bg-[#C5B358] flex items-center justify-center shadow-lg">
+            <Plus className="w-5 h-5 text-white" />
           </div>
         </div>
       </motion.button>
