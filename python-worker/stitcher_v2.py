@@ -2561,7 +2561,9 @@ def assemble_lego_podcast(
     
     # 5. CREATE EPISODE
     try:
-        title = f"Keernel {format_type.title()} - {target_date.strftime('%d %B %Y')}"
+        # V13: New title format: [Express/Deep Dive] de [PRENOM] du [DATE]
+        format_display = "Express" if format_type == "flash" else "Deep Dive"
+        title = f"{format_display} de {first_name} du {target_date.strftime('%d %B %Y')}"
         
         episode = supabase.table("episodes").insert({
             "user_id": user_id,
@@ -2570,7 +2572,7 @@ def assemble_lego_podcast(
             "audio_duration": total_duration,
             "sources_data": sources_data,
             "chapters": chapters,  # V12: Add chapters for player navigation
-            "summary_text": f"Keernel {format_type} avec {len(sources_data)} sources"
+            "summary_text": f"Keernel {format_display} avec {len(sources_data)} sources"
         }).execute()
         
         log.info(f"📚 Episode has {len(chapters)} chapters")

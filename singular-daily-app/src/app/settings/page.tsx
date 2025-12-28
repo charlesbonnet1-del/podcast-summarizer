@@ -74,12 +74,11 @@ export default async function SettingsPage() {
             lastName={profile?.last_name || ""}
             memberSince={profile?.created_at}
             plan={profile?.subscription_status || "free"}
-            includeInternational={profile?.include_international || false}
           />
         </CardContent>
       </Card>
 
-      {/* Format Toggle - Flash / Digest */}
+      {/* Format Toggle - Express / Deep Dive */}
       <Card className="matte-card border-0">
         <CardHeader>
           <div className="flex items-center gap-3">

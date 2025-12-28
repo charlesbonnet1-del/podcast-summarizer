@@ -52,7 +52,7 @@ export function FormatToggle({ initialFormat = "deepdive", onFormatChange }: For
 
       if (error) throw error;
 
-      toast.success(`Format ${newFormat === "flash" ? "Flash ⚡" : "Deep Dive 🧭"} sélectionné`);
+      toast.success(`Format ${newFormat === "flash" ? "Express ⚡" : "Deep Dive 🧭"} sélectionné`);
     } catch (error) {
       console.error("Failed to save format:", error);
       toast.error("Erreur lors de la sauvegarde");
@@ -64,7 +64,7 @@ export function FormatToggle({ initialFormat = "deepdive", onFormatChange }: For
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        {/* Flash Option */}
+        {/* Express Option (formerly Flash) */}
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -95,7 +95,7 @@ export function FormatToggle({ initialFormat = "deepdive", onFormatChange }: For
               }`} />
             </div>
             <div>
-              <div className="font-semibold text-lg">Flash</div>
+              <div className="font-semibold text-lg">Express</div>
               <div className="text-2xl font-bold text-[#C5B358]">~4 min</div>
             </div>
           </div>

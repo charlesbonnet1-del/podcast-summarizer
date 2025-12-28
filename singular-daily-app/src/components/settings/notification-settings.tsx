@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, BellOff, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Bell, BellOff, Loader2, CheckCircle, AlertCircle, Info } from "lucide-react";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { toast } from "sonner";
 
@@ -46,18 +46,21 @@ export default function NotificationSettings() {
     }
   };
 
-  // Not supported
+  // Not supported - show helpful message
   if (!isSupported) {
     return (
       <div className="p-4 rounded-xl bg-card border border-border/50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-            <BellOff className="w-5 h-5 text-muted-foreground" />
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+            <Info className="w-5 h-5 text-amber-500" />
           </div>
           <div>
             <p className="font-display font-medium">Notifications Push</p>
-            <p className="text-sm text-muted-foreground">
-              Non supporté par ce navigateur
+            <p className="text-sm text-muted-foreground mt-1">
+              Les notifications push nécessitent un navigateur récent (Chrome, Firefox, Safari 16+) et une connexion HTTPS.
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              💡 Essayez d'ouvrir Keernel dans Chrome ou Firefox pour activer cette fonctionnalité.
             </p>
           </div>
         </div>
@@ -69,14 +72,17 @@ export default function NotificationSettings() {
   if (permission === 'denied') {
     return (
       <div className="p-4 rounded-xl bg-card border border-border/50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
             <AlertCircle className="w-5 h-5 text-red-500" />
           </div>
           <div>
             <p className="font-display font-medium">Notifications bloquées</p>
-            <p className="text-sm text-muted-foreground">
-              Autorisez les notifications dans les paramètres de votre navigateur
+            <p className="text-sm text-muted-foreground mt-1">
+              Vous avez bloqué les notifications pour ce site.
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              💡 Pour les réactiver, cliquez sur l'icône 🔒 dans la barre d'adresse, puis autorisez les notifications.
             </p>
           </div>
         </div>

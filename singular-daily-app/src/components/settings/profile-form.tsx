@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Check, Globe } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 
 interface ProfileFormProps {
   email: string;
@@ -14,7 +14,6 @@ interface ProfileFormProps {
   lastName: string;
   memberSince?: string;
   plan: string;
-  includeInternational?: boolean;
 }
 
 export function ProfileForm({ 
@@ -22,19 +21,16 @@ export function ProfileForm({
   firstName: initialFirstName, 
   lastName: initialLastName,
   memberSince,
-  plan,
-  includeInternational: initialInternational = false
+  plan
 }: ProfileFormProps) {
   const [firstName, setFirstName] = useState(initialFirstName);
   const [lastName, setLastName] = useState(initialLastName);
-  const [includeInternational, setIncludeInternational] = useState(initialInternational);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const hasChanges = 
     firstName !== initialFirstName || 
-    lastName !== initialLastName ||
-    includeInternational !== initialInternational;
+    lastName !== initialLastName;
 
   const handleSave = async () => {
     setSaving(true);
@@ -50,8 +46,7 @@ export function ProfileForm({
         .from("users")
         .update({
           first_name: firstName.trim() || null,
-          last_name: lastName.trim() || null,
-          include_international: includeInternational
+          last_name: lastName.trim() || null
         })
         .eq("id", user.id);
 
@@ -71,58 +66,28 @@ export function ProfileForm({
       {/* Name fields */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="firstName" className="font-display">First Name</Label>
+          <Label htmlFor="firstName" className="font-display">Prénom</Label>
           <Input
             id="firstName"
-            placeholder="Your first name"
+            placeholder="Votre prénom"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             className="h-11"
           />
           <p className="text-xs text-muted-foreground">
-            Used for your personalized podcast greeting
+            Utilisé pour le titre de votre podcast
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="lastName" className="font-display">Last Name</Label>
+          <Label htmlFor="lastName" className="font-display">Nom</Label>
           <Input
             id="lastName"
-            placeholder="Your last name"
+            placeholder="Votre nom"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
             className="h-11"
           />
         </div>
-      </div>
-
-      {/* International Sources Toggle */}
-      <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-card border border-brass/20 flex items-center justify-center">
-            <Globe className="w-5 h-5 text-sand" />
-          </div>
-          <div>
-            <p className="font-display font-medium">Sources Internationales</p>
-            <p className="text-sm text-muted-foreground">
-              Inclure des actualités internationales
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setIncludeInternational(!includeInternational)}
-          className={`relative w-12 h-6 rounded-full transition-colors ${
-            includeInternational ? 'bg-charcoal dark:bg-cream' : 'bg-muted'
-          }`}
-        >
-          <span
-            className={`absolute top-1 w-4 h-4 rounded-full transition-transform ${
-              includeInternational 
-                ? 'left-7 bg-cream dark:bg-charcoal' 
-                : 'left-1 bg-white dark:bg-gray-400'
-            }`}
-          />
-        </button>
       </div>
 
       {/* Save button */}
@@ -135,15 +100,15 @@ export function ProfileForm({
           {saving ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Saving...
+              Sauvegarde...
             </>
           ) : saved ? (
             <>
               <Check className="w-4 h-4 mr-2" />
-              Saved!
+              Sauvegardé !
             </>
           ) : (
-            "Save Changes"
+            "Sauvegarder"
           )}
         </Button>
       )}
@@ -162,9 +127,9 @@ export function ProfileForm({
         </div>
         {memberSince && (
           <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Member since</span>
+            <span className="text-sm text-muted-foreground">Membre depuis</span>
             <span className="text-sm font-display font-medium">
-              {new Date(memberSince).toLocaleDateString("en-US", {
+              {new Date(memberSince).toLocaleDateString("fr-FR", {
                 month: "long",
                 day: "numeric",
                 year: "numeric"
