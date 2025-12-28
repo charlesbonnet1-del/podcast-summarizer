@@ -901,42 +901,30 @@ function SignalMixerModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-16 pb-28 px-4"
+          className="fixed inset-0 z-50 bg-[#F7EEDD] dark:bg-[#1A1A1A] flex flex-col"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* Backdrop - Sable background */}
-          <motion.div
-            className="absolute inset-0 bg-[#F7EEDD]/98 dark:bg-[#1A1A1A]/98 backdrop-blur-xl"
-            onClick={onClose}
-          />
-
-          {/* Modal Container */}
-          <motion.div
-            className="relative z-10 w-full max-w-lg max-h-full bg-card rounded-2xl shadow-xl border border-border/30 flex flex-col overflow-hidden"
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          >
-            {/* Header - Fixed */}
-            <div className="flex items-center justify-between p-4 border-b border-border/30">
-              <div>
-                <h2 className="font-display text-xl font-bold">Signal Mixer</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Ajustez par verticale, affinez par topic
-                </p>
-              </div>
-              <button
-                onClick={onClose}
-                className="w-10 h-10 rounded-full bg-secondary/80 flex items-center justify-center hover:bg-secondary transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          {/* Header - Fixed at top */}
+          <div className="flex items-center justify-between p-4 pt-6">
+            <div>
+              <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Ajustez par verticale, affinez par topic
+              </p>
             </div>
+            <button
+              onClick={onClose}
+              className="w-10 h-10 rounded-full bg-secondary/60 flex items-center justify-center hover:bg-secondary transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-            {/* Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* Content - Scrollable, with bottom padding for player */}
+          <div className="flex-1 overflow-y-auto px-4 pb-36">
+            <div className="max-w-lg mx-auto space-y-3">
               {/* Verticals */}
               {VERTICALS.map((vertical) => {
                 const verticalWeight = getVerticalWeight(vertical.id);
@@ -946,7 +934,7 @@ function SignalMixerModal({
                 return (
                   <motion.div
                     key={vertical.id}
-                    className="rounded-xl bg-secondary/40 border border-border/30 overflow-hidden"
+                    className="rounded-xl bg-[#F0E6D3] dark:bg-[#252525] border border-[#E5D9C3] dark:border-[#333] overflow-hidden"
                     layout
                   >
                     {/* Vertical Header with Slider */}
@@ -977,7 +965,7 @@ function SignalMixerModal({
                         step="10"
                         value={verticalWeight}
                         onChange={(e) => updateVerticalWeight(vertical.id, parseInt(e.target.value))}
-                        className="w-full h-2 rounded-full appearance-none cursor-pointer bg-muted
+                        className="w-full h-2 rounded-full appearance-none cursor-pointer bg-[#E5D9C3] dark:bg-[#333]
                           [&::-webkit-slider-thumb]:appearance-none
                           [&::-webkit-slider-thumb]:w-5
                           [&::-webkit-slider-thumb]:h-5
@@ -991,8 +979,8 @@ function SignalMixerModal({
                           background: `linear-gradient(to right, 
                             ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#8B7355' : verticalWeight >= 20 ? '#6B5B4F' : '#9ca3af'} 0%, 
                             ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#8B7355' : verticalWeight >= 20 ? '#6B5B4F' : '#9ca3af'} ${verticalWeight}%, 
-                            hsl(var(--muted)) ${verticalWeight}%, 
-                            hsl(var(--muted)) 100%)`
+                            #E5D9C3 ${verticalWeight}%, 
+                            #E5D9C3 100%)`
                         }}
                       />
                     </div>
@@ -1005,9 +993,9 @@ function SignalMixerModal({
                           animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2 }}
-                          className="border-t border-border/30"
+                          className="border-t border-[#E5D9C3] dark:border-[#333]"
                         >
-                          <div className="p-3 space-y-2 bg-secondary/30">
+                          <div className="p-3 space-y-2 bg-[#EBE1CF] dark:bg-[#222]">
                             {vertical.topics.map((topic) => {
                               const topicWeight = weights[topic.id] ?? 50;
                               const topicSignal = getSignalLabel(topicWeight);
@@ -1028,7 +1016,7 @@ function SignalMixerModal({
                                     step="10"
                                     value={topicWeight}
                                     onChange={(e) => updateTopicWeight(topic.id, parseInt(e.target.value))}
-                                    className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-muted
+                                    className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-[#E5D9C3] dark:bg-[#333]
                                       [&::-webkit-slider-thumb]:appearance-none
                                       [&::-webkit-slider-thumb]:w-4
                                       [&::-webkit-slider-thumb]:h-4
@@ -1042,8 +1030,8 @@ function SignalMixerModal({
                                       background: `linear-gradient(to right, 
                                         ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#8B7355' : topicWeight >= 20 ? '#6B5B4F' : '#9ca3af'} 0%, 
                                         ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#8B7355' : topicWeight >= 20 ? '#6B5B4F' : '#9ca3af'} ${topicWeight}%, 
-                                        hsl(var(--muted)) ${topicWeight}%, 
-                                        hsl(var(--muted)) 100%)`
+                                        #E5D9C3 ${topicWeight}%, 
+                                        #E5D9C3 100%)`
                                     }}
                                   />
                                   
@@ -1067,14 +1055,12 @@ function SignalMixerModal({
                   <span className="text-[#C5B358] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle
                 </p>
               </div>
-            </div>
 
-            {/* Footer - Fixed Save Button */}
-            <div className="p-4 border-t border-border/30 bg-card">
+              {/* Save Button - Inside scroll area, above player */}
               <motion.button
                 onClick={saveWeights}
                 disabled={saving}
-                className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity disabled:opacity-50 mt-4"
                 whileTap={{ scale: 0.98 }}
               >
                 {saving ? (
@@ -1087,7 +1073,7 @@ function SignalMixerModal({
                 )}
               </motion.button>
             </div>
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
