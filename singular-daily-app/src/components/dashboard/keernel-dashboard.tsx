@@ -901,26 +901,26 @@ function SignalMixerModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-start justify-center pt-16 pb-28 px-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* Backdrop */}
+          {/* Backdrop - Sable background */}
           <motion.div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#F7EEDD]/98 dark:bg-[#1A1A1A]/98 backdrop-blur-xl"
             onClick={onClose}
           />
 
           {/* Modal Container */}
           <motion.div
-            className="relative z-10 w-full max-w-lg max-h-[85vh] bg-card rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden"
+            className="relative z-10 w-full max-w-lg max-h-full bg-card rounded-2xl shadow-xl border border-border/30 flex flex-col overflow-hidden"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
           >
             {/* Header - Fixed */}
-            <div className="flex items-center justify-between p-4 border-b border-border/50">
+            <div className="flex items-center justify-between p-4 border-b border-border/30">
               <div>
                 <h2 className="font-display text-xl font-bold">Signal Mixer</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -1070,7 +1070,7 @@ function SignalMixerModal({
             </div>
 
             {/* Footer - Fixed Save Button */}
-            <div className="p-4 border-t border-border/50 bg-card">
+            <div className="p-4 border-t border-border/30 bg-card">
               <motion.button
                 onClick={saveWeights}
                 disabled={saving}
