@@ -243,6 +243,8 @@ def generate_on_demand(user_id: str, format_type: str = None) -> dict | None:
     Génère un épisode à la demande (bypass phantom check).
     Appelé quand l'utilisateur clique sur "Générer maintenant".
     
+    V12 FIX: Check content_queue before generating, fetch if needed
+    
     Args:
         user_id: User ID
         format_type: Override format (flash/digest)
@@ -266,6 +268,36 @@ def generate_on_demand(user_id: str, format_type: str = None) -> dict | None:
         format_type, target_duration = get_user_format(user_id)
     else:
         target_duration = FORMAT_DURATIONS.get(format_type, 15)
+    
+    # V12 FIX: Check if we have enough pending content
+    min_articles_needed = 5 if format_type == "flash" else 8
+    try:
+        pending_result = supabase.table("content_queue") \
+            .select("id") \
+            .eq("user_id", user_id) \
+            .eq("status", "pending") \
+            .execute()
+        
+        pending_count = len(pending_result.data) if pending_result.data else 0
+        log.info(f"📋 Pending content check: {pending_count} articles in queue")
+        
+        if pending_count < min_articles_needed:
+            log.warning(f"⚠️ Not enough content ({pending_count} < {min_articles_needed}), running fetcher first...")
+            try:
+                from fetcher import fetch_for_user
+                fetch_count = fetch_for_user(user_id)
+                log.info(f"✅ Fetcher added {fetch_count} articles")
+            except ImportError:
+                log.warning("⚠️ fetcher.fetch_for_user not available, trying run_fetcher")
+                try:
+                    from fetcher import run_fetcher_for_user
+                    run_fetcher_for_user(user_id)
+                except:
+                    log.warning("⚠️ Could not run fetcher, proceeding with available content")
+            except Exception as e:
+                log.warning(f"⚠️ Fetcher failed: {e}, proceeding with available content")
+    except Exception as e:
+        log.warning(f"⚠️ Could not check pending content: {e}")
     
     return assemble_lego_podcast(
         user_id=user_id,

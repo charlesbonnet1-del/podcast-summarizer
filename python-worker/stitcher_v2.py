@@ -118,18 +118,21 @@ SEGMENT_CACHE_DAYS = 7
 REPORT_RETENTION_DAYS = 365
 
 # Format configurations - OPTIMIZED FOR DENSITY
+# V12: Increased words per article for more substantial segments
 FORMAT_CONFIG = {
     "flash": {
         "duration_minutes": 4,
-        "total_words": 900,
-        "max_articles": 7,
-        "words_per_article": 130,
+        "total_words": 1000,           # Target ~4-5 min with segments
+        "max_articles": 7,             # Max articles to select
+        "min_articles": 5,             # MINIMUM articles required
+        "words_per_article": 150,      # ~35-40s per segment
         "style": "ultra-concis et percutant"
     },
     "digest": {
         "duration_minutes": 15,
         "total_words": 2800,
         "max_articles": 12,
+        "min_articles": 8,
         "words_per_article": 240,
         "style": "approfondi et analytique"
     }
@@ -1313,7 +1316,7 @@ def get_or_create_outro() -> Optional[dict]:
 # CONTENT SELECTION - SMART CLUSTERING
 # ============================================
 
-CLUSTERING_PROMPT = """Analyse ces titres d'articles et regroupe ceux qui parlent du MÊME SUJET.
+CLUSTERING_PROMPT = """Analyse ces titres d'articles et regroupe UNIQUEMENT ceux qui parlent du MÊME ÉVÉNEMENT SPÉCIFIQUE.
 
 TITRES:
 {titles}
@@ -1329,13 +1332,16 @@ RÉPONDS EN JSON UNIQUEMENT (pas de texte avant/après):
   ]
 }}
 
-RÈGLES:
+RÈGLES STRICTES:
+- REGROUPER UNIQUEMENT si les articles parlent du MÊME ÉVÉNEMENT (ex: même annonce, même actualité)
+- NE PAS regrouper des articles juste parce qu'ils parlent du même domaine général (ex: "IA" n'est pas un regroupement valide)
 - Un article peut être dans UN SEUL cluster
 - Les articles seuls (pas de doublon) = cluster avec 1 seul indice
-- priority "high" = 3+ articles sur le même sujet (actualité majeure)
-- priority "medium" = 2 articles sur le même sujet
-- priority "low" = article seul
+- priority "high" = 3+ articles sur le MÊME événement spécifique
+- priority "medium" = 2 articles sur le MÊME événement spécifique  
+- priority "low" = article seul (LA MAJORITÉ devrait être "low")
 - Les indices commencent à 0
+- EN CAS DE DOUTE, NE PAS REGROUPER
 
 JSON:"""
 
@@ -1424,9 +1430,15 @@ def cluster_articles_by_theme(items: list[dict]) -> list[dict]:
         return [{"theme": item.get("title", ""), "articles": [item], "priority": "low", "source_count": 1} for item in items]
 
 
-def select_smart_content(user_id: str, max_articles: int) -> list[dict]:
+def select_smart_content(user_id: str, max_articles: int, min_articles: int = 5) -> list[dict]:
     """
     Smart content selection with thematic clustering.
+    
+    V12 CHANGES:
+    - Clustering is LESS aggressive (only groups same EVENT, not same domain)
+    - Guarantees minimum number of CLUSTERS (segments), not just articles
+    - Falls back to diverse selection if not enough clusters
+    
     - Groups similar articles together
     - Prioritizes multi-source topics
     - Returns clusters instead of individual articles
@@ -1445,7 +1457,7 @@ def select_smart_content(user_id: str, max_articles: int) -> list[dict]:
             return []
         
         items = result.data
-        log.info(f"📋 Queue has {len(items)} items")
+        log.info(f"📋 Queue has {len(items)} PENDING items")
         
         # Separate priority vs bing
         priority_items = []
@@ -1458,7 +1470,16 @@ def select_smart_content(user_id: str, max_articles: int) -> list[dict]:
             else:
                 priority_items.append(item)
         
-        log.info(f"📊 Priority: {len(priority_items)}, Bing: {len(bing_items)}")
+        log.info(f"📊 Priority (GSheet/manual): {len(priority_items)}, Bing: {len(bing_items)}")
+        
+        # If very few items, skip clustering and use all
+        if len(items) <= min_articles:
+            log.info(f"⚠️ Only {len(items)} items, using ALL without clustering")
+            for item in items:
+                item["_cluster_theme"] = item.get("title", "")
+                item["_cluster_size"] = 1
+                item["_cluster_priority"] = "high" if "bing" not in (item.get("source") or "").lower() else "low"
+            return items[:max_articles]
         
         # Cluster all items together for theme detection
         all_items = priority_items + bing_items
@@ -1468,22 +1489,32 @@ def select_smart_content(user_id: str, max_articles: int) -> list[dict]:
         priority_order = {"high": 0, "medium": 1, "low": 2}
         clusters.sort(key=lambda c: (priority_order.get(c["priority"], 2), -c["source_count"]))
         
-        # Select clusters until we reach max_articles
+        # V12: Calculate minimum CLUSTERS needed (not articles)
+        # For Flash: we want at least 5-6 distinct segments
+        # For Digest: we want at least 8-10 distinct segments
+        min_clusters = min_articles  # Each cluster = 1 segment
+        
+        # Select clusters until we reach max_articles OR min_clusters
         selected_clusters = []
         total_articles = 0
         
         for cluster in clusters:
             cluster_size = len(cluster["articles"])
             
-            # For multi-source clusters, we might include all articles
-            # For single-source, just 1
+            # For multi-source clusters, include up to 2 articles (not 3)
             if cluster["source_count"] > 1:
-                # Multi-source: include up to 3 articles from same topic
-                articles_to_take = min(cluster_size, 3)
+                articles_to_take = min(cluster_size, 2)
             else:
                 articles_to_take = 1
             
-            if total_articles + articles_to_take <= max_articles + 2:  # Small buffer for rich topics
+            # V12: Keep selecting until we have enough CLUSTERS
+            # Allow going slightly over max_articles to ensure enough segments
+            should_select = (
+                len(selected_clusters) < min_clusters or  # Need more clusters
+                (total_articles + articles_to_take <= max_articles + 2)  # Still under limit
+            )
+            
+            if should_select and len(selected_clusters) < max_articles:  # Hard cap on clusters
                 cluster["selected_articles"] = cluster["articles"][:articles_to_take]
                 selected_clusters.append(cluster)
                 total_articles += articles_to_take
@@ -1493,7 +1524,8 @@ def select_smart_content(user_id: str, max_articles: int) -> list[dict]:
                 else:
                     log.info(f"   ✅ Selected: {cluster['articles'][0].get('title', '')[:40]}...")
             
-            if total_articles >= max_articles:
+            # Stop only when we have enough clusters AND articles
+            if len(selected_clusters) >= min_clusters and total_articles >= max_articles:
                 break
         
         # Flatten selected articles with cluster info
@@ -1506,13 +1538,20 @@ def select_smart_content(user_id: str, max_articles: int) -> list[dict]:
                 selected.append(article)
         
         multi_count = sum(1 for c in selected_clusters if c["source_count"] > 1)
-        log.info(f"✅ FINAL: {len(selected)} articles in {len(selected_clusters)} topics ({multi_count} multi-source)")
+        log.info(f"✅ Clustering result: {len(selected_clusters)} clusters, {len(selected)} articles ({multi_count} multi-source)")
+        
+        # V12: Check if we have enough CLUSTERS (segments)
+        if len(selected_clusters) < min_clusters:
+            log.warning(f"⚠️ Only {len(selected_clusters)} clusters, need at least {min_clusters}")
+            log.warning(f"⚠️ This may result in a shorter podcast")
         
         return selected
         
     except Exception as e:
         log.error(f"Smart content selection failed: {e}")
-        return []
+        # Fallback to diverse selection
+        log.warning(f"⚠️ Falling back to select_diverse_content due to error")
+        return select_diverse_content(user_id, max_articles)
 
 
 def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
@@ -1614,13 +1653,43 @@ def assemble_lego_podcast(
     config = FORMAT_CONFIG.get(format_type, FORMAT_CONFIG["digest"])
     target_minutes = config["duration_minutes"]
     max_articles = config["max_articles"]
+    min_articles = config.get("min_articles", 5)
     
     log.info("=" * 60)
     log.info(f"🎙️ ASSEMBLING PODCAST (Alice & Bob)")
     log.info(f"   Format: {format_type}")
     log.info(f"   Target: {target_minutes} minutes")
     log.info(f"   Max articles: {max_articles}")
+    log.info(f"   Min articles: {min_articles}")
     log.info("=" * 60)
+    
+    # V12 DIAGNOSTIC: Count pending content before selection
+    try:
+        pending_check = supabase.table("content_queue") \
+            .select("id, source, keyword") \
+            .eq("user_id", user_id) \
+            .eq("status", "pending") \
+            .execute()
+        
+        pending_count = len(pending_check.data) if pending_check.data else 0
+        
+        # Count by source
+        source_counts = {}
+        topic_counts = {}
+        for item in (pending_check.data or []):
+            src = item.get("source", "unknown")
+            source_counts[src] = source_counts.get(src, 0) + 1
+            topic = item.get("keyword", "unknown")
+            topic_counts[topic] = topic_counts.get(topic, 0) + 1
+        
+        log.info(f"📊 QUEUE DIAGNOSTIC: {pending_count} pending articles")
+        log.info(f"   By source: {source_counts}")
+        log.info(f"   By topic: {topic_counts}")
+        
+        if pending_count < min_articles:
+            log.warning(f"⚠️ CRITICAL: Only {pending_count} pending articles, need at least {min_articles}!")
+    except Exception as e:
+        log.warning(f"⚠️ Could not run queue diagnostic: {e}")
     
     try:
         user_result = supabase.table("users") \
@@ -1632,12 +1701,16 @@ def assemble_lego_podcast(
     except:
         first_name = "Ami"
     
-    # Use smart clustering selection
-    items = select_smart_content(user_id, max_articles)
+    # V12: Use smart clustering for BOTH formats
+    # The clustering is now less aggressive (only groups same EVENT)
+    min_clusters = config.get("min_articles", 5)
+    items = select_smart_content(user_id, max_articles, min_articles=min_clusters)
     
     if not items:
         log.warning("❌ No content to process")
         return None
+    
+    log.info(f"📦 Selected {len(items)} articles for processing")
     
     target_date = date.today()
     edition = "morning" if datetime.now().hour < 14 else "evening"
@@ -1649,12 +1722,21 @@ def assemble_lego_podcast(
     target_seconds = target_minutes * 60
     
     # Group items by cluster for multi-source processing
+    # For Flash: each article is its own "cluster" (no grouping)
     clusters = {}
     for item in items:
-        cluster_theme = item.get("_cluster_theme", item.get("title", ""))
+        if format_type == "flash":
+            # Flash mode: each article is its own cluster (use URL as unique key)
+            cluster_theme = item.get("url", item.get("title", ""))
+        else:
+            # Digest mode: use clustering
+            cluster_theme = item.get("_cluster_theme", item.get("title", ""))
+        
         if cluster_theme not in clusters:
             clusters[cluster_theme] = []
         clusters[cluster_theme].append(item)
+    
+    log.info(f"📊 Processing {len(clusters)} topics/clusters")
     
     # 1. INTRO (cached per name)
     intro = get_or_create_intro(first_name)

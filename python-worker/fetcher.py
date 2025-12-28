@@ -425,6 +425,111 @@ def run_fetcher(edition: str = "morning"):
              elapsed=round(elapsed, 1))
 
 
+def fetch_for_user(user_id: str, edition: str = None) -> int:
+    """
+    Fetch content for a specific user.
+    Called before on-demand generation to ensure enough content.
+    
+    Returns:
+        Number of articles added
+    """
+    if not edition:
+        edition = "morning" if datetime.now().hour < 14 else "evening"
+    
+    log.info(f"🔄 Fetching content for user {user_id[:8]}...")
+    
+    try:
+        # Get user settings
+        user_result = supabase.table("users") \
+            .select("id, first_name, include_international, selected_verticals") \
+            .eq("id", user_id) \
+            .single() \
+            .execute()
+        
+        if not user_result.data:
+            log.warning(f"User {user_id[:8]} not found")
+            return 0
+        
+        user = user_result.data
+        include_intl = user.get("include_international", False)
+        
+        # Get user's topics
+        interests_result = supabase.table("user_interests") \
+            .select("keyword, display_name, search_keywords") \
+            .eq("user_id", user_id) \
+            .execute()
+        
+        topic_ids = [t["keyword"] for t in (interests_result.data or [])]
+        
+        if not topic_ids:
+            log.warning(f"No topics for user {user_id[:8]}")
+            return 0
+        
+        # Limit to 4 topics
+        topic_ids = topic_ids[:4]
+        
+        articles = []
+        seen_urls = set()
+        
+        # Get existing URLs to avoid duplicates
+        existing = supabase.table("content_queue") \
+            .select("url") \
+            .eq("user_id", user_id) \
+            .eq("status", "pending") \
+            .execute()
+        
+        for item in (existing.data or []):
+            seen_urls.add(item["url"])
+        
+        # Level 2: GSheet RSS
+        gsheet_articles = get_gsheet_sources_for_topics(topic_ids, include_intl)
+        
+        for article in gsheet_articles:
+            if article["url"] not in seen_urls:
+                seen_urls.add(article["url"])
+                articles.append(article)
+        
+        log.info(f"📰 GSheet articles: {len(articles)}")
+        
+        # Level 3: Bing News backup
+        target_articles = len(topic_ids) * 3
+        if len(articles) < target_articles:
+            remaining = target_articles - len(articles)
+            bing_articles = fetch_bing_for_topics(topic_ids, include_intl, max_articles=remaining)
+            
+            for article in bing_articles:
+                if article["url"] not in seen_urls:
+                    seen_urls.add(article["url"])
+                    articles.append(article)
+        
+        log.info(f"📰 Total articles: {len(articles)}")
+        
+        # Add to queue
+        added = 0
+        for article in articles:
+            source_type = article.get("source_type", "unknown")
+            
+            result = add_to_content_queue_auto(
+                user_id=user_id,
+                url=article["url"],
+                title=article["title"],
+                keyword=article.get("topic", "general"),
+                edition=edition,
+                source=source_type,
+                source_country=article.get("source_country", "FR"),
+                vertical_id=article.get("vertical_id")
+            )
+            if result:
+                added += 1
+        
+        log.info(f"✅ Added {added} articles for user {user_id[:8]}")
+        return added
+        
+    except Exception as e:
+        log.error(f"fetch_for_user failed: {e}")
+        return 0
+
+
 def cleanup_old():
     """Remove pending items older than 48h."""
     try:
