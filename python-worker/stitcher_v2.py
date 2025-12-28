@@ -1180,7 +1180,6 @@ def get_or_create_segment(
     
     # 2. Extract digest metadata (for episode_digests)
     digest = extract_article_digest(
-    digest = extract_article_digest(
         title=title,
         content=content,
         source_name=source_name,
