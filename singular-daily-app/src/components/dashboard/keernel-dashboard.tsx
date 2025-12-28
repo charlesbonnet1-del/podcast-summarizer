@@ -901,13 +901,13 @@ function SignalMixerModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[60] bg-[#F7EEDD] dark:bg-[#1A1A1A] overflow-y-auto"
+          className="fixed inset-x-0 top-0 bottom-24 z-[60] bg-[#F7EEDD] dark:bg-[#1A1A1A] flex flex-col"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* Header */}
-          <div className="sticky top-0 z-10 bg-[#F7EEDD] dark:bg-[#1A1A1A] px-4 pt-4 pb-2">
+          {/* Header - Fixed */}
+          <div className="shrink-0 px-4 pt-4 pb-2">
             <div className="max-w-lg mx-auto flex items-start justify-between">
               <div>
                 <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
@@ -924,9 +924,9 @@ function SignalMixerModal({
             </div>
           </div>
 
-          {/* Content */}
-          <div className="px-4 pb-44">
-            <div className="max-w-lg mx-auto space-y-3">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto px-4">
+            <div className="max-w-lg mx-auto space-y-3 pb-4">
               {/* Verticals */}
               {VERTICALS.map((vertical) => {
                 const verticalWeight = getVerticalWeight(vertical.id);
@@ -1057,12 +1057,16 @@ function SignalMixerModal({
                   <span className="text-[#C5B358] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle
                 </p>
               </div>
+            </div>
+          </div>
 
-              {/* Save Button */}
+          {/* Footer - Fixed Save Button */}
+          <div className="shrink-0 px-4 py-3 bg-[#F7EEDD] dark:bg-[#1A1A1A] border-t border-[#E5D9C3] dark:border-[#333]">
+            <div className="max-w-lg mx-auto">
               <motion.button
                 onClick={saveWeights}
                 disabled={saving}
-                className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity disabled:opacity-50 mt-4"
+                className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
                 whileTap={{ scale: 0.98 }}
               >
                 {saving ? (
