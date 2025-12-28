@@ -139,6 +139,134 @@ FORMAT_CONFIG = {
 }
 
 # ============================================
+# TRANSITIONS BETWEEN SEGMENTS (Cached)
+# ============================================
+
+# Map topic/vertical to transition phrases
+# These will be cached as audio files
+TRANSITION_PHRASES = {
+    # Tech
+    "ia": "Passons à l'intelligence artificielle.",
+    "quantum": "Direction l'informatique quantique.",
+    "robotics": "Parlons robotique.",
+    "ai_tech": "Côté tech maintenant.",
+    
+    # World
+    "asia": "Cap sur l'Asie.",
+    "regulation": "Côté régulation.",
+    "resources": "Parlons ressources.",
+    "world": "À l'international maintenant.",
+    
+    # Economy
+    "crypto": "Direction les cryptomonnaies.",
+    "macro": "Côté macroéconomie.",
+    "stocks": "Parlons marchés.",
+    "finance": "L'actualité financière.",
+    
+    # Science
+    "energy": "Côté énergie.",
+    "health": "Parlons santé.",
+    "space": "Direction l'espace.",
+    "science": "L'actualité scientifique.",
+    
+    # Influence
+    "info": "Parlons guerre de l'information.",
+    "attention": "Côté économie de l'attention.",
+    "persuasion": "Les stratégies de persuasion.",
+    "culture": "L'actualité culturelle.",
+    
+    # Generic fallbacks
+    "general": "Passons au sujet suivant.",
+    "default": "Continuons.",
+}
+
+def get_transition_text(topic: str, vertical: str = None) -> str:
+    """Get the transition phrase for a topic or vertical."""
+    # Try topic first
+    if topic and topic.lower() in TRANSITION_PHRASES:
+        return TRANSITION_PHRASES[topic.lower()]
+    
+    # Then vertical
+    if vertical and vertical.lower() in TRANSITION_PHRASES:
+        return TRANSITION_PHRASES[vertical.lower()]
+    
+    # Default
+    return TRANSITION_PHRASES["default"]
+
+
+def get_or_create_transition(topic: str, vertical: str = None) -> Optional[dict]:
+    """
+    Get or create a cached transition audio for a topic.
+    Transitions are short (~2-3 seconds) and cached indefinitely.
+    """
+    transition_text = get_transition_text(topic, vertical)
+    
+    # Create cache key from text (normalized)
+    import hashlib
+    cache_key = hashlib.md5(transition_text.encode()).hexdigest()[:12]
+    
+    # Check cache
+    try:
+        cached = supabase.table("cached_transitions") \
+            .select("audio_url, audio_duration, text") \
+            .eq("cache_key", cache_key) \
+            .single() \
+            .execute()
+        
+        if cached.data and cached.data.get("audio_url"):
+            log.debug(f"✅ Using cached transition: {transition_text}")
+            return {
+                "audio_url": cached.data["audio_url"],
+                "duration": cached.data["audio_duration"],
+                "text": cached.data["text"]
+            }
+    except:
+        pass
+    
+    # Generate new transition
+    log.info(f"🎵 Creating transition: {transition_text}")
+    
+    timestamp = datetime.now().strftime("%H%M%S%f")
+    temp_path = os.path.join(tempfile.gettempdir(), f"transition_{cache_key}_{timestamp}.mp3")
+    
+    # Use Alice's voice for transitions
+    if not generate_tts(transition_text, "alice", temp_path):
+        log.warning(f"⚠️ Failed to generate transition audio")
+        return None
+    
+    duration = get_audio_duration(temp_path)
+    
+    # Upload
+    remote_path = f"transitions/{cache_key}.mp3"
+    audio_url = upload_segment(temp_path, remote_path)
+    
+    if audio_url:
+        # Cache it
+        try:
+            supabase.table("cached_transitions").upsert({
+                "cache_key": cache_key,
+                "text": transition_text,
+                "topic": topic,
+                "audio_url": audio_url,
+                "audio_duration": duration
+            }).execute()
+            log.info(f"✅ Transition cached: {transition_text} ({duration}s)")
+        except Exception as e:
+            log.warning(f"⚠️ Failed to cache transition: {e}")
+    
+    # Clean up temp file
+    try:
+        os.remove(temp_path)
+    except:
+        pass
+    
+    return {
+        "audio_url": audio_url,
+        "duration": duration,
+        "text": transition_text
+    }
+
+# ============================================
 # DIALOGUE PROMPT - ALICE & BOB
 # ============================================
 
@@ -146,7 +274,7 @@ DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {
 
 ## LES HÔTES
 - [A] ALICE = Experte qui mène la conversation, explique clairement
-- [B] BOB = Challenger curieux qui pose des questions pertinentes
+- [B] BOB = Co-animateur qui réagit, complète et questionne parfois
 
 ## FORMAT OBLIGATOIRE
 Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
@@ -155,23 +283,24 @@ Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
 Alice parle et explique.
 
 [B]
-Bob questionne ou réagit.
+Bob réagit, complète ou questionne.
 
 ## RÈGLES STRICTES
 1. ALTERNER [A] et [B] - jamais deux [A] ou deux [B] de suite
 2. ALICE [A] commence TOUJOURS en premier
 3. Minimum 6 répliques (3 de chaque)
 4. Style oral naturel français: "Écoute,", "En fait,", "Tu vois,"
-5. BOB [B] pose des QUESTIONS
+5. ⚠️ BOB [B]: MAXIMUM 50% de ses répliques sont des questions. Il doit aussi AFFIRMER, COMPLÉTER, RÉAGIR (ex: "C'est intéressant parce que...", "Ça rejoint ce qu'on voyait...", "D'ailleurs...")
 6. ZÉRO liste, ZÉRO bullet points
 7. CITE LA SOURCE dans la première réplique: "Selon {source_name}..."
 8. INTERDIT: Ne jamais écrire "Alice répond", "Bob questionne" ou toute didascalie
 9. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une phrase conclusive (résumé ou perspective)
 10. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
+11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être sourcable dans le contenu fourni. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
 
 ## STRUCTURE DU DIALOGUE
 - Début: Alice introduit le sujet en citant la source
-- Milieu: Échange questions/réponses
+- Milieu: Échange naturel où Bob réagit (affirmations ET questions)
 - Fin: Alice CONCLUT avec une synthèse ou une ouverture (ex: "Voilà qui résume bien...", "On suivra ça de près...", "C'est un sujet à surveiller...")
 
 ## SOURCE
@@ -192,7 +321,7 @@ Tu dois CROISER et COMPARER les informations des différentes sources.
 
 ## LES HÔTES
 - [A] ALICE = Experte qui synthétise les différentes sources
-- [B] BOB = Challenger qui compare et questionne les différents angles
+- [B] BOB = Co-animateur qui compare, complète et questionne parfois
 
 ## FORMAT OBLIGATOIRE
 Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
@@ -201,22 +330,24 @@ Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
 Alice synthétise et compare.
 
 [B]
-Bob questionne ou souligne les différences.
+Bob réagit, complète ou souligne les différences.
 
 ## RÈGLES STRICTES
 1. ALTERNER [A] et [B] - jamais deux [A] ou deux [B] de suite
 2. ALICE [A] commence TOUJOURS en premier
 3. Minimum 8 répliques (4 de chaque) - sujet plus riche !
 4. Style oral naturel français
-5. CITE LES DIFFÉRENTES SOURCES: "Selon Le Monde...", "De son côté, Les Échos rapportent..."
-6. COMPARE les points de vue ou informations complémentaires
-7. ZÉRO liste, ZÉRO bullet points
-8. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
-9. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
+5. ⚠️ BOB [B]: MAXIMUM 50% de ses répliques sont des questions. Il doit aussi AFFIRMER, COMPLÉTER, RÉAGIR (ex: "C'est cohérent avec...", "Ce qui est intéressant c'est que...", "D'un autre côté...")
+6. CITE LES DIFFÉRENTES SOURCES: "Selon Le Monde...", "De son côté, Les Échos rapportent..."
+7. COMPARE les points de vue ou informations complémentaires
+8. ZÉRO liste, ZÉRO bullet points
+9. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
+10. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
+11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être présent dans les sources fournies. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
 
 ## STRUCTURE DU DIALOGUE
 - Début: Alice présente le sujet multi-sources
-- Milieu: Échange comparant les différents angles
+- Milieu: Échange naturel comparant les différents angles (Bob réagit ET questionne)
 - Fin: Alice CONCLUT en synthétisant les points de vue (ex: "En résumé, les sources s'accordent sur...", "Ce qui ressort de tout ça...")
 
 ## SOURCES ({source_count} articles sur ce sujet)
@@ -1738,6 +1869,9 @@ def assemble_lego_podcast(
     
     log.info(f"📊 Processing {len(clusters)} topics/clusters")
     
+    # Track chapters for player navigation
+    chapters = []
+    
     # 1. INTRO (cached per name)
     intro = get_or_create_intro(first_name)
     if intro:
@@ -1747,12 +1881,22 @@ def assemble_lego_podcast(
             "audio_path": intro.get("local_path"),
             "duration": intro.get("audio_duration", intro.get("duration", 5))
         })
+        chapters.append({
+            "title": "Introduction",
+            "start_time": 0,
+            "type": "intro"
+        })
         total_duration += intro.get("audio_duration", intro.get("duration", 5))
         log.info(f"✅ Intro: {total_duration}s")
     
     # 2. EPHEMERIDE (generated daily - NOT cached)
     ephemeride = get_or_create_ephemeride()
     if ephemeride:
+        chapters.append({
+            "title": "Éphéméride",
+            "start_time": total_duration,
+            "type": "ephemeride"
+        })
         segments.append({
             "type": "ephemeride",
             "audio_path": ephemeride.get("local_path"),
@@ -1761,10 +1905,32 @@ def assemble_lego_podcast(
         total_duration += ephemeride.get("audio_duration", ephemeride.get("duration", 10))
         log.info(f"✅ Ephemeride: {ephemeride.get('duration', 0)}s | Total: {total_duration}s")
     
-    # 3. NEWS SEGMENTS - Process by cluster
+    # 3. NEWS SEGMENTS - Process by cluster with TRANSITIONS
     cluster_idx = 0
+    previous_topic = None
+    
     for cluster_theme, cluster_items in clusters.items():
         cluster_idx += 1
+        
+        # Get topic for transition
+        current_topic = cluster_items[0].get("keyword", "general")
+        current_vertical = cluster_items[0].get("vertical_id", "general")
+        
+        # Add TRANSITION between segments (skip for first segment)
+        if cluster_idx > 1:
+            transition = get_or_create_transition(current_topic, current_vertical)
+            if transition:
+                segments.append({
+                    "type": "transition",
+                    "audio_url": transition.get("audio_url"),
+                    "duration": transition.get("duration", 2),
+                    "text": transition.get("text", "")
+                })
+                total_duration += transition.get("duration", 2)
+                log.info(f"🎵 Transition: {transition.get('text', '')} ({transition.get('duration', 0)}s)")
+        
+        # Record chapter start time (after transition)
+        chapter_start = total_duration
         
         if len(cluster_items) > 1:
             # Multi-source topic - create enriched segment
@@ -1787,6 +1953,17 @@ def assemble_lego_podcast(
                     "title": f"[MULTI] {cluster_theme}",
                     "url": cluster_items[0]["url"]
                 })
+                
+                # Add chapter
+                chapters.append({
+                    "title": cluster_theme[:60],  # Truncate long titles
+                    "start_time": chapter_start,
+                    "type": "news",
+                    "topic": current_topic,
+                    "url": cluster_items[0]["url"],
+                    "multi_source": True
+                })
+                
                 total_duration += segment.get("duration", 90)
                 
                 # Add all sources
@@ -1831,6 +2008,17 @@ def assemble_lego_podcast(
                     "title": segment.get("title"),
                     "url": segment.get("url")
                 })
+                
+                # Add chapter
+                chapters.append({
+                    "title": (segment.get("title") or item.get("title", ""))[:60],
+                    "start_time": chapter_start,
+                    "type": "news",
+                    "topic": current_topic,
+                    "url": segment.get("url"),
+                    "multi_source": False
+                })
+                
                 total_duration += segment.get("duration", 60)
                 
                 sources_data.append({
@@ -1884,8 +2072,11 @@ def assemble_lego_podcast(
             "audio_url": final_url,
             "audio_duration": total_duration,
             "sources_data": sources_data,
+            "chapters": chapters,  # V12: Add chapters for player navigation
             "summary_text": f"Keernel {format_type} avec {len(sources_data)} sources"
         }).execute()
+        
+        log.info(f"📚 Episode has {len(chapters)} chapters")
         
         # Mark USED articles as processed
         processed_urls = [s["url"] for s in sources_data]
