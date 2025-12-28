@@ -165,6 +165,7 @@ TRANSITION_PHRASES = {
     
     # Science
     "energy": "Côté énergie.",
+    "longevity": "Parlons longévité et biohacking.",
     "health": "Parlons santé.",
     "space": "Direction l'espace.",
     "science": "L'actualité scientifique.",
@@ -179,6 +180,102 @@ TRANSITION_PHRASES = {
     "general": "Passons au sujet suivant.",
     "default": "Continuons.",
 }
+
+# ============================================
+# TOPIC EDITORIAL INTENTIONS
+# ============================================
+# Each topic has a specific editorial angle that guides the dialogue generation
+# These are injected into the prompt to focus the conversation
+
+TOPIC_INTENTIONS = {
+    # Verticale TECH
+    "ia": """⚡ ANGLE ÉDITORIAL (IA):
+Qu'est-ce qui change dans ce que la machine peut faire ou comprendre aujourd'hui ?
+Priorise le SAUT DE CAPACITÉ, qu'il soit technique, philosophique ou marketing.
+Focus sur : nouvelles capabilities, ruptures de paradigme, implications concrètes.""",
+
+    "quantum": """⚡ ANGLE ÉDITORIAL (QUANTUM):
+Où en est-on sur la courbe entre la théorie et l'impact réel ?
+Retiens ce qui illustre un CHANGEMENT D'ÉCHELLE ou de PARADIGME DE CALCUL.
+Focus sur : avancées vers l'utilité pratique, franchissement de seuils, applications émergentes.""",
+
+    "robotics": """⚡ ANGLE ÉDITORIAL (ROBOTIQUE):
+Comment la machine s'interface-t-elle avec le monde physique ?
+Focus sur l'AUTONOMIE et l'évolution de l'INTERACTION HOMME-MACHINE.
+Analyse : nouveaux degrés de liberté, perception, manipulation, collaboration humain-robot.""",
+
+    # Verticale ECONOMICS
+    "crypto": """⚡ ANGLE ÉDITORIAL (CRYPTO):
+Comment la confiance et la valeur se déplacent-elles sur les réseaux ?
+Analyse les INFRASTRUCTURES et les nouveaux MODÈLES DE PROPRIÉTÉ.
+Focus sur : évolutions protocolaires, adoption institutionnelle, nouvelles primitives économiques.""",
+
+    "macro": """⚡ ANGLE ÉDITORIAL (MACRO):
+Quels sont les courants de fond (politiques, monétaires, intellectuels) qui déplacent les PLAQUES TECTONIQUES de l'économie mondiale ?
+Focus sur : tendances structurelles, inflexions de politique, reconfigurations géoéconomiques.""",
+
+    "stocks": """⚡ ANGLE ÉDITORIAL (MARCHÉS):
+Quelles sont les FORCES STRUCTURELLES (et non les bruits de séance) qui modifient la valeur des entreprises et des secteurs ?
+Focus sur : rotations sectorielles, changements de valorisation, signaux de long terme.""",
+
+    # Verticale SCIENCE
+    "energy": """⚡ ANGLE ÉDITORIAL (ÉNERGIE):
+Quelles sont les RUPTURES dans notre capacité à produire, stocker ou optimiser l'énergie ?
+Focus sur l'EFFICIENCE et la SCALABILITÉ.
+Analyse : nouvelles technologies, économie de l'énergie, transition énergétique.""",
+
+    "longevity": """⚡ ANGLE ÉDITORIAL (LONGÉVITÉ & BIOHACKING):
+Quelles avancées (scientifiques ou pratiques) permettent de REPOUSSER LES LIMITES BIOLOGIQUES ou d'OPTIMISER LE POTENTIEL HUMAIN ?
+Focus sur : recherche anti-âge, interventions validées, quantified self, performance humaine.""",
+
+    "health": """⚡ ANGLE ÉDITORIAL (SANTÉ):
+Quelles avancées permettent de repousser les limites biologiques ou d'optimiser le potentiel humain ?
+Focus sur : innovations médicales, recherche clinique, accès aux soins.""",
+
+    "space": """⚡ ANGLE ÉDITORIAL (ESPACE):
+Comment l'espace devient-il une EXTENSION DE NOTRE ÉCONOMIE et de notre champ d'exploration ?
+Focus sur l'INFRASTRUCTURE et la LOGISTIQUE ORBITALE.
+Analyse : lanceurs, constellations, économie spatiale, exploration.""",
+
+    # Verticale WORLD
+    "asia": """⚡ ANGLE ÉDITORIAL (ASIE):
+Quels SIGNAUX (tech, politiques, sociaux) émanant d'Asie redéfinissent l'ÉQUILIBRE MONDIAL ?
+Focus sur : innovations asiatiques, dynamiques géopolitiques, tendances culturelles et économiques.""",
+
+    "regulation": """⚡ ANGLE ÉDITORIAL (RÉGULATION):
+Comment les RÈGLES DU JEU évoluent-elles ?
+Analyse la norme comme une CONTRAINTE ou comme un LEVIER STRATÉGIQUE.
+Focus sur : nouvelles législations, enforcement, arbitrages réglementaires.""",
+
+    "resources": """⚡ ANGLE ÉDITORIAL (RESSOURCES):
+Quelles sont les TENSIONS ou les INNOVATIONS sur les flux de matières premières qui soutiennent le monde moderne ?
+Focus sur : supply chains, métaux critiques, eau, agriculture, géopolitique des ressources.""",
+
+    # Verticale ATTENTION & INFLUENCE
+    "info": """⚡ ANGLE ÉDITORIAL (GUERRE DE L'INFORMATION):
+Comment l'information est-elle utilisée comme une ARME ou un OUTIL DE PUISSANCE ?
+Analyse les MÉTHODES DE DIFFUSION et de CONTRÔLE.
+Focus sur : désinformation, influence operations, contrôle narratif, fact-checking.""",
+
+    "attention": """⚡ ANGLE ÉDITORIAL (MARCHÉS DE L'ATTENTION):
+Comment la CAPTATION DE L'ATTENTION évolue-t-elle avec les plateformes ?
+Focus sur les CHANGEMENTS DE MODÈLES MENTAUX des audiences.
+Analyse : algorithmes, formats, comportements utilisateurs, économie de l'attention.""",
+
+    "persuasion": """⚡ ANGLE ÉDITORIAL (STRATÉGIES DE PERSUASION):
+Quelles sont les logiques (psychologiques, historiques, marketing) qui permettent de FORGER UNE OPINION ou d'ENTRAÎNER UNE ADHÉSION ?
+Focus sur : techniques rhétoriques, nudges, design persuasif, propagande.""",
+}
+
+def get_topic_intention(topic_slug: str) -> str:
+    """Get the editorial intention for a specific topic."""
+    if not topic_slug:
+        return ""
+    
+    intention = TOPIC_INTENTIONS.get(topic_slug.lower(), "")
+    if intention:
+        return f"\n{intention}\n"
+    return ""
 
 def get_transition_text(topic: str, vertical: str = None) -> str:
     """Get the transition phrase for a topic or vertical."""
@@ -271,7 +368,7 @@ def get_or_create_transition(topic: str, vertical: str = None) -> Optional[dict]
 # ============================================
 
 DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
-
+{topic_intention}
 ## LES HÔTES
 - [A] ALICE = Experte qui mène la conversation, explique clairement
 - [B] BOB = Co-animateur qui réagit, complète et questionne parfois
@@ -329,7 +426,7 @@ Ce qui a été couvert:
 
 # Multi-source prompt for topics covered by multiple articles
 DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE ENRICHI de {word_count} mots entre deux hôtes.
-
+{topic_intention}
 ## CONTEXTE SPÉCIAL
 Ce sujet est couvert par PLUSIEURS SOURCES - c'est donc un sujet d'actualité majeur !
 Tu dois CROISER et COMPARER les informations des différentes sources.
@@ -833,6 +930,11 @@ CONTEXTE ENRICHI (sources additionnelles):
                 )
                 log.info(f"📚 Including previous segment context for topic '{topic_slug}'")
         
+        # V12: Get editorial intention for this topic
+        topic_intention = get_topic_intention(topic_slug) if topic_slug else ""
+        if topic_intention:
+            log.info(f"🎯 Applying editorial angle for topic '{topic_slug}'")
+        
         prompt = DIALOGUE_SEGMENT_PROMPT.format(
             word_count=word_count,
             style=style,
@@ -840,7 +942,8 @@ CONTEXTE ENRICHI (sources additionnelles):
             source_name=source_name,
             content=full_content,
             previous_segment_rule=previous_segment_rule,
-            previous_segment_context=previous_segment_context
+            previous_segment_context=previous_segment_context,
+            topic_intention=topic_intention
         )
         
         for attempt in range(3):
@@ -1223,6 +1326,11 @@ def get_or_create_multi_source_segment(
         )
         log.info(f"📚 Including previous segment context for multi-source topic '{topic_slug}'")
     
+    # V12: Get editorial intention for this topic
+    topic_intention = get_topic_intention(topic_slug)
+    if topic_intention:
+        log.info(f"🎯 Applying editorial angle for multi-source topic '{topic_slug}'")
+    
     # 3. Generate dialogue with multi-source prompt
     # More words for richer multi-source content
     word_count = int(format_config["words_per_article"] * 1.5)
@@ -1233,7 +1341,8 @@ def get_or_create_multi_source_segment(
         sources_content=sources_content,
         style=format_config["style"],
         previous_segment_rule=previous_segment_rule,
-        previous_segment_context=previous_segment_context
+        previous_segment_context=previous_segment_context,
+        topic_intention=topic_intention
     )
     
     script = None
