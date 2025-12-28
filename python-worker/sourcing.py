@@ -119,13 +119,15 @@ def get_gsheet_client():
 # GSHEET SOURCE LIBRARY
 # ============================================
 
-# Verticals and their allowed topics
+# V13: Updated verticals and topics (15 topics)
+# ia = super-topic (IA, Robotique, Hardware)
+# deals = M&A, VC, Funding rounds
 VERTICALS_TOPICS = {
+    "TECH": ["ia", "cyber", "deep_tech"],
+    "SCIENCE": ["health", "space", "energy"],
+    "ECONOMICS": ["crypto", "macro", "stocks", "deals"],
     "WORLD": ["asia", "regulation", "resources"],
-    "TECH": ["ia", "quantum", "robotics"],
-    "ECONOMICS": ["crypto", "macro", "stocks"],
-    "SCIENCE": ["energy", "health", "space"],
-    "CULTURE": ["cinema", "gaming", "lifestyle"],
+    "INFLUENCE": ["info", "attention", "persuasion"],
 }
 
 # Flat list of all supported topics

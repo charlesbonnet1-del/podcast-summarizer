@@ -593,11 +593,11 @@ function MagicBar() {
 function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
   const [showMixer, setShowMixer] = useState(false);
 
-  // Calculate average weight per vertical (V13 - 15 Topics)
+  // Calculate average weight per vertical (V13 - 16 Topics)
   const VERTICALS = [
     { id: "tech", label: "Tech", topics: ["ia", "cyber", "deep_tech"] },
     { id: "science", label: "Science", topics: ["health", "space", "energy"] },
-    { id: "economie", label: "Économie", topics: ["crypto", "macro", "stocks"] },
+    { id: "economie", label: "Économie", topics: ["crypto", "macro", "stocks", "deals"] },
     { id: "monde", label: "Monde", topics: ["asia", "regulation", "resources"] },
     { id: "influence", label: "Influence", topics: ["info", "attention", "persuasion"] },
   ];
@@ -788,6 +788,7 @@ const VERTICALS = [
       { id: "crypto", label: "Crypto", description: "Protocoles et décentralisation" },
       { id: "macro", label: "Macro-économie", description: "Banques centrales et tendances" },
       { id: "stocks", label: "Marchés", description: "Valorisations et rotations" },
+      { id: "deals", label: "M&A & VC", description: "Levées et acquisitions" },
     ]
   },
   {
@@ -1127,6 +1128,7 @@ const TOPIC_CATEGORIES = [
       { id: "crypto", label: "Crypto", description: "Protocoles blockchain et redéfinition de la valeur." },
       { id: "macro", label: "Macro-économie", description: "Banques centrales, flux de capitaux et tendances." },
       { id: "stocks", label: "Marchés", description: "Valorisations et rotations sectorielles de fond." },
+      { id: "deals", label: "M&A & VC", description: "Levées de fonds, acquisitions et mouvements de capital." },
     ]
   },
   {

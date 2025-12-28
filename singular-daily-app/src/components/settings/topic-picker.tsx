@@ -49,6 +49,7 @@ const TOPIC_CATEGORIES = [
       { id: "crypto", label: "Crypto", description: "Au cœur de la décentralisation, analysant protocoles, blockchain et la redéfinition de la notion de valeur.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain", "DeFi", "NFT"] },
       { id: "macro", label: "Macro-économie", description: "Analyse des rapports de force géopolitiques et des flux de capitaux pour anticiper les ruptures économiques.", keywords: ["BCE", "Fed", "inflation", "taux", "économie mondiale", "récession"] },
       { id: "stocks", label: "Marchés", description: "Suivi chirurgical des valorisations et rotations sectorielles pour identifier les tendances de fond.", keywords: ["bourse", "actions", "Wall Street", "CAC 40", "earnings", "IPO"] },
+      { id: "deals", label: "M&A & VC", description: "Levées de fonds, acquisitions stratégiques et mouvements de capital qui signalent les tendances.", keywords: ["M&A", "acquisition", "levée de fonds", "VC", "funding", "série A"] },
     ]
   },
   {

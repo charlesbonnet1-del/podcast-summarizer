@@ -37,6 +37,7 @@ const ALL_TOPICS: TopicData[] = [
   { id: "crypto", label: "Crypto", shortLabel: "Crypto" },
   { id: "macro", label: "Macro-économie", shortLabel: "Macro" },
   { id: "stocks", label: "Marchés", shortLabel: "Stocks" },
+  { id: "deals", label: "M&A & VC", shortLabel: "Deals" },
   // V4 WORLD
   { id: "asia", label: "Asie", shortLabel: "Asia" },
   { id: "regulation", label: "Régulation", shortLabel: "Régul" },

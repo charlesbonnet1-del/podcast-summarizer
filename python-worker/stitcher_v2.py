@@ -159,6 +159,7 @@ TRANSITION_PHRASES = {
     "crypto": "Direction les cryptomonnaies.",
     "macro": "Côté macroéconomie.",
     "stocks": "Parlons marchés.",
+    "deals": "Les deals du moment.",
     
     # V4 WORLD
     "asia": "Cap sur l'Asie.",
@@ -176,11 +177,11 @@ TRANSITION_PHRASES = {
 }
 
 # ============================================
-# TOPIC EDITORIAL INTENTIONS (15 TOPICS)
+# TOPIC EDITORIAL INTENTIONS (16 TOPICS)
 # ============================================
 # V1 TECH: ia, cyber, deep_tech
 # V2 SCIENCE: health, space, energy
-# V3 ECONOMICS: crypto, macro, stocks
+# V3 ECONOMICS: crypto, macro, stocks, deals
 # V4 WORLD: asia, regulation, resources
 # V5 INFLUENCE: info, attention, persuasion
 
@@ -229,6 +230,11 @@ Focus sur : tendances structurelles, inflexions de politique, reconfigurations g
     "stocks": """⚡ ANGLE ÉDITORIAL (STOCKS):
 Quelles sont les FORCES STRUCTURELLES (et non les bruits de séance) qui modifient la valeur des entreprises et des secteurs ?
 Focus sur : rotations sectorielles, changements de valorisation, signaux de long terme.""",
+
+    "deals": """⚡ ANGLE ÉDITORIAL (M&A, VC, DEALS):
+Quels MOUVEMENTS DE CAPITAL signalent les stratégies de long terme des acteurs ?
+Analyse les LOGIQUES D'ACQUISITION et les signaux du marché VC.
+Focus sur : levées de fonds, acquisitions stratégiques, consolidations sectorielles, valorisations.""",
 
     # V4 WORLD
     "asia": """⚡ ANGLE ÉDITORIAL (ASIA):
@@ -646,8 +652,19 @@ def generate_tts(text: str, voice_type: str, output_path: str) -> bool:
     """
     Generate TTS with Cartesia (primary) or OpenAI (fallback).
     
+    V13: Applies phonetic sanitization before TTS to ensure proper pronunciation.
+    
     voice_type: "alice" or "bob"
     """
+    # V13: Sanitize text for proper pronunciation
+    from phonetic_sanitizer import sanitize_for_tts
+    sanitized_text = sanitize_for_tts(text)
+    
+    if sanitized_text != text:
+        log.debug("🔤 Text sanitized for TTS", 
+                  original_len=len(text), 
+                  sanitized_len=len(sanitized_text))
+    
     # Map voice type to voice IDs
     if voice_type == "alice":
         cartesia_voice = CARTESIA_VOICE_ALICE
@@ -656,13 +673,13 @@ def generate_tts(text: str, voice_type: str, output_path: str) -> bool:
         cartesia_voice = CARTESIA_VOICE_BOB
         openai_voice = OPENAI_VOICE_BOB
     
-    # Try Cartesia first
-    if cartesia_client and generate_tts_cartesia(text, cartesia_voice, output_path):
+    # Try Cartesia first (with sanitized text)
+    if cartesia_client and generate_tts_cartesia(sanitized_text, cartesia_voice, output_path):
         return True
     
-    # Fallback to OpenAI
+    # Fallback to OpenAI (with sanitized text)
     log.warning(f"⚠️ Falling back to OpenAI TTS")
-    return generate_tts_openai(text, openai_voice, output_path)
+    return generate_tts_openai(sanitized_text, openai_voice, output_path)
 
 
 def get_audio_duration(path: str) -> int:
