@@ -21,25 +21,30 @@ interface TopicData {
 }
 
 // ============================================
-// TOPIC DEFINITIONS
+// TOPIC DEFINITIONS (V13 - 15 Topics)
 // ============================================
 
 const ALL_TOPICS: TopicData[] = [
-  { id: "ia", label: "Intelligence Artificielle", shortLabel: "IA" },
-  { id: "quantum", label: "Quantum Computing", shortLabel: "Quantum" },
-  { id: "robotics", label: "Robotique", shortLabel: "Robot" },
-  { id: "asia", label: "Asie", shortLabel: "Asie" },
-  { id: "regulation", label: "Régulation", shortLabel: "Régul" },
-  { id: "resources", label: "Ressources", shortLabel: "Ress" },
+  // V1 TECH
+  { id: "ia", label: "IA, Robotique & Hardware", shortLabel: "IA" },
+  { id: "cyber", label: "Cybersécurité", shortLabel: "Cyber" },
+  { id: "deep_tech", label: "Deep Tech", shortLabel: "Deep" },
+  // V2 SCIENCE
+  { id: "health", label: "Santé & Longévité", shortLabel: "Santé" },
+  { id: "space", label: "Espace", shortLabel: "Space" },
+  { id: "energy", label: "Énergie", shortLabel: "Energy" },
+  // V3 ECONOMICS
   { id: "crypto", label: "Crypto", shortLabel: "Crypto" },
   { id: "macro", label: "Macro-économie", shortLabel: "Macro" },
-  { id: "stocks", label: "Bourse", shortLabel: "Bourse" },
-  { id: "energy", label: "Énergie", shortLabel: "Énergie" },
-  { id: "health", label: "Santé", shortLabel: "Santé" },
-  { id: "space", label: "Espace", shortLabel: "Espace" },
-  { id: "cinema", label: "Cinéma", shortLabel: "Ciné" },
-  { id: "gaming", label: "Gaming", shortLabel: "Gaming" },
-  { id: "lifestyle", label: "Lifestyle", shortLabel: "Life" },
+  { id: "stocks", label: "Marchés", shortLabel: "Stocks" },
+  // V4 WORLD
+  { id: "asia", label: "Asie", shortLabel: "Asia" },
+  { id: "regulation", label: "Régulation", shortLabel: "Régul" },
+  { id: "resources", label: "Ressources", shortLabel: "Ress" },
+  // V5 INFLUENCE
+  { id: "info", label: "Guerre de l'Information", shortLabel: "Info" },
+  { id: "attention", label: "Marchés de l'Attention", shortLabel: "Attn" },
+  { id: "persuasion", label: "Persuasion", shortLabel: "Persu" },
 ];
 
 // ============================================

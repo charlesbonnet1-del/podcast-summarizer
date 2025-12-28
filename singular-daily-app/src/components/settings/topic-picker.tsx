@@ -8,17 +8,17 @@ import {
   Lock, 
   ChevronDown, 
   Bot,           // Tech 🤖
-  Globe,         // Monde 🌍
-  TrendingUp,    // Économie 📈
+  Globe,         // World 🌍
+  TrendingUp,    // Economics 📈
   FlaskConical,  // Science 🔬
-  Film           // Culture 🎬
+  Radio          // Influence 📡
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 /**
- * V4 Topic structure - Using Lucide icons instead of emojis
- * All icons use text-sand color class for consistency
+ * V13 Topic structure - 15 topics across 5 verticals
+ * Matching backend VALID_TOPICS in stitcher_v2.py
  */
 const TOPIC_CATEGORIES = [
   {
@@ -26,29 +26,9 @@ const TOPIC_CATEGORIES = [
     name: "Tech",
     Icon: Bot,
     topics: [
-      { id: "ia", label: "IA", description: "Suivi de la course vers l'AGI, des infrastructures de calcul aux modèles génératifs qui transforment radicalement chaque strate de la société.", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT", "AGI"] },
-      { id: "quantum", label: "Quantum", description: "Immersion dans l'ingénierie subatomique pour anticiper la prochaine rupture majeure de la puissance de calcul et de la cryptographie.", keywords: ["quantique", "quantum", "qubits", "IBM Quantum"] },
-      { id: "robotics", label: "Robotique", description: "Analyse du déploiement des systèmes autonomes et des humanoïdes, marquant l'intégration finale de l'intelligence artificielle dans le monde physique.", keywords: ["robotique", "robots", "Tesla Bot", "Boston Dynamics", "humanoïdes"] },
-    ]
-  },
-  {
-    id: "world",
-    name: "Monde",
-    Icon: Globe,
-    topics: [
-      { id: "asia", label: "Asie", description: "Veille stratégique sur l'épicentre de l'innovation mondiale, décryptant les dynamiques de la tech chinoise et l'essor des marchés émergents asiatiques.", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie"] },
-      { id: "regulation", label: "Régulation", description: "Analyse des enjeux de souveraineté numérique et des évolutions législatives mondiales qui redéfinissent les frontières du permis et de l'interdit.", keywords: ["régulation", "lois", "RGPD", "antitrust", "gouvernance", "souveraineté"] },
-      { id: "resources", label: "Ressources", description: "Décryptage de la géopolitique des matières premières et des minéraux critiques, piliers invisibles de la transition énergétique et technologique.", keywords: ["pétrole", "gaz", "matières premières", "minerais", "lithium"] },
-    ]
-  },
-  {
-    id: "economics",
-    name: "Économie",
-    Icon: TrendingUp,
-    topics: [
-      { id: "crypto", label: "Crypto", description: "Au cœur de la décentralisation financière, analysant l'évolution des protocoles, de la blockchain et la redéfinition de la notion même de valeur.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain", "DeFi"] },
-      { id: "macro", label: "Macro", description: "Analyse des rapports de force géopolitiques et des flux de capitaux mondiaux pour anticiper les grandes ruptures économiques de demain.", keywords: ["BCE", "Fed", "inflation", "économie mondiale", "géopolitique"] },
-      { id: "stocks", label: "Bourse", description: "Suivi chirurgical des marchés publics et des valorisations d'entreprises pour identifier les tendances de fond de l'économie globale.", keywords: ["CAC 40", "Wall Street", "bourse", "actions", "valorisation"] },
+      { id: "ia", label: "IA, Robotique & Hardware", description: "Suivi de la course vers l'AGI, des infrastructures de calcul aux modèles génératifs et robots qui transforment la société.", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT", "AGI", "robotique", "NVIDIA"] },
+      { id: "cyber", label: "Cybersécurité", description: "Menaces, vulnérabilités zero-day, défenses et incidents de sécurité qui redéfinissent la souveraineté numérique.", keywords: ["cybersécurité", "hacking", "ransomware", "zero-day", "breach", "sécurité"] },
+      { id: "deep_tech", label: "Deep Tech", description: "Immersion dans l'ingénierie quantique, la fusion et les nouveaux matériaux pour anticiper les ruptures de demain.", keywords: ["quantique", "quantum", "fusion", "matériaux", "deep tech", "breakthrough"] },
     ]
   },
   {
@@ -56,19 +36,39 @@ const TOPIC_CATEGORIES = [
     name: "Science",
     Icon: FlaskConical,
     topics: [
-      { id: "energy", label: "Énergie", description: "Veille sur le mix énergétique du futur, de la renaissance nucléaire aux innovations solaires, pour comprendre les enjeux de la puissance mondiale.", keywords: ["énergie", "nucléaire", "renouvelable", "solaire", "climat"] },
-      { id: "health", label: "Santé & Longévité", description: "Exploration des frontières de la biologie et de l'optimisation humaine, de la réparation cellulaire au biohacking, pour étendre la longévité active.", keywords: ["santé", "médecine", "biotech", "longévité", "biohacking", "cellulaire"] },
-      { id: "space", label: "Espace", description: "Décryptage de l'économie orbitale et de l'exploration interstellaire, marquant le passage de l'humanité vers une espèce multi-planétaire.", keywords: ["NASA", "SpaceX", "espace", "Mars", "orbite"] },
+      { id: "health", label: "Santé & Longévité", description: "Exploration des frontières de la biologie, de la réparation cellulaire au biohacking, pour étendre la longévité active.", keywords: ["santé", "médecine", "biotech", "longévité", "anti-âge", "CRISPR", "biohacking"] },
+      { id: "space", label: "Espace", description: "Décryptage de l'économie orbitale et de l'exploration interstellaire vers une humanité multi-planétaire.", keywords: ["NASA", "SpaceX", "espace", "Mars", "satellite", "fusée", "orbite"] },
+      { id: "energy", label: "Énergie", description: "Veille sur le mix énergétique du futur, de la renaissance nucléaire aux innovations de stockage.", keywords: ["énergie", "nucléaire", "renouvelable", "batterie", "solaire", "hydrogène"] },
+    ]
+  },
+  {
+    id: "economics",
+    name: "Économie",
+    Icon: TrendingUp,
+    topics: [
+      { id: "crypto", label: "Crypto", description: "Au cœur de la décentralisation, analysant protocoles, blockchain et la redéfinition de la notion de valeur.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain", "DeFi", "NFT"] },
+      { id: "macro", label: "Macro-économie", description: "Analyse des rapports de force géopolitiques et des flux de capitaux pour anticiper les ruptures économiques.", keywords: ["BCE", "Fed", "inflation", "taux", "économie mondiale", "récession"] },
+      { id: "stocks", label: "Marchés", description: "Suivi chirurgical des valorisations et rotations sectorielles pour identifier les tendances de fond.", keywords: ["bourse", "actions", "Wall Street", "CAC 40", "earnings", "IPO"] },
+    ]
+  },
+  {
+    id: "world",
+    name: "Monde",
+    Icon: Globe,
+    topics: [
+      { id: "asia", label: "Asie", description: "Veille stratégique sur l'épicentre de l'innovation mondiale, de la tech chinoise aux marchés émergents.", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie", "ASEAN"] },
+      { id: "regulation", label: "Régulation", description: "Analyse des enjeux de souveraineté numérique et des évolutions législatives qui redéfinissent les règles.", keywords: ["régulation", "lois", "RGPD", "antitrust", "compliance", "UE"] },
+      { id: "resources", label: "Ressources", description: "Décryptage de la géopolitique des matières premières et minéraux critiques de la transition.", keywords: ["pétrole", "lithium", "terres rares", "minerais", "supply chain"] },
     ]
   },
   {
     id: "influence",
     name: "Influence",
-    Icon: Film,
+    Icon: Radio,
     topics: [
-      { id: "info", label: "Guerre de l'Info", description: "Décryptage des campagnes d'influence étatiques, de la propagande automatisée et des cyber-opérations redéfinissant la souveraineté numérique mondiale.", keywords: ["propagande", "désinformation", "cyber", "influence", "guerre informationnelle"] },
-      { id: "attention", label: "Marchés de l'Attention", description: "Analyse des algorithmes de recommandation et de l'économie des plateformes pour comprendre les mécanismes de capture et de monétisation de l'attention humaine.", keywords: ["algorithme", "attention", "plateformes", "engagement", "recommandation"] },
-      { id: "persuasion", label: "Stratégies de Persuasion", description: "Étude des sciences comportementales et du design cognitif pour maîtriser les leviers de décision et le leadership d'opinion à l'échelle mondiale.", keywords: ["persuasion", "comportement", "nudge", "influence", "leadership"] },
+      { id: "info", label: "Guerre de l'Information", description: "Décryptage des campagnes d'influence, de la propagande automatisée et des cyber-opérations mondiales.", keywords: ["désinformation", "fake news", "propagande", "influence", "manipulation"] },
+      { id: "attention", label: "Marchés de l'Attention", description: "Analyse des algorithmes de recommandation et des mécanismes de capture de l'attention humaine.", keywords: ["attention", "algorithme", "réseaux sociaux", "TikTok", "engagement"] },
+      { id: "persuasion", label: "Stratégies de Persuasion", description: "Étude des sciences comportementales et du design cognitif pour maîtriser les leviers de décision.", keywords: ["persuasion", "nudge", "marketing", "influence", "psychologie"] },
     ]
   }
 ];

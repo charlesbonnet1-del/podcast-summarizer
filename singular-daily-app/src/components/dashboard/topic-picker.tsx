@@ -8,17 +8,17 @@ import {
   Lock, 
   ChevronDown, 
   Bot,           // Tech 🤖
-  Globe,         // Monde 🌍
-  TrendingUp,    // Économie 📈
+  Globe,         // World 🌍
+  TrendingUp,    // Economics 📈
   FlaskConical,  // Science 🔬
-  Film           // Culture 🎬
+  Radio          // Influence 📡
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 /**
- * V4 Topic structure - Using Lucide icons instead of emojis
- * All icons use text-sand color class for consistency
+ * V13 Topic structure - 15 topics across 5 verticals
+ * Matching backend VALID_TOPICS in stitcher_v2.py
  */
 const TOPIC_CATEGORIES = [
   {
@@ -26,29 +26,9 @@ const TOPIC_CATEGORIES = [
     name: "Tech",
     Icon: Bot,
     topics: [
-      { id: "ia", label: "IA & LLM", description: "Intelligence artificielle, ChatGPT, Claude et les dernières avancées en machine learning.", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT"] },
-      { id: "quantum", label: "Quantum Computing", description: "Ordinateurs quantiques, qubits et les percées d'IBM, Google et startups.", keywords: ["quantique", "quantum", "qubits", "IBM Quantum"] },
-      { id: "robotics", label: "Robotique", description: "Robots humanoïdes, automatisation industrielle et véhicules autonomes.", keywords: ["robotique", "robots", "Tesla Bot", "Boston Dynamics"] },
-    ]
-  },
-  {
-    id: "world",
-    name: "Monde",
-    Icon: Globe,
-    topics: [
-      { id: "asia", label: "Asie", description: "Actualités de Chine, Japon, Corée et tensions géopolitiques en Asie-Pacifique.", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie"] },
-      { id: "resources", label: "Ressources", description: "Marchés du pétrole, gaz, métaux rares et enjeux d'approvisionnement.", keywords: ["pétrole", "gaz", "matières premières", "minerais"] },
-      { id: "regulation", label: "Régulation", description: "Nouvelles lois tech, RGPD, antitrust et décisions des régulateurs.", keywords: ["régulation", "lois", "RGPD", "antitrust", "gouvernance"] },
-    ]
-  },
-  {
-    id: "economics",
-    name: "Économie",
-    Icon: TrendingUp,
-    topics: [
-      { id: "stocks", label: "Bourse", description: "CAC 40, Wall Street, résultats d'entreprises et tendances des marchés.", keywords: ["CAC 40", "Wall Street", "bourse", "actions"] },
-      { id: "crypto", label: "Crypto", description: "Bitcoin, Ethereum, DeFi et évolutions réglementaires des cryptomonnaies.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain"] },
-      { id: "macro", label: "Macro-économie", description: "Décisions de la BCE et Fed, inflation, croissance et emploi.", keywords: ["BCE", "Fed", "inflation", "économie mondiale"] },
+      { id: "ia", label: "IA, Robotique & Hardware", description: "Intelligence artificielle, LLMs, robots, puces et avancées matérielles.", keywords: ["IA", "LLM", "ChatGPT", "OpenAI", "Claude", "GPT", "robotique", "NVIDIA", "puces"] },
+      { id: "cyber", label: "Cybersécurité", description: "Menaces, vulnérabilités, défenses et incidents de sécurité informatique.", keywords: ["cybersécurité", "hacking", "ransomware", "zero-day", "breach", "sécurité"] },
+      { id: "deep_tech", label: "Deep Tech", description: "Quantum, fusion nucléaire, nouveaux matériaux et technologies de rupture.", keywords: ["quantique", "quantum", "fusion", "matériaux", "deep tech", "breakthrough"] },
     ]
   },
   {
@@ -56,19 +36,39 @@ const TOPIC_CATEGORIES = [
     name: "Science",
     Icon: FlaskConical,
     topics: [
-      { id: "space", label: "Espace", description: "Missions NASA et SpaceX, exploration de Mars et satellites.", keywords: ["NASA", "SpaceX", "espace", "Mars", "fusée"] },
-      { id: "health", label: "Santé", description: "Recherche médicale, biotechnologies, vaccins et santé publique.", keywords: ["santé", "médecine", "biotech", "vaccin"] },
-      { id: "energy", label: "Énergie", description: "Transition énergétique, nucléaire, renouvelables et climat.", keywords: ["énergie", "nucléaire", "renouvelable", "climat"] },
+      { id: "health", label: "Santé & Longévité", description: "Recherche médicale, biotechnologies, anti-âge et optimisation humaine.", keywords: ["santé", "médecine", "biotech", "longévité", "anti-âge", "CRISPR"] },
+      { id: "space", label: "Espace", description: "Missions spatiales, satellites, exploration et économie orbitale.", keywords: ["NASA", "SpaceX", "espace", "Mars", "satellite", "fusée", "orbite"] },
+      { id: "energy", label: "Énergie", description: "Transition énergétique, nucléaire, renouvelables et stockage.", keywords: ["énergie", "nucléaire", "renouvelable", "batterie", "solaire", "hydrogène"] },
     ]
   },
   {
-    id: "culture",
-    name: "Culture",
-    Icon: Film,
+    id: "economics",
+    name: "Économie",
+    Icon: TrendingUp,
     topics: [
-      { id: "cinema", label: "Cinéma & Séries", description: "Sorties films, séries Netflix/Disney+ et actualités du 7ème art.", keywords: ["cinéma", "Netflix", "films", "séries"] },
-      { id: "gaming", label: "Gaming", description: "Jeux vidéo, consoles, esport et industrie du gaming.", keywords: ["jeux vidéo", "PlayStation", "Nintendo", "gaming"] },
-      { id: "lifestyle", label: "Lifestyle", description: "Tendances, design, mode et innovations du quotidien.", keywords: ["lifestyle", "tendances", "mode", "design"] },
+      { id: "crypto", label: "Crypto", description: "Bitcoin, Ethereum, DeFi, protocoles et adoption institutionnelle.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain", "DeFi", "NFT"] },
+      { id: "macro", label: "Macro-économie", description: "Politiques monétaires, banques centrales, inflation et tendances mondiales.", keywords: ["BCE", "Fed", "inflation", "taux", "économie mondiale", "récession"] },
+      { id: "stocks", label: "Marchés", description: "Actions, valorisations, rotations sectorielles et signaux de long terme.", keywords: ["bourse", "actions", "Wall Street", "CAC 40", "earnings", "IPO"] },
+    ]
+  },
+  {
+    id: "world",
+    name: "Monde",
+    Icon: Globe,
+    topics: [
+      { id: "asia", label: "Asie", description: "Signaux tech, politiques et économiques de Chine, Japon, Corée et Asie-Pacifique.", keywords: ["Chine", "Japon", "Corée", "Taïwan", "Asie", "ASEAN"] },
+      { id: "regulation", label: "Régulation", description: "Nouvelles lois, antitrust, normes et arbitrages réglementaires.", keywords: ["régulation", "lois", "RGPD", "antitrust", "compliance", "UE"] },
+      { id: "resources", label: "Ressources", description: "Matières premières, métaux critiques, supply chains et géopolitique des ressources.", keywords: ["pétrole", "lithium", "terres rares", "minerais", "supply chain"] },
+    ]
+  },
+  {
+    id: "influence",
+    name: "Influence",
+    Icon: Radio,
+    topics: [
+      { id: "info", label: "Guerre de l'Information", description: "Désinformation, influence ops, contrôle narratif et fact-checking.", keywords: ["désinformation", "fake news", "propagande", "influence", "manipulation"] },
+      { id: "attention", label: "Marchés de l'Attention", description: "Plateformes, algorithmes, captation d'attention et modèles mentaux.", keywords: ["attention", "algorithme", "réseaux sociaux", "TikTok", "engagement"] },
+      { id: "persuasion", label: "Stratégies de Persuasion", description: "Rhétorique, nudges, design persuasif et techniques d'adhésion.", keywords: ["persuasion", "nudge", "marketing", "influence", "psychologie"] },
     ]
   }
 ];

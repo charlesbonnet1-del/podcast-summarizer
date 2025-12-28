@@ -593,12 +593,12 @@ function MagicBar() {
 function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
   const [showMixer, setShowMixer] = useState(false);
 
-  // Calculate average weight per vertical
+  // Calculate average weight per vertical (V13 - 15 Topics)
   const VERTICALS = [
-    { id: "tech", label: "Tech", topics: ["ia", "quantum", "robotics"] },
-    { id: "monde", label: "Monde", topics: ["asia", "regulation", "resources"] },
+    { id: "tech", label: "Tech", topics: ["ia", "cyber", "deep_tech"] },
+    { id: "science", label: "Science", topics: ["health", "space", "energy"] },
     { id: "economie", label: "Économie", topics: ["crypto", "macro", "stocks"] },
-    { id: "science", label: "Science", topics: ["energy", "health", "space"] },
+    { id: "monde", label: "Monde", topics: ["asia", "regulation", "resources"] },
     { id: "influence", label: "Influence", topics: ["info", "attention", "persuasion"] },
   ];
 
@@ -767,45 +767,45 @@ const VERTICALS = [
     id: "tech",
     name: "Tech",
     topics: [
-      { id: "ia", label: "IA", description: "Course vers l'AGI et modèles génératifs" },
-      { id: "quantum", label: "Quantum", description: "Puissance de calcul et cryptographie" },
-      { id: "robotics", label: "Robotique", description: "Systèmes autonomes et humanoïdes" },
-    ]
-  },
-  {
-    id: "world",
-    name: "Monde",
-    topics: [
-      { id: "asia", label: "Asie", description: "Tech chinoise et marchés émergents" },
-      { id: "regulation", label: "Régulation", description: "Souveraineté numérique et législation" },
-      { id: "resources", label: "Ressources", description: "Matières premières et minéraux critiques" },
-    ]
-  },
-  {
-    id: "economics",
-    name: "Économie",
-    topics: [
-      { id: "crypto", label: "Crypto", description: "Décentralisation et blockchain" },
-      { id: "macro", label: "Macro", description: "Géopolitique et flux de capitaux" },
-      { id: "stocks", label: "Bourse", description: "Marchés et valorisations" },
+      { id: "ia", label: "IA, Robotique & Hardware", description: "AGI, LLMs, robots et puces" },
+      { id: "cyber", label: "Cybersécurité", description: "Menaces, zero-days et défenses" },
+      { id: "deep_tech", label: "Deep Tech", description: "Quantum, fusion et matériaux" },
     ]
   },
   {
     id: "science",
     name: "Science",
     topics: [
-      { id: "energy", label: "Énergie", description: "Mix énergétique et nucléaire" },
-      { id: "health", label: "Santé", description: "Longévité, biohacking et réparation cellulaire" },
+      { id: "health", label: "Santé & Longévité", description: "Biotech, anti-âge et biohacking" },
       { id: "space", label: "Espace", description: "Économie orbitale et exploration" },
+      { id: "energy", label: "Énergie", description: "Mix énergétique et stockage" },
+    ]
+  },
+  {
+    id: "economics",
+    name: "Économie",
+    topics: [
+      { id: "crypto", label: "Crypto", description: "Protocoles et décentralisation" },
+      { id: "macro", label: "Macro-économie", description: "Banques centrales et tendances" },
+      { id: "stocks", label: "Marchés", description: "Valorisations et rotations" },
+    ]
+  },
+  {
+    id: "world",
+    name: "Monde",
+    topics: [
+      { id: "asia", label: "Asie", description: "Tech chinoise et émergents" },
+      { id: "regulation", label: "Régulation", description: "Lois et compliance" },
+      { id: "resources", label: "Ressources", description: "Matières et supply chains" },
     ]
   },
   {
     id: "influence",
     name: "Influence",
     topics: [
-      { id: "info", label: "Info Wars", description: "Propagande et cyber-opérations" },
-      { id: "attention", label: "Attention", description: "Algorithmes et capture de l'attention" },
-      { id: "persuasion", label: "Persuasion", description: "Sciences comportementales et leadership" },
+      { id: "info", label: "Guerre de l'Information", description: "Désinformation et influence ops" },
+      { id: "attention", label: "Marchés de l'Attention", description: "Algorithmes et plateformes" },
+      { id: "persuasion", label: "Stratégies de Persuasion", description: "Nudges et design cognitif" },
     ]
   }
 ];
@@ -1098,7 +1098,7 @@ function SignalMixerModal({
 
 
 // ============================================
-// TOPIC SELECTOR MODAL (legacy, keeping for reference)
+// TOPIC SELECTOR MODAL (V13 - 15 Topics)
 // ============================================
 
 const TOPIC_CATEGORIES = [
@@ -1106,45 +1106,45 @@ const TOPIC_CATEGORIES = [
     id: "tech",
     name: "Tech",
     topics: [
-      { id: "ia", label: "IA", description: "Course vers l'AGI, infrastructures de calcul et modèles génératifs transformant la société." },
-      { id: "quantum", label: "Quantum", description: "Ingénierie subatomique, rupture de la puissance de calcul et cryptographie." },
-      { id: "robotics", label: "Robotique", description: "Systèmes autonomes et humanoïdes, intégration de l'IA dans le monde physique." },
-    ]
-  },
-  {
-    id: "world",
-    name: "Monde",
-    topics: [
-      { id: "asia", label: "Asie", description: "Veille stratégique sur la tech chinoise et l'essor des marchés émergents." },
-      { id: "regulation", label: "Régulation", description: "Souveraineté numérique et évolutions législatives mondiales." },
-      { id: "resources", label: "Ressources", description: "Géopolitique des matières premières et minéraux critiques." },
-    ]
-  },
-  {
-    id: "economics",
-    name: "Économie",
-    topics: [
-      { id: "crypto", label: "Crypto", description: "Décentralisation financière, protocoles blockchain et redéfinition de la valeur." },
-      { id: "macro", label: "Macro", description: "Rapports de force géopolitiques et flux de capitaux mondiaux." },
-      { id: "stocks", label: "Bourse", description: "Marchés publics et valorisations pour identifier les tendances de fond." },
+      { id: "ia", label: "IA, Robotique & Hardware", description: "AGI, LLMs, robots et puces qui transforment la société." },
+      { id: "cyber", label: "Cybersécurité", description: "Menaces, zero-days et défenses de la souveraineté numérique." },
+      { id: "deep_tech", label: "Deep Tech", description: "Quantum, fusion et nouveaux matériaux de rupture." },
     ]
   },
   {
     id: "science",
     name: "Science",
     topics: [
-      { id: "energy", label: "Énergie", description: "Mix énergétique du futur, renaissance nucléaire et innovations solaires." },
-      { id: "health", label: "Santé", description: "Longévité, biohacking et réparation cellulaire." },
-      { id: "space", label: "Espace", description: "Économie orbitale et exploration vers une espèce multi-planétaire." },
+      { id: "health", label: "Santé & Longévité", description: "Biotech, anti-âge et biohacking pour étendre la vie active." },
+      { id: "space", label: "Espace", description: "Économie orbitale vers une humanité multi-planétaire." },
+      { id: "energy", label: "Énergie", description: "Mix énergétique, nucléaire et innovations de stockage." },
+    ]
+  },
+  {
+    id: "economics",
+    name: "Économie",
+    topics: [
+      { id: "crypto", label: "Crypto", description: "Protocoles blockchain et redéfinition de la valeur." },
+      { id: "macro", label: "Macro-économie", description: "Banques centrales, flux de capitaux et tendances." },
+      { id: "stocks", label: "Marchés", description: "Valorisations et rotations sectorielles de fond." },
+    ]
+  },
+  {
+    id: "world",
+    name: "Monde",
+    topics: [
+      { id: "asia", label: "Asie", description: "Tech chinoise et marchés émergents asiatiques." },
+      { id: "regulation", label: "Régulation", description: "Lois, compliance et arbitrages réglementaires." },
+      { id: "resources", label: "Ressources", description: "Matières premières et supply chains critiques." },
     ]
   },
   {
     id: "influence",
     name: "Influence",
     topics: [
-      { id: "info", label: "Info Wars", description: "Propagande, cyber-opérations et souveraineté numérique." },
-      { id: "attention", label: "Attention", description: "Algorithmes et capture de l'attention humaine." },
-      { id: "persuasion", label: "Persuasion", description: "Sciences comportementales et leadership d'opinion." },
+      { id: "info", label: "Guerre de l'Information", description: "Désinformation et cyber-opérations mondiales." },
+      { id: "attention", label: "Marchés de l'Attention", description: "Algorithmes et capture de l'attention humaine." },
+      { id: "persuasion", label: "Stratégies de Persuasion", description: "Nudges et design cognitif pour forger l'opinion." },
     ]
   }
 ];

@@ -17,7 +17,7 @@ interface SignalMixerProps {
 }
 
 // ============================================
-// VERTICALS WITH TOPICS
+// VERTICALS WITH TOPICS (V13 - 15 Topics)
 // ============================================
 
 const VERTICALS = [
@@ -25,45 +25,45 @@ const VERTICALS = [
     id: "tech",
     name: "Tech",
     topics: [
-      { id: "ia", label: "IA", description: "Course vers l'AGI et modèles génératifs" },
-      { id: "quantum", label: "Quantum", description: "Puissance de calcul et cryptographie" },
-      { id: "robotics", label: "Robotique", description: "Systèmes autonomes et humanoïdes" },
-    ]
-  },
-  {
-    id: "world",
-    name: "Monde",
-    topics: [
-      { id: "asia", label: "Asie", description: "Tech chinoise et marchés émergents" },
-      { id: "regulation", label: "Régulation", description: "Souveraineté numérique et législation" },
-      { id: "resources", label: "Ressources", description: "Matières premières et minéraux critiques" },
-    ]
-  },
-  {
-    id: "economics",
-    name: "Économie",
-    topics: [
-      { id: "crypto", label: "Crypto", description: "Décentralisation et blockchain" },
-      { id: "macro", label: "Macro", description: "Géopolitique et flux de capitaux" },
-      { id: "stocks", label: "Bourse", description: "Marchés et valorisations" },
+      { id: "ia", label: "IA, Robotique & Hardware", description: "AGI, LLMs, robots et puces" },
+      { id: "cyber", label: "Cybersécurité", description: "Menaces, zero-days et défenses" },
+      { id: "deep_tech", label: "Deep Tech", description: "Quantum, fusion et matériaux" },
     ]
   },
   {
     id: "science",
     name: "Science",
     topics: [
-      { id: "energy", label: "Énergie", description: "Mix énergétique et nucléaire" },
-      { id: "health", label: "Santé & Longévité", description: "Biohacking et réparation cellulaire" },
+      { id: "health", label: "Santé & Longévité", description: "Biotech, anti-âge et biohacking" },
       { id: "space", label: "Espace", description: "Économie orbitale et exploration" },
+      { id: "energy", label: "Énergie", description: "Mix énergétique et stockage" },
+    ]
+  },
+  {
+    id: "economics",
+    name: "Économie",
+    topics: [
+      { id: "crypto", label: "Crypto", description: "Protocoles et décentralisation" },
+      { id: "macro", label: "Macro-économie", description: "Banques centrales et tendances" },
+      { id: "stocks", label: "Marchés", description: "Valorisations et rotations" },
+    ]
+  },
+  {
+    id: "world",
+    name: "Monde",
+    topics: [
+      { id: "asia", label: "Asie", description: "Tech chinoise et émergents" },
+      { id: "regulation", label: "Régulation", description: "Lois et compliance" },
+      { id: "resources", label: "Ressources", description: "Matières et supply chains" },
     ]
   },
   {
     id: "influence",
     name: "Influence",
     topics: [
-      { id: "info", label: "Guerre de l'Info", description: "Propagande et cyber-opérations" },
-      { id: "attention", label: "Marchés de l'Attention", description: "Algorithmes et capture de l'attention" },
-      { id: "persuasion", label: "Stratégies de Persuasion", description: "Sciences comportementales et leadership" },
+      { id: "info", label: "Guerre de l'Information", description: "Désinformation et influence ops" },
+      { id: "attention", label: "Marchés de l'Attention", description: "Algorithmes et plateformes" },
+      { id: "persuasion", label: "Stratégies de Persuasion", description: "Nudges et design cognitif" },
     ]
   }
 ];
