@@ -29,7 +29,7 @@ export default async function DashboardPage() {
     .limit(1)
     .single();
 
-  // Fetch user interests (topics)
+  // Fetch user interests (topics) - still used for hasTopics check
   const { data: interests } = await supabase
     .from("user_interests")
     .select("*")
@@ -45,12 +45,15 @@ export default async function DashboardPage() {
     .eq("source", "manual")
     .order("created_at", { ascending: false });
 
-  // Count all pending
-  const { count: pendingCount } = await supabase
-    .from("content_queue")
+  // V13: Count INVENTORY (cached segments from last 7 days)
+  // This is what the podcast actually pulls from
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  
+  const { count: inventoryCount } = await supabase
+    .from("audio_segments")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("status", "pending");
+    .gte("created_at", sevenDaysAgo.toISOString());
 
   // Fetch signal weights
   const { data: signalWeightsData } = await supabase
@@ -69,7 +72,7 @@ export default async function DashboardPage() {
       episode={latestEpisode}
       topics={interests || []}
       manualContent={manualContent || []}
-      pendingCount={pendingCount ?? 0}
+      pendingCount={inventoryCount ?? 0}
       signalWeights={signalWeightsData?.weights || {}}
     />
   );

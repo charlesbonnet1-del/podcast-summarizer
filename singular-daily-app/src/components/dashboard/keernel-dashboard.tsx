@@ -1581,18 +1581,12 @@ function GenerateButton({ pendingCount, hasTopics }: { pendingCount: number; has
     }
   };
 
-  if (!hasTopics && pendingCount === 0) {
-    return (
-      <button disabled className="w-full max-w-xs mx-auto block px-6 py-3 rounded-full bg-secondary text-muted-foreground text-sm font-mono">
-        Add topics to get started
-      </button>
-    );
-  }
-
+  // V13: pendingCount is now inventoryCount (cached segments available)
+  // Always allow generation - backend will handle sourcing
   return (
     <motion.button
       onClick={handleGenerate}
-      disabled={loading || pendingCount === 0}
+      disabled={loading}
       className="w-full max-w-xs mx-auto block btn-generate px-6 py-3 text-sm"
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
@@ -1603,7 +1597,14 @@ function GenerateButton({ pendingCount, hasTopics }: { pendingCount: number; has
           Generating...
         </span>
       ) : (
-        `Generate Keernel${pendingCount > 0 ? ` (${pendingCount})` : ""}`
+        <span className="flex items-center justify-center gap-2">
+          Generate Keernel
+          {pendingCount > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-brass/20 text-xs">
+              {pendingCount} segments
+            </span>
+          )}
+        </span>
       )}
     </motion.button>
   );
