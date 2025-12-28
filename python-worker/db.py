@@ -215,7 +215,7 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
     
     Args:
         source: Source type (gsheet_rss, bing_news, manual, etc.)
-        source_name: Display name of the media (e.g., "Le Monde", "TechCrunch")
+        source_name: Display name of the media (e.g., "Le Monde", "TechCrunch") - optional
     """
     try:
         # Check if URL already exists for this user (any status)
@@ -244,6 +244,8 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
         }
         
         # Add source_name if provided (media display name)
+        # Note: Column must exist in DB - run migration first
+        # Skipped silently if column doesn't exist to avoid breaking fetcher
         if source_name:
             insert_data["source_name"] = source_name
         
@@ -257,8 +259,18 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
                 insert_data["vertical_id"] = mapped_id
             # If not in mapping, don't include vertical_id (let it be NULL)
         
-        result = supabase.table("content_queue").insert(insert_data).execute()
-        return result.data[0] if result.data else None
+        # Try insert with source_name first
+        try:
+            result = supabase.table("content_queue").insert(insert_data).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            # If source_name column doesn't exist, retry without it
+            if "source_name" in str(e) and "source_name" in insert_data:
+                del insert_data["source_name"]
+                result = supabase.table("content_queue").insert(insert_data).execute()
+                return result.data[0] if result.data else None
+            raise
+            
     except Exception as e:
         print(f"Error adding auto content: {e}")
         return None

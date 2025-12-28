@@ -119,7 +119,7 @@ def get_gsheet_client():
 # GSHEET SOURCE LIBRARY
 # ============================================
 
-# V13: Updated verticals and topics (15 topics)
+# V13: Updated verticals and topics (16 topics)
 # ia = super-topic (IA, Robotique, Hardware)
 # deals = M&A, VC, Funding rounds
 VERTICALS_TOPICS = {
@@ -130,10 +130,23 @@ VERTICALS_TOPICS = {
     "INFLUENCE": ["info", "attention", "persuasion"],
 }
 
-# Flat list of all supported topics
+# Legacy topic mappings (GSheet may still use old names)
+# Maps old topic names to new ones
+LEGACY_TOPIC_MAPPING = {
+    "quantum": "deep_tech",
+    "robotics": "ia",
+    "longevity": "health",
+    "cinema": "attention",
+    "gaming": "attention",
+    "lifestyle": "persuasion",
+}
+
+# Flat list of all supported topics (including legacy)
 SUPPORTED_TOPICS = []
 for topics in VERTICALS_TOPICS.values():
     SUPPORTED_TOPICS.extend(topics)
+# Add legacy topics as valid
+SUPPORTED_TOPICS.extend(LEGACY_TOPIC_MAPPING.keys())
 
 
 def get_vertical_for_topic(topic: str) -> str | None:
@@ -253,7 +266,13 @@ class GSheetSourceLibrary:
                 if not url_rss or not topic:
                     continue
                 
-                # Validate topic is in SUPPORTED_TOPICS
+                # Map legacy topics to new ones
+                if topic in LEGACY_TOPIC_MAPPING:
+                    original_topic = topic
+                    topic = LEGACY_TOPIC_MAPPING[topic]
+                    log.debug("Mapped legacy topic", original=original_topic, mapped=topic, row=row_idx)
+                
+                # Validate topic is in SUPPORTED_TOPICS (after mapping)
                 if topic not in [t.lower() for t in SUPPORTED_TOPICS]:
                     log.debug("Skipping unknown topic", topic=topic, row=row_idx)
                     continue
