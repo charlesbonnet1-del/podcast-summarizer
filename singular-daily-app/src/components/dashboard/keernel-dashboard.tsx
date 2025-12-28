@@ -901,29 +901,31 @@ function SignalMixerModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-50 bg-[#F7EEDD] dark:bg-[#1A1A1A] flex flex-col"
+          className="fixed inset-0 z-[60] bg-[#F7EEDD] dark:bg-[#1A1A1A] overflow-y-auto"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* Header - Fixed at top */}
-          <div className="flex items-center justify-between p-4 pt-6">
-            <div>
-              <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Ajustez par verticale, affinez par topic
-              </p>
+          {/* Header */}
+          <div className="sticky top-0 z-10 bg-[#F7EEDD] dark:bg-[#1A1A1A] px-4 pt-4 pb-2">
+            <div className="max-w-lg mx-auto flex items-start justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Ajustez par verticale, affinez par topic
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-10 h-10 rounded-full bg-[#E5D9C3] dark:bg-[#333] flex items-center justify-center hover:bg-[#DDD0BC] dark:hover:bg-[#444] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="w-10 h-10 rounded-full bg-secondary/60 flex items-center justify-center hover:bg-secondary transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
-          {/* Content - Scrollable, with bottom padding for player */}
-          <div className="flex-1 overflow-y-auto px-4 pb-36">
+          {/* Content */}
+          <div className="px-4 pb-44">
             <div className="max-w-lg mx-auto space-y-3">
               {/* Verticals */}
               {VERTICALS.map((vertical) => {
@@ -1056,7 +1058,7 @@ function SignalMixerModal({
                 </p>
               </div>
 
-              {/* Save Button - Inside scroll area, above player */}
+              {/* Save Button */}
               <motion.button
                 onClick={saveWeights}
                 disabled={saving}
