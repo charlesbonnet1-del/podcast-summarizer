@@ -43,18 +43,34 @@ const SOURCE_COLORS = [
   { bg: "bg-[#1A1A1A]", text: "text-[#FFFFFF]", domain: "text-[#888888]" },      // Noir / Black
 ];
 
-// Topic icons/colors for chapters
+// Topic icons/colors for chapters (15 topics)
 const TOPIC_STYLES: Record<string, { icon: string; color: string }> = {
+  // V1 TECH
   ia: { icon: "🤖", color: "text-purple-500" },
-  quantum: { icon: "⚛️", color: "text-blue-500" },
-  robotics: { icon: "🦾", color: "text-gray-500" },
-  crypto: { icon: "₿", color: "text-orange-500" },
-  macro: { icon: "📈", color: "text-green-500" },
-  stocks: { icon: "📊", color: "text-blue-400" },
-  asia: { icon: "🌏", color: "text-red-500" },
-  health: { icon: "🏥", color: "text-pink-500" },
+  cyber: { icon: "🔐", color: "text-red-500" },
+  deep_tech: { icon: "⚛️", color: "text-blue-500" },
+  
+  // V2 SCIENCE
+  health: { icon: "🧬", color: "text-pink-500" },
   space: { icon: "🚀", color: "text-indigo-500" },
   energy: { icon: "⚡", color: "text-yellow-500" },
+  
+  // V3 ECONOMICS
+  crypto: { icon: "₿", color: "text-orange-500" },
+  macro: { icon: "🌍", color: "text-green-500" },
+  stocks: { icon: "📈", color: "text-blue-400" },
+  
+  // V4 WORLD
+  asia: { icon: "🌏", color: "text-red-400" },
+  regulation: { icon: "⚖️", color: "text-gray-500" },
+  resources: { icon: "🪨", color: "text-amber-600" },
+  
+  // V5 INFLUENCE
+  info: { icon: "📡", color: "text-cyan-500" },
+  attention: { icon: "👁️", color: "text-violet-500" },
+  persuasion: { icon: "🎯", color: "text-rose-500" },
+  
+  // System
   intro: { icon: "▶️", color: "text-brass" },
   ephemeride: { icon: "📅", color: "text-amber-600" },
   default: { icon: "📰", color: "text-gray-500" },

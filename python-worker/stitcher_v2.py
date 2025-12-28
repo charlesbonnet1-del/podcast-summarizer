@@ -145,36 +145,30 @@ FORMAT_CONFIG = {
 # Map topic/vertical to transition phrases
 # These will be cached as audio files
 TRANSITION_PHRASES = {
-    # Tech
+    # V1 TECH
     "ia": "Passons à l'intelligence artificielle.",
-    "quantum": "Direction l'informatique quantique.",
-    "robotics": "Parlons robotique.",
-    "ai_tech": "Côté tech maintenant.",
+    "cyber": "Côté cybersécurité.",
+    "deep_tech": "Direction les technologies de rupture.",
     
-    # World
-    "asia": "Cap sur l'Asie.",
-    "regulation": "Côté régulation.",
-    "resources": "Parlons ressources.",
-    "world": "À l'international maintenant.",
+    # V2 SCIENCE
+    "health": "Parlons santé et longévité.",
+    "space": "Direction l'espace.",
+    "energy": "Côté énergie.",
     
-    # Economy
+    # V3 ECONOMICS
     "crypto": "Direction les cryptomonnaies.",
     "macro": "Côté macroéconomie.",
     "stocks": "Parlons marchés.",
-    "finance": "L'actualité financière.",
     
-    # Science
-    "energy": "Côté énergie.",
-    "longevity": "Parlons longévité et biohacking.",
-    "health": "Parlons santé.",
-    "space": "Direction l'espace.",
-    "science": "L'actualité scientifique.",
+    # V4 WORLD
+    "asia": "Cap sur l'Asie.",
+    "regulation": "Côté régulation.",
+    "resources": "Parlons ressources.",
     
-    # Influence
+    # V5 INFLUENCE
     "info": "Parlons guerre de l'information.",
     "attention": "Côté économie de l'attention.",
     "persuasion": "Les stratégies de persuasion.",
-    "culture": "L'actualité culturelle.",
     
     # Generic fallbacks
     "general": "Passons au sujet suivant.",
@@ -182,29 +176,47 @@ TRANSITION_PHRASES = {
 }
 
 # ============================================
-# TOPIC EDITORIAL INTENTIONS
+# TOPIC EDITORIAL INTENTIONS (15 TOPICS)
 # ============================================
-# Each topic has a specific editorial angle that guides the dialogue generation
-# These are injected into the prompt to focus the conversation
+# V1 TECH: ia, cyber, deep_tech
+# V2 SCIENCE: health, space, energy
+# V3 ECONOMICS: crypto, macro, stocks
+# V4 WORLD: asia, regulation, resources
+# V5 INFLUENCE: info, attention, persuasion
 
 TOPIC_INTENTIONS = {
-    # Verticale TECH
-    "ia": """⚡ ANGLE ÉDITORIAL (IA):
+    # V1 TECH
+    "ia": """⚡ ANGLE ÉDITORIAL (IA, Robotique, Hardware):
 Qu'est-ce qui change dans ce que la machine peut faire ou comprendre aujourd'hui ?
 Priorise le SAUT DE CAPACITÉ, qu'il soit technique, philosophique ou marketing.
-Focus sur : nouvelles capabilities, ruptures de paradigme, implications concrètes.""",
+Focus sur : nouvelles capabilities, ruptures de paradigme, implications concrètes, autonomie machine.""",
 
-    "quantum": """⚡ ANGLE ÉDITORIAL (QUANTUM):
+    "cyber": """⚡ ANGLE ÉDITORIAL (CYBERSECURITY):
+Quelles sont les nouvelles surfaces d'attaque et les défenses émergentes ?
+Analyse les VULNÉRABILITÉS SYSTÉMIQUES et les réponses technologiques.
+Focus sur : vecteurs d'attaque, zero-days, attribution, résilience infrastructure.""",
+
+    "deep_tech": """⚡ ANGLE ÉDITORIAL (QUANTUM, FUSION, MATÉRIAUX):
 Où en est-on sur la courbe entre la théorie et l'impact réel ?
-Retiens ce qui illustre un CHANGEMENT D'ÉCHELLE ou de PARADIGME DE CALCUL.
-Focus sur : avancées vers l'utilité pratique, franchissement de seuils, applications émergentes.""",
+Retiens ce qui illustre un CHANGEMENT D'ÉCHELLE ou de PARADIGME.
+Focus sur : franchissement de seuils, démonstrations expérimentales, timeline vers l'application.""",
 
-    "robotics": """⚡ ANGLE ÉDITORIAL (ROBOTIQUE):
-Comment la machine s'interface-t-elle avec le monde physique ?
-Focus sur l'AUTONOMIE et l'évolution de l'INTERACTION HOMME-MACHINE.
-Analyse : nouveaux degrés de liberté, perception, manipulation, collaboration humain-robot.""",
+    # V2 SCIENCE
+    "health": """⚡ ANGLE ÉDITORIAL (HEALTH & LONGEVITY):
+Quelles avancées permettent de REPOUSSER LES LIMITES BIOLOGIQUES ou d'optimiser le potentiel humain ?
+Focus sur : recherche anti-âge, interventions validées, biomarqueurs, médecine de précision.""",
 
-    # Verticale ECONOMICS
+    "space": """⚡ ANGLE ÉDITORIAL (SPACE):
+Comment l'espace devient-il une EXTENSION DE NOTRE ÉCONOMIE et de notre champ d'exploration ?
+Focus sur l'INFRASTRUCTURE et la LOGISTIQUE ORBITALE.
+Analyse : lanceurs, constellations, économie spatiale, exploration.""",
+
+    "energy": """⚡ ANGLE ÉDITORIAL (ENERGY):
+Quelles sont les RUPTURES dans notre capacité à produire, stocker ou optimiser l'énergie ?
+Focus sur l'EFFICIENCE et la SCALABILITÉ.
+Analyse : nouvelles technologies, économie de l'énergie, transition énergétique.""",
+
+    # V3 ECONOMICS
     "crypto": """⚡ ANGLE ÉDITORIAL (CRYPTO):
 Comment la confiance et la valeur se déplacent-elles sur les réseaux ?
 Analyse les INFRASTRUCTURES et les nouveaux MODÈLES DE PROPRIÉTÉ.
@@ -214,44 +226,25 @@ Focus sur : évolutions protocolaires, adoption institutionnelle, nouvelles prim
 Quels sont les courants de fond (politiques, monétaires, intellectuels) qui déplacent les PLAQUES TECTONIQUES de l'économie mondiale ?
 Focus sur : tendances structurelles, inflexions de politique, reconfigurations géoéconomiques.""",
 
-    "stocks": """⚡ ANGLE ÉDITORIAL (MARCHÉS):
+    "stocks": """⚡ ANGLE ÉDITORIAL (STOCKS):
 Quelles sont les FORCES STRUCTURELLES (et non les bruits de séance) qui modifient la valeur des entreprises et des secteurs ?
 Focus sur : rotations sectorielles, changements de valorisation, signaux de long terme.""",
 
-    # Verticale SCIENCE
-    "energy": """⚡ ANGLE ÉDITORIAL (ÉNERGIE):
-Quelles sont les RUPTURES dans notre capacité à produire, stocker ou optimiser l'énergie ?
-Focus sur l'EFFICIENCE et la SCALABILITÉ.
-Analyse : nouvelles technologies, économie de l'énergie, transition énergétique.""",
-
-    "longevity": """⚡ ANGLE ÉDITORIAL (LONGÉVITÉ & BIOHACKING):
-Quelles avancées (scientifiques ou pratiques) permettent de REPOUSSER LES LIMITES BIOLOGIQUES ou d'OPTIMISER LE POTENTIEL HUMAIN ?
-Focus sur : recherche anti-âge, interventions validées, quantified self, performance humaine.""",
-
-    "health": """⚡ ANGLE ÉDITORIAL (SANTÉ):
-Quelles avancées permettent de repousser les limites biologiques ou d'optimiser le potentiel humain ?
-Focus sur : innovations médicales, recherche clinique, accès aux soins.""",
-
-    "space": """⚡ ANGLE ÉDITORIAL (ESPACE):
-Comment l'espace devient-il une EXTENSION DE NOTRE ÉCONOMIE et de notre champ d'exploration ?
-Focus sur l'INFRASTRUCTURE et la LOGISTIQUE ORBITALE.
-Analyse : lanceurs, constellations, économie spatiale, exploration.""",
-
-    # Verticale WORLD
-    "asia": """⚡ ANGLE ÉDITORIAL (ASIE):
+    # V4 WORLD
+    "asia": """⚡ ANGLE ÉDITORIAL (ASIA):
 Quels SIGNAUX (tech, politiques, sociaux) émanant d'Asie redéfinissent l'ÉQUILIBRE MONDIAL ?
 Focus sur : innovations asiatiques, dynamiques géopolitiques, tendances culturelles et économiques.""",
 
-    "regulation": """⚡ ANGLE ÉDITORIAL (RÉGULATION):
+    "regulation": """⚡ ANGLE ÉDITORIAL (REGULATION):
 Comment les RÈGLES DU JEU évoluent-elles ?
 Analyse la norme comme une CONTRAINTE ou comme un LEVIER STRATÉGIQUE.
 Focus sur : nouvelles législations, enforcement, arbitrages réglementaires.""",
 
-    "resources": """⚡ ANGLE ÉDITORIAL (RESSOURCES):
+    "resources": """⚡ ANGLE ÉDITORIAL (RESOURCES):
 Quelles sont les TENSIONS ou les INNOVATIONS sur les flux de matières premières qui soutiennent le monde moderne ?
 Focus sur : supply chains, métaux critiques, eau, agriculture, géopolitique des ressources.""",
 
-    # Verticale ATTENTION & INFLUENCE
+    # V5 INFLUENCE
     "info": """⚡ ANGLE ÉDITORIAL (GUERRE DE L'INFORMATION):
 Comment l'information est-elle utilisée comme une ARME ou un OUTIL DE PUISSANCE ?
 Analyse les MÉTHODES DE DIFFUSION et de CONTRÔLE.
@@ -266,6 +259,9 @@ Analyse : algorithmes, formats, comportements utilisateurs, économie de l'atten
 Quelles sont les logiques (psychologiques, historiques, marketing) qui permettent de FORGER UNE OPINION ou d'ENTRAÎNER UNE ADHÉSION ?
 Focus sur : techniques rhétoriques, nudges, design persuasif, propagande.""",
 }
+
+# Valid topic slugs for validation
+VALID_TOPICS = list(TOPIC_INTENTIONS.keys())
 
 def get_topic_intention(topic_slug: str) -> str:
     """Get the editorial intention for a specific topic."""
@@ -369,37 +365,39 @@ def get_or_create_transition(topic: str, vertical: str = None) -> Optional[dict]
 
 DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
 {topic_intention}
-## LES HÔTES
-- [A] ALICE = Experte qui mène la conversation, explique clairement
-- [B] BOB = Co-animateur qui réagit, complète et questionne parfois
+## LES HÔTES (Dialectique fonctionnelle, pas d'émotions simulées)
+- [B] BOB (L'Analyste) = Voix stable, factuelle. Il apporte les données brutes, les faits techniques et le potentiel futuriste.
+- [A] ALICE (La Sceptique) = Voix incisive, inquisitrice. Elle pose les questions qui fâchent : "Quel est le ROI réel ?", "Est-ce juste du marketing ?", "Quelles sont les contraintes physiques ?"
+
+## STRUCTURE: Bob expose → Alice challenge ou demande une mise en perspective
 
 ## FORMAT OBLIGATOIRE
 Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
 
-[A]
-Alice parle et explique.
-
 [B]
-Bob réagit, complète ou questionne.
+Bob expose les faits et données.
+
+[A]
+Alice challenge ou met en perspective.
 
 ## RÈGLES STRICTES
-1. ALTERNER [A] et [B] - jamais deux [A] ou deux [B] de suite
-2. ALICE [A] commence TOUJOURS en premier
+1. ALTERNER [B] et [A] - jamais deux [B] ou deux [A] de suite
+2. BOB [B] commence TOUJOURS en premier (il expose)
 3. Minimum 6 répliques (3 de chaque)
 4. Style oral naturel français: "Écoute,", "En fait,", "Tu vois,"
-5. ⚠️ BOB [B]: MAXIMUM 50% de ses répliques sont des questions. Il doit aussi AFFIRMER, COMPLÉTER, RÉAGIR (ex: "C'est intéressant parce que...", "Ça rejoint ce qu'on voyait...", "D'ailleurs...")
+5. ⚠️ ALICE [A]: Pose des questions INCISIVES (ROI, faisabilité, contraintes, marketing vs réalité). Elle peut aussi affirmer son scepticisme.
 6. ZÉRO liste, ZÉRO bullet points
-7. CITE LA SOURCE dans la première réplique: "Selon {source_name}..."
-8. INTERDIT: Ne jamais écrire "Alice répond", "Bob questionne" ou toute didascalie
-9. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une phrase conclusive (résumé ou perspective)
-10. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
+7. CITE LA SOURCE dans la première réplique de Bob: "Selon {source_name}..."
+8. INTERDIT: Ne jamais écrire "Bob expose", "Alice questionne" ou toute didascalie
+9. ⚠️ BOB [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse factuelle ou une projection
+10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question d'Alice
 11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être sourcable dans le contenu fourni. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
 {previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
-- Début: Alice introduit le sujet en citant la source
-- Milieu: Échange naturel où Bob réagit (affirmations ET questions)
-- Fin: Alice CONCLUT avec une synthèse ou une ouverture (ex: "Voilà qui résume bien...", "On suivra ça de près...", "C'est un sujet à surveiller...")
+- Début: Bob expose les faits clés en citant la source
+- Milieu: Alice challenge (ROI, faisabilité, limites), Bob répond avec des données
+- Fin: Bob CONCLUT avec une synthèse factuelle ou une perspective future
 
 ## SOURCE
 Titre: {title}
@@ -408,7 +406,7 @@ Contenu:
 {content}
 {previous_segment_context}
 
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}) - ALICE DOIT CONCLURE:"""
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}) - BOB DOIT CONCLURE:"""
 
 # Rule to add when there's a previous segment
 PREVIOUS_SEGMENT_RULE = """12. ⚠️ NON-RÉPÉTITION: Un segment récent sur ce sujet existe. NE RÉPÈTE PAS les informations déjà couvertes (voir ci-dessous). Apporte des NOUVELLES informations ou un nouvel angle. Tu peux brièvement rappeler le contexte si nécessaire, mais le cœur du dialogue doit être NOUVEAU."""
@@ -431,43 +429,45 @@ DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE
 Ce sujet est couvert par PLUSIEURS SOURCES - c'est donc un sujet d'actualité majeur !
 Tu dois CROISER et COMPARER les informations des différentes sources.
 
-## LES HÔTES
-- [A] ALICE = Experte qui synthétise les différentes sources
-- [B] BOB = Co-animateur qui compare, complète et questionne parfois
+## LES HÔTES (Dialectique fonctionnelle, pas d'émotions simulées)
+- [B] BOB (L'Analyste) = Voix stable, factuelle. Il synthétise les données des différentes sources et expose le potentiel.
+- [A] ALICE (La Sceptique) = Voix incisive. Elle challenge les incohérences entre sources, questionne le ROI, la faisabilité.
+
+## STRUCTURE: Bob expose et compare → Alice challenge ou met en perspective
 
 ## FORMAT OBLIGATOIRE
 Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
 
-[A]
-Alice synthétise et compare.
-
 [B]
-Bob réagit, complète ou souligne les différences.
+Bob synthétise et compare les sources.
+
+[A]
+Alice challenge ou souligne les contradictions.
 
 ## RÈGLES STRICTES
-1. ALTERNER [A] et [B] - jamais deux [A] ou deux [B] de suite
-2. ALICE [A] commence TOUJOURS en premier
+1. ALTERNER [B] et [A] - jamais deux [B] ou deux [A] de suite
+2. BOB [B] commence TOUJOURS en premier
 3. Minimum 8 répliques (4 de chaque) - sujet plus riche !
 4. Style oral naturel français
-5. ⚠️ BOB [B]: MAXIMUM 50% de ses répliques sont des questions. Il doit aussi AFFIRMER, COMPLÉTER, RÉAGIR (ex: "C'est cohérent avec...", "Ce qui est intéressant c'est que...", "D'un autre côté...")
+5. ⚠️ ALICE [A]: Questions INCISIVES sur les divergences entre sources, le marketing vs réalité, les contraintes ignorées
 6. CITE LES DIFFÉRENTES SOURCES: "Selon Le Monde...", "De son côté, Les Échos rapportent..."
 7. COMPARE les points de vue ou informations complémentaires
 8. ZÉRO liste, ZÉRO bullet points
-9. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
-10. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
+9. ⚠️ BOB [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
+10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question d'Alice
 11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être présent dans les sources fournies. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
 {previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
-- Début: Alice présente le sujet multi-sources
-- Milieu: Échange naturel comparant les différents angles (Bob réagit ET questionne)
-- Fin: Alice CONCLUT en synthétisant les points de vue (ex: "En résumé, les sources s'accordent sur...", "Ce qui ressort de tout ça...")
+- Début: Bob présente le sujet multi-sources avec les faits clés
+- Milieu: Alice challenge (contradictions, limites, ROI), Bob répond avec des données croisées
+- Fin: Bob CONCLUT en synthétisant ce qui ressort des différentes sources
 
 ## SOURCES ({source_count} articles sur ce sujet)
 {sources_content}
 {previous_segment_context}
 
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources) - ALICE DOIT CONCLURE:"""
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources) - BOB DOIT CONCLURE:"""
 
 # ============================================
 # DIGEST EXTRACTION PROMPT
@@ -960,7 +960,7 @@ CONTEXTE ENRICHI (sources additionnelles):
             has_tags = '[A]' in script or '[B]' in script
             if has_tags:
                 # Ensure dialogue ends with Alice [A]
-                script = ensure_alice_conclusion(script)
+                script = ensure_bob_conclusion(script)
                 log.info(f"✅ Dialogue script generated: {len(script.split())} words" + 
                         (" (enriched)" if enriched_context else ""))
                 return script
@@ -974,8 +974,11 @@ CONTEXTE ENRICHI (sources additionnelles):
         return None
 
 
-def ensure_alice_conclusion(script: str) -> str:
-    """Ensure the dialogue ends with Alice [A], not Bob [B]."""
+def ensure_bob_conclusion(script: str) -> str:
+    """Ensure the dialogue ends with Bob [B], not Alice [A].
+    
+    In the new format: Bob (Analyste) exposes and concludes, Alice (Sceptique) challenges.
+    """
     lines = script.strip().split('\n')
     
     # Find the last speaker tag
@@ -988,26 +991,23 @@ def ensure_alice_conclusion(script: str) -> str:
         elif line.strip() == '[B]':
             last_b_idx = i
     
-    # If Bob speaks last, we need to fix it
-    if last_b_idx > last_a_idx:
-        log.warning("⚠️ Dialogue ended with Bob, adding Alice conclusion")
+    # If Alice speaks last, we need to fix it (Bob should conclude)
+    if last_a_idx > last_b_idx:
+        log.warning("⚠️ Dialogue ended with Alice, adding Bob conclusion")
         
-        # Find Bob's last block and remove or truncate it
-        # Then add a conclusion from Alice
-        
-        # Option 1: Just append Alice's conclusion
+        # Append Bob's conclusion
         conclusion_phrases = [
-            "Voilà qui résume bien la situation.",
-            "On suivra ça de près dans les prochains jours.",
-            "C'est un sujet important à garder en tête.",
-            "Affaire à suivre, comme on dit.",
-            "Voilà pour ce point, c'était important d'en parler."
+            "Voilà pour les faits. On surveillera les prochains développements.",
+            "Ce sont les données clés à retenir sur ce sujet.",
+            "Les chiffres parlent d'eux-mêmes. Affaire à suivre.",
+            "Voilà l'état des lieux. On verra comment ça évolue.",
+            "C'est ce que disent les sources. Le reste, c'est de la spéculation."
         ]
         import random
         conclusion = random.choice(conclusion_phrases)
         
-        script = script.rstrip() + f"\n\n[A]\n{conclusion}"
-        log.info("✅ Added Alice conclusion to dialogue")
+        script = script.rstrip() + f"\n\n[B]\n{conclusion}"
+        log.info("✅ Added Bob conclusion to dialogue")
     
     return script
 
@@ -1787,6 +1787,239 @@ def cluster_articles_by_theme(items: list[dict]) -> list[dict]:
         return [{"theme": item.get("title", ""), "articles": [item], "priority": "low", "source_count": 1} for item in items]
 
 
+# ============================================
+# INVENTORY-FIRST SELECTION (14+1 Algorithm)
+# ============================================
+
+def get_user_topic_weights(user_id: str) -> dict:
+    """Get user's topic weights from database or return defaults."""
+    try:
+        result = supabase.table("users") \
+            .select("topic_weights") \
+            .eq("id", user_id) \
+            .single() \
+            .execute()
+        
+        if result.data and result.data.get("topic_weights"):
+            return result.data["topic_weights"]
+    except:
+        pass
+    
+    # Default weights (all topics equal at 50%)
+    return {topic: 50 for topic in VALID_TOPICS}
+
+
+def get_user_history_hashes(user_id: str, days_back: int = 30) -> set:
+    """Get content hashes of segments already served to this user."""
+    try:
+        from datetime import timedelta
+        cutoff_date = (datetime.now() - timedelta(days=days_back)).isoformat()
+        
+        result = supabase.table("user_history") \
+            .select("content_hash") \
+            .eq("user_id", user_id) \
+            .gte("served_at", cutoff_date) \
+            .execute()
+        
+        if result.data:
+            return {row["content_hash"] for row in result.data if row.get("content_hash")}
+    except Exception as e:
+        log.warning(f"⚠️ Could not fetch user history: {e}")
+    
+    return set()
+
+
+def record_user_history(user_id: str, segments: list, episode_id: str = None):
+    """Record segments served to user for future deduplication."""
+    try:
+        records = []
+        for seg in segments:
+            if seg.get("content_hash"):
+                records.append({
+                    "user_id": user_id,
+                    "content_hash": seg["content_hash"],
+                    "topic_slug": seg.get("keyword", seg.get("topic_slug", "general")),
+                    "episode_id": episode_id
+                })
+        
+        if records:
+            supabase.table("user_history").upsert(
+                records,
+                on_conflict="user_id,content_hash"
+            ).execute()
+            log.info(f"📝 Recorded {len(records)} segments in user history")
+    except Exception as e:
+        log.warning(f"⚠️ Failed to record user history: {e}")
+
+
+def calculate_final_score(item: dict, user_weights: dict, now: datetime) -> float:
+    """
+    Calculate Final_Score = (Relevance * User_Weight) * (1 / (1 + Age_en_jours))
+    
+    - Relevance: Base relevance from content (default 0.5)
+    - User_Weight: User's preference for this topic (0-100, normalized to 0-1)
+    - Age decay: Fresher content scores higher
+    """
+    # Get base relevance (from AI or default)
+    relevance = item.get("relevance_score", 0.5)
+    
+    # Get user weight for this topic (0-100 -> 0-1)
+    topic = item.get("keyword", item.get("topic_slug", "general"))
+    user_weight = user_weights.get(topic, 50) / 100.0
+    
+    # Calculate age in days
+    created_at = item.get("created_at")
+    if created_at:
+        try:
+            if isinstance(created_at, str):
+                created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            else:
+                created_dt = created_at
+            age_days = (now - created_dt.replace(tzinfo=None)).days
+        except:
+            age_days = 0
+    else:
+        age_days = 0
+    
+    # Age decay factor: 1 / (1 + age_days)
+    age_decay = 1.0 / (1.0 + age_days)
+    
+    # Final score
+    final_score = (relevance * user_weight) * age_decay
+    
+    return final_score
+
+
+def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
+    """
+    INVENTORY-FIRST Selection Algorithm (14+1)
+    
+    The podcast is a curated selection from stock, not a perishable news feed.
+    
+    Algorithm:
+    1. Get segments from cache (7 days eligible)
+    2. Exclude segments already served to this user (user_history)
+    3. Calculate Final_Score = (Relevance * User_Weight) * (1 / (1 + Age_days))
+    4. Select top 14 by Final_Score
+    5. Inject 1 "Wildcard" (best raw score from a 0% weight topic) at position 5-12
+    
+    Returns: List of selected segments ready for podcast assembly
+    """
+    log.info(f"🎯 Running INVENTORY-FIRST selection for user {user_id[:8]}...")
+    
+    now = datetime.now()
+    from datetime import timedelta
+    cache_cutoff = (now - timedelta(days=SEGMENT_CACHE_DAYS)).isoformat()
+    
+    # 1. Get user preferences
+    user_weights = get_user_topic_weights(user_id)
+    log.info(f"📊 User weights: {user_weights}")
+    
+    # Find topics with 0% weight (for wildcard)
+    zero_weight_topics = [t for t, w in user_weights.items() if w == 0]
+    
+    # 2. Get already-served segment hashes
+    served_hashes = get_user_history_hashes(user_id)
+    log.info(f"📚 User has {len(served_hashes)} segments in history")
+    
+    # 3. Get eligible segments from cache
+    try:
+        result = supabase.table("audio_segments") \
+            .select("id, content_hash, topic_slug, source_title, source_url, audio_url, audio_duration, script_text, relevance_score, created_at") \
+            .gte("created_at", cache_cutoff) \
+            .order("created_at", desc=True) \
+            .limit(200) \
+            .execute()
+        
+        if not result.data:
+            log.warning("❌ No segments in cache! Falling back to content_queue")
+            return select_smart_content(user_id, max_segments)
+        
+        segments = result.data
+        log.info(f"📦 Found {len(segments)} segments in cache (last 7 days)")
+        
+    except Exception as e:
+        log.error(f"❌ Failed to query segment cache: {e}")
+        return select_smart_content(user_id, max_segments)
+    
+    # 4. Filter out already-served segments
+    eligible = []
+    for seg in segments:
+        content_hash = seg.get("content_hash", "")
+        if content_hash and content_hash not in served_hashes:
+            eligible.append(seg)
+    
+    log.info(f"✅ {len(eligible)} segments eligible (not yet served to user)")
+    
+    if len(eligible) < max_segments // 2:
+        log.warning(f"⚠️ Only {len(eligible)} eligible segments, may need fresh content")
+        # Could trigger fetcher here if needed
+    
+    # 5. Calculate Final_Score for each segment
+    for seg in eligible:
+        seg["_final_score"] = calculate_final_score(seg, user_weights, now)
+        seg["keyword"] = seg.get("topic_slug", "general")  # Normalize field name
+    
+    # 6. Separate main candidates and wildcard candidates
+    main_candidates = []
+    wildcard_candidates = []
+    
+    for seg in eligible:
+        topic = seg.get("topic_slug", "general")
+        if topic in zero_weight_topics:
+            wildcard_candidates.append(seg)
+        else:
+            main_candidates.append(seg)
+    
+    # 7. Sort main candidates by Final_Score (descending)
+    main_candidates.sort(key=lambda x: x["_final_score"], reverse=True)
+    
+    # 8. Select top 14
+    selected = main_candidates[:max_segments]
+    log.info(f"📋 Selected {len(selected)} main segments")
+    
+    # 9. Inject Wildcard if available (position 5-12)
+    if wildcard_candidates and len(selected) >= 5:
+        # Sort wildcards by raw relevance (ignore user weight)
+        wildcard_candidates.sort(key=lambda x: x.get("relevance_score", 0.5), reverse=True)
+        wildcard = wildcard_candidates[0]
+        
+        # Insert at random position between 5 and min(12, len(selected))
+        import random
+        insert_pos = random.randint(5, min(12, len(selected)))
+        selected.insert(insert_pos, wildcard)
+        
+        log.info(f"🃏 WILDCARD injected at position {insert_pos}: {wildcard.get('source_title', '')[:40]}... (topic: {wildcard.get('topic_slug')})")
+        
+        # Trim to max if needed
+        selected = selected[:max_segments + 1]  # 14 + 1 wildcard
+    
+    # 10. Log final selection
+    log.info(f"✅ INVENTORY-FIRST: {len(selected)} segments selected")
+    for i, seg in enumerate(selected):
+        score = seg.get("_final_score", 0)
+        topic = seg.get("topic_slug", "?")
+        title = seg.get("source_title", "")[:35]
+        log.info(f"   {i+1}. [{topic}] {title}... (score: {score:.3f})")
+    
+    # Convert to format expected by assembler
+    formatted = []
+    for seg in selected:
+        formatted.append({
+            "url": seg.get("source_url", ""),
+            "title": seg.get("source_title", ""),
+            "keyword": seg.get("topic_slug", "general"),
+            "content_hash": seg.get("content_hash"),
+            "audio_url": seg.get("audio_url"),
+            "audio_duration": seg.get("audio_duration"),
+            "script_text": seg.get("script_text"),
+            "_from_cache": True,
+            "_final_score": seg.get("_final_score", 0)
+        })
+    
+    return formatted
+
+
 def select_smart_content(user_id: str, max_articles: int, min_articles: int = 5) -> list[dict]:
     """
     Smart content selection with thematic clustering.
@@ -2058,10 +2291,17 @@ def assemble_lego_podcast(
     except:
         first_name = "Ami"
     
-    # V12: Use smart clustering for BOTH formats
-    # The clustering is now less aggressive (only groups same EVENT)
+    # V13: Use INVENTORY-FIRST selection (14+1 algorithm)
+    # Falls back to smart_content if not enough cached segments
     min_clusters = config.get("min_articles", 5)
-    items = select_smart_content(user_id, max_articles, min_articles=min_clusters)
+    
+    # Try inventory-first (from segment cache with scoring)
+    items = select_inventory_first(user_id, max_articles)
+    
+    # If not enough from cache, use content_queue with clustering
+    if len(items) < min_clusters:
+        log.warning(f"⚠️ Only {len(items)} from inventory, using content_queue")
+        items = select_smart_content(user_id, max_articles, min_articles=min_clusters)
     
     if not items:
         log.warning("❌ No content to process")
@@ -2354,6 +2594,9 @@ def assemble_lego_podcast(
                     .update({"report_url": report_url}) \
                     .eq("id", episode_id) \
                     .execute()
+            
+            # V13: Record segments in user_history for deduplication
+            record_user_history(user_id, items, episode_id)
             
             log.info(f"✅ EPISODE CREATED: {total_duration}s, {len(sources_data)} sources")
             return episode.data[0]
