@@ -401,9 +401,10 @@ def run_fetcher(edition: str = "morning"):
         # ADD TO CONTENT QUEUE
         # ============================================
         for article in articles:
-            # Use source_type for categorization, source_name for display
+            # source_type: gsheet_rss, bing_news, etc. (for categorization)
+            # source_name: "Le Monde", "TechCrunch", etc. (for display in dialogue)
             source_type = article.get("source_type", "unknown")
-            source_name = article.get("source", "unknown")
+            source_name = article.get("source", "unknown")  # Media name from GSheet or Bing
             
             result = add_to_content_queue_auto(
                 user_id=user_id,
@@ -412,6 +413,7 @@ def run_fetcher(edition: str = "morning"):
                 keyword=article.get("topic", "general"),
                 edition=edition,
                 source=source_type,  # gsheet_rss, bing_news, etc.
+                source_name=source_name,  # V13: Media name for dialogue prompt
                 source_country=article.get("source_country", "FR"),
                 vertical_id=article.get("vertical_id")
             )
@@ -508,6 +510,7 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
         added = 0
         for article in articles:
             source_type = article.get("source_type", "unknown")
+            source_name = article.get("source", None)  # Media name
             
             result = add_to_content_queue_auto(
                 user_id=user_id,
@@ -516,6 +519,7 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
                 keyword=article.get("topic", "general"),
                 edition=edition,
                 source=source_type,
+                source_name=source_name,  # V13: Media name for dialogue
                 source_country=article.get("source_country", "FR"),
                 vertical_id=article.get("vertical_id")
             )

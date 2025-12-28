@@ -1142,7 +1142,8 @@ def get_or_create_segment(
     edition: str,
     format_config: dict,
     use_enrichment: bool = False,
-    user_id: str = None
+    user_id: str = None,
+    source_name: str = None
 ) -> Optional[dict]:
     """
     Create or retrieve a DIALOGUE segment for an article.
@@ -1150,6 +1151,7 @@ def get_or_create_segment(
     Args:
         use_enrichment: If True, uses Perplexity for deeper context (Digest mode)
         user_id: User ID for previous segment lookup (V12)
+        source_name: Media display name from GSheet (V13) - e.g., "Le Monde", "TechCrunch"
     """
     
     log.info(f"📰 Processing: {title[:50]}..." + (" [enriched]" if use_enrichment else ""))
@@ -1169,9 +1171,15 @@ def get_or_create_segment(
     if not title and extracted_title:
         title = extracted_title
     
-    source_name = urlparse(url).netloc.replace("www.", "")
+    # V13: Use source_name from GSheet if provided, otherwise fallback to URL parsing
+    if not source_name:
+        source_name = urlparse(url).netloc.replace("www.", "")
+        log.debug(f"⚠️ No source_name provided, using URL: {source_name}")
+    else:
+        log.info(f"📰 Source: {source_name}")
     
     # 2. Extract digest metadata (for episode_digests)
+    digest = extract_article_digest(
     digest = extract_article_digest(
         title=title,
         content=content,
@@ -1279,7 +1287,11 @@ def get_or_create_multi_source_segment(
         extraction = extract_content(article["url"])
         if extraction:
             source_type, extracted_title, content = extraction
-            source_name = urlparse(article["url"]).netloc.replace("www.", "")
+            
+            # V13: Use source_name from GSheet if available, otherwise fallback to URL
+            source_name = article.get("source_name")
+            if not source_name:
+                source_name = urlparse(article["url"]).netloc.replace("www.", "")
             
             extracted_articles.append({
                 "title": article.get("title") or extracted_title,
@@ -2035,7 +2047,7 @@ def select_smart_content(user_id: str, max_articles: int, min_articles: int = 5)
     """
     try:
         result = supabase.table("content_queue") \
-            .select("url, title, keyword, source, vertical_id") \
+            .select("url, title, keyword, source, source_name, vertical_id") \
             .eq("user_id", user_id) \
             .eq("status", "pending") \
             .order("created_at") \
@@ -2148,7 +2160,7 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
     """Select content prioritizing GSheet sources."""
     try:
         result = supabase.table("content_queue") \
-            .select("url, title, keyword, source, vertical_id") \
+            .select("url, title, keyword, source, source_name, vertical_id") \
             .eq("user_id", user_id) \
             .eq("status", "pending") \
             .order("created_at") \
@@ -2464,7 +2476,8 @@ def assemble_lego_podcast(
                 edition=edition,
                 format_config=config,
                 use_enrichment=use_enrichment,
-                user_id=user_id  # V12: Pass user_id for previous segment lookup
+                user_id=user_id,
+                source_name=item.get("source_name")  # V13: Media name from GSheet
             )
             
             if segment:

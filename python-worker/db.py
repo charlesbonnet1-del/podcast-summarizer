@@ -209,9 +209,13 @@ VERTICAL_MAPPING = {
 }
 
 
-def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, edition: str, source: str = "bing_news", source_country: str = "FR", vertical_id: str = None) -> dict | None:
+def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, edition: str, source: str = "bing_news", source_name: str = None, source_country: str = "FR", vertical_id: str = None) -> dict | None:
     """Add a news item to the content queue from automatic fetching.
     Checks for duplicates before inserting.
+    
+    Args:
+        source: Source type (gsheet_rss, bing_news, manual, etc.)
+        source_name: Display name of the media (e.g., "Le Monde", "TechCrunch")
     """
     try:
         # Check if URL already exists for this user (any status)
@@ -238,6 +242,10 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
             "priority": "normal",
             "status": "pending"
         }
+        
+        # Add source_name if provided (media display name)
+        if source_name:
+            insert_data["source_name"] = source_name
         
         # Normalize and map vertical_id
         if vertical_id:
