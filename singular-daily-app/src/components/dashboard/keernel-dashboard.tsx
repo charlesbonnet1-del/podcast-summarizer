@@ -901,42 +901,42 @@ function SignalMixerModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 bg-[#F7EEDD]/95 dark:bg-[#1A1A1A]/95 backdrop-blur-xl"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={onClose}
           />
 
-          {/* Close button */}
-          <motion.button
-            onClick={onClose}
-            className="absolute top-6 left-6 z-10 w-12 h-12 rounded-full bg-card/80 backdrop-blur-sm border border-border/50 flex items-center justify-center hover:bg-card transition-colors shadow-lg"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
+          {/* Modal Container */}
+          <motion.div
+            className="relative z-10 w-full max-w-lg max-h-[85vh] bg-card rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
           >
-            <X className="w-5 h-5" />
-          </motion.button>
-
-          {/* Content */}
-          <div className="relative z-10 w-full max-w-lg max-h-[70vh] sm:max-h-[85vh] overflow-y-auto px-4 pt-8 pb-24 sm:pb-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
-            >
-              {/* Header */}
-              <div className="text-center mb-6">
-                <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
-                <p className="text-sm text-muted-foreground mt-2">
+            {/* Header - Fixed */}
+            <div className="flex items-center justify-between p-4 border-b border-border/50">
+              <div>
+                <h2 className="font-display text-xl font-bold">Signal Mixer</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Ajustez par verticale, affinez par topic
                 </p>
               </div>
+              <button
+                onClick={onClose}
+                className="w-10 h-10 rounded-full bg-secondary/80 flex items-center justify-center hover:bg-secondary transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {/* Verticals */}
               {VERTICALS.map((vertical) => {
                 const verticalWeight = getVerticalWeight(vertical.id);
@@ -946,7 +946,7 @@ function SignalMixerModal({
                 return (
                   <motion.div
                     key={vertical.id}
-                    className="rounded-xl bg-card/60 backdrop-blur-sm border border-border/30 overflow-hidden"
+                    className="rounded-xl bg-secondary/40 border border-border/30 overflow-hidden"
                     layout
                   >
                     {/* Vertical Header with Slider */}
@@ -1067,30 +1067,27 @@ function SignalMixerModal({
                   <span className="text-[#C5B358] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle
                 </p>
               </div>
+            </div>
 
-              {/* Spacer for fixed button on mobile */}
-              <div className="h-16 sm:hidden" />
-            </motion.div>
-          </div>
-
-          {/* Save button - fixed on mobile */}
-          <motion.button
-            onClick={saveWeights}
-            disabled={saving}
-            className="fixed sm:relative bottom-20 sm:bottom-auto left-4 right-4 sm:left-auto sm:right-auto z-20 w-[calc(100%-2rem)] sm:w-full max-w-lg mx-auto py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity shadow-lg disabled:opacity-50"
-            whileTap={{ scale: 0.98 }}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            {saving ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Sauvegarde...
-              </span>
-            ) : (
-              "Sauvegarder"
-            )}
-          </motion.button>
+            {/* Footer - Fixed Save Button */}
+            <div className="p-4 border-t border-border/50 bg-card">
+              <motion.button
+                onClick={saveWeights}
+                disabled={saving}
+                className="w-full py-3 rounded-xl bg-charcoal dark:bg-cream text-cream dark:text-charcoal font-display font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                whileTap={{ scale: 0.98 }}
+              >
+                {saving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Sauvegarde...
+                  </span>
+                ) : (
+                  "Sauvegarder"
+                )}
+              </motion.button>
+            </div>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
