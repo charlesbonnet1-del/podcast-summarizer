@@ -297,6 +297,7 @@ Bob réagit, complète ou questionne.
 9. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une phrase conclusive (résumé ou perspective)
 10. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
 11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être sourcable dans le contenu fourni. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
+{previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
 - Début: Alice introduit le sujet en citant la source
@@ -308,8 +309,22 @@ Titre: {title}
 Source: {source_name}
 Contenu:
 {content}
+{previous_segment_context}
 
 ## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}) - ALICE DOIT CONCLURE:"""
+
+# Rule to add when there's a previous segment
+PREVIOUS_SEGMENT_RULE = """12. ⚠️ NON-RÉPÉTITION: Un segment récent sur ce sujet existe. NE RÉPÈTE PAS les informations déjà couvertes (voir ci-dessous). Apporte des NOUVELLES informations ou un nouvel angle. Tu peux brièvement rappeler le contexte si nécessaire, mais le cœur du dialogue doit être NOUVEAU."""
+
+# Context block for previous segment
+PREVIOUS_SEGMENT_CONTEXT = """
+
+## SEGMENT PRÉCÉDENT SUR CE SUJET (ne pas répéter)
+Titre précédent: {prev_title}
+Ce qui a été couvert:
+{prev_script}
+
+⚠️ NE RÉPÈTE PAS ces informations. Apporte du NOUVEAU."""
 
 
 # Multi-source prompt for topics covered by multiple articles
@@ -344,6 +359,7 @@ Bob réagit, complète ou souligne les différences.
 9. ⚠️ ALICE [A] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
 10. La DERNIÈRE réplique est TOUJOURS [A] qui conclut - JAMAIS une question de Bob
 11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être présent dans les sources fournies. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
+{previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
 - Début: Alice présente le sujet multi-sources
@@ -352,6 +368,7 @@ Bob réagit, complète ou souligne les différences.
 
 ## SOURCES ({source_count} articles sur ce sujet)
 {sources_content}
+{previous_segment_context}
 
 ## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources) - ALICE DOIT CONCLURE:"""
 
@@ -768,13 +785,17 @@ def generate_dialogue_segment_script(
     source_name: str,
     word_count: int = 200,
     style: str = "dynamique",
-    use_enrichment: bool = False
+    use_enrichment: bool = False,
+    topic_slug: str = None,
+    user_id: str = None
 ) -> Optional[str]:
     """
     Generate DIALOGUE script for a segment.
     
     Args:
         use_enrichment: If True, uses Perplexity to add context (for Digest mode)
+        topic_slug: Topic identifier to fetch previous segment
+        user_id: User ID for context (optional)
     """
     if not groq_client:
         log.error("Groq client not available")
@@ -796,12 +817,30 @@ CONTEXTE ENRICHI (sources additionnelles):
         else:
             full_content = content[:4000]
         
+        # V12: Get previous segment for this topic to avoid repetition
+        previous_segment = None
+        previous_segment_rule = ""
+        previous_segment_context = ""
+        
+        if topic_slug:
+            previous_segment = get_previous_segment_for_topic(topic_slug, user_id)
+            
+            if previous_segment and previous_segment.get("script_text"):
+                previous_segment_rule = PREVIOUS_SEGMENT_RULE
+                previous_segment_context = PREVIOUS_SEGMENT_CONTEXT.format(
+                    prev_title=previous_segment.get("title", "Segment précédent"),
+                    prev_script=previous_segment.get("script_text", "")[:1500]  # Limit size
+                )
+                log.info(f"📚 Including previous segment context for topic '{topic_slug}'")
+        
         prompt = DIALOGUE_SEGMENT_PROMPT.format(
             word_count=word_count,
             style=style,
             title=title,
             source_name=source_name,
-            content=full_content
+            content=full_content,
+            previous_segment_rule=previous_segment_rule,
+            previous_segment_context=previous_segment_context
         )
         
         for attempt in range(3):
@@ -873,6 +912,47 @@ def ensure_alice_conclusion(script: str) -> str:
 # ============================================
 # SEGMENT CACHING
 # ============================================
+
+def get_previous_segment_for_topic(topic_slug: str, user_id: str = None, days_back: int = 7) -> Optional[dict]:
+    """
+    Get the most recent segment generated for the same topic.
+    Used to avoid repetition and build on previous coverage.
+    
+    Returns:
+        dict with 'script_text', 'title', 'source_title', 'created_at' or None
+    """
+    try:
+        from datetime import timedelta
+        cutoff_date = (datetime.now() - timedelta(days=days_back)).isoformat()
+        
+        query = supabase.table("audio_segments") \
+            .select("script_text, source_title, topic_slug, created_at") \
+            .eq("topic_slug", topic_slug) \
+            .gte("created_at", cutoff_date) \
+            .order("created_at", desc=True) \
+            .limit(1)
+        
+        # Optionally filter by user_id if provided
+        if user_id:
+            query = query.eq("user_id", user_id)
+        
+        result = query.execute()
+        
+        if result.data and len(result.data) > 0:
+            segment = result.data[0]
+            log.info(f"📚 Found previous segment for topic '{topic_slug}': {segment.get('source_title', '')[:40]}...")
+            return {
+                "script_text": segment.get("script_text", ""),
+                "title": segment.get("source_title", ""),
+                "created_at": segment.get("created_at", "")
+            }
+        
+        return None
+        
+    except Exception as e:
+        log.warning(f"⚠️ Could not fetch previous segment for topic: {e}")
+        return None
+
 
 def get_content_hash(url: str, content: str) -> str:
     """Generate unique hash for content."""
@@ -958,13 +1038,15 @@ def get_or_create_segment(
     target_date: date,
     edition: str,
     format_config: dict,
-    use_enrichment: bool = False
+    use_enrichment: bool = False,
+    user_id: str = None
 ) -> Optional[dict]:
     """
     Create or retrieve a DIALOGUE segment for an article.
     
     Args:
         use_enrichment: If True, uses Perplexity for deeper context (Digest mode)
+        user_id: User ID for previous segment lookup (V12)
     """
     
     log.info(f"📰 Processing: {title[:50]}..." + (" [enriched]" if use_enrichment else ""))
@@ -1011,13 +1093,16 @@ def get_or_create_segment(
             }
     
     # 4. Generate DIALOGUE script (with Perplexity enrichment for Digest)
+    # V12: Pass topic_slug to check for previous segment
     script = generate_dialogue_segment_script(
         title=title,
         content=content,
         source_name=source_name,
         word_count=format_config["words_per_article"],
         style=format_config["style"],
-        use_enrichment=use_enrichment
+        use_enrichment=use_enrichment,
+        topic_slug=topic_slug,
+        user_id=user_id
     )
     
     if not script:
@@ -1073,11 +1158,15 @@ def get_or_create_multi_source_segment(
     cluster_theme: str,
     target_date: date,
     edition: str,
-    format_config: dict
+    format_config: dict,
+    user_id: str = None
 ) -> Optional[dict]:
     """Create an enriched segment from multiple articles on the same topic."""
     
     log.info(f"🔥 Creating multi-source segment: {cluster_theme[:50]}... ({len(articles)} sources)")
+    
+    # Get topic from first article for previous segment lookup
+    topic_slug = articles[0].get("keyword", "general") if articles else "general"
     
     # 1. Extract content from all articles
     extracted_articles = []
@@ -1121,6 +1210,19 @@ def get_or_create_multi_source_segment(
         sources_content += f"Titre: {art['title']}\n"
         sources_content += f"Contenu:\n{art['content']}\n"
     
+    # V12: Get previous segment for this topic to avoid repetition
+    previous_segment = get_previous_segment_for_topic(topic_slug, user_id)
+    previous_segment_rule = ""
+    previous_segment_context = ""
+    
+    if previous_segment and previous_segment.get("script_text"):
+        previous_segment_rule = PREVIOUS_SEGMENT_RULE
+        previous_segment_context = PREVIOUS_SEGMENT_CONTEXT.format(
+            prev_title=previous_segment.get("title", "Segment précédent"),
+            prev_script=previous_segment.get("script_text", "")[:1500]
+        )
+        log.info(f"📚 Including previous segment context for multi-source topic '{topic_slug}'")
+    
     # 3. Generate dialogue with multi-source prompt
     # More words for richer multi-source content
     word_count = int(format_config["words_per_article"] * 1.5)
@@ -1129,7 +1231,9 @@ def get_or_create_multi_source_segment(
         word_count=word_count,
         source_count=len(extracted_articles),
         sources_content=sources_content,
-        style=format_config["style"]
+        style=format_config["style"],
+        previous_segment_rule=previous_segment_rule,
+        previous_segment_context=previous_segment_context
     )
     
     script = None
@@ -1169,6 +1273,19 @@ def get_or_create_multi_source_segment(
     
     if not audio_url:
         audio_url = audio_path
+    
+    # V12: Cache this multi-source segment for future non-repetition
+    cache_segment(
+        content_hash=content_hash,
+        topic_slug=topic_slug,
+        target_date=target_date,
+        edition=edition,
+        source_url=articles[0]["url"],
+        source_title=cluster_theme,
+        script_text=script,
+        audio_url=audio_url,
+        audio_duration=duration
+    )
     
     log.info(f"✅ Multi-source segment created: {cluster_theme[:40]}, {duration}s, {len(articles)} sources")
     
@@ -1941,7 +2058,8 @@ def assemble_lego_podcast(
                 cluster_theme=cluster_theme,
                 target_date=target_date,
                 edition=edition,
-                format_config=config
+                format_config=config,
+                user_id=user_id  # V12: Pass user_id for previous segment lookup
             )
             
             if segment:
@@ -1996,7 +2114,8 @@ def assemble_lego_podcast(
                 target_date=target_date,
                 edition=edition,
                 format_config=config,
-                use_enrichment=use_enrichment
+                use_enrichment=use_enrichment,
+                user_id=user_id  # V12: Pass user_id for previous segment lookup
             )
             
             if segment:
