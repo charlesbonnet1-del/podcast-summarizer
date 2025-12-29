@@ -45,8 +45,7 @@ const VERTICALS = [
     topics: [
       { id: "crypto", label: "Crypto", description: "Protocoles et décentralisation" },
       { id: "macro", label: "Macro-économie", description: "Banques centrales et tendances" },
-      { id: "stocks", label: "Marchés", description: "Valorisations et rotations" },
-      { id: "deals", label: "M&A & VC", description: "Levées et acquisitions" },
+      { id: "deals", label: "M&A & VC", description: "Levées, acquisitions et marchés" },
     ]
   },
   {

@@ -32,7 +32,7 @@ DEFAULT_TOPICS = [
     # Monde
     "asia", "regulation", "resources",
     # Économie
-    "crypto", "macro", "stocks",
+    "crypto", "macro", "deals",
     # Science
     "energy", "health", "space",
     # Influence (replaces Culture)

@@ -125,7 +125,7 @@ def get_gsheet_client():
 VERTICALS_TOPICS = {
     "TECH": ["ia", "cyber", "deep_tech"],
     "SCIENCE": ["health", "space", "energy"],
-    "ECONOMICS": ["crypto", "macro", "stocks", "deals"],
+    "ECONOMICS": ["crypto", "macro", "deals"],
     "WORLD": ["asia", "regulation", "resources"],
     "INFLUENCE": ["info", "attention", "persuasion"],
 }
@@ -764,7 +764,7 @@ def fetch_content_for_user(
             "france": "politique France",
             "usa": "politique USA",
             "international": "géopolitique monde",
-            "stocks": "bourse CAC 40",
+            "deals": "M&A levée fonds IPO bourse",
             "crypto": "bitcoin crypto",
             "macro": "économie mondiale",
             "space": "espace NASA SpaceX",

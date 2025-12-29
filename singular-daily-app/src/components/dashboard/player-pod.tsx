@@ -58,7 +58,7 @@ const TOPIC_STYLES: Record<string, { icon: string; color: string }> = {
   // V3 ECONOMICS
   crypto: { icon: "₿", color: "text-orange-500" },
   macro: { icon: "🌍", color: "text-green-500" },
-  stocks: { icon: "📈", color: "text-blue-400" },
+  deals: { icon: "💼", color: "text-purple-400" },
   deals: { icon: "🤝", color: "text-emerald-500" },
   
   // V4 WORLD

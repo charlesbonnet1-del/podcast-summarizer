@@ -79,7 +79,7 @@ MARKETS = {
 SUPPORTED_TOPICS = [
     'ia', 'quantum', 'robotics',           # Tech
     'France', 'USA',                        # Politics (case-sensitive!)
-    'crypto', 'macro', 'stocks',            # Finance
+    'crypto', 'macro', 'deals',            # Finance
     'space', 'health', 'energy',            # Science
     'cinema', 'gaming', 'lifestyle'         # Culture
 ]
@@ -98,7 +98,7 @@ TOPIC_QUERIES = {
     # Finance
     "crypto": "bitcoin crypto ethereum",
     "macro": "économie mondiale macroéconomie",
-    "stocks": "bourse CAC 40 marchés actions",
+    "deals": "M&A levée fonds acquisition IPO bourse",
     # Science
     "space": "espace NASA SpaceX",
     "health": "santé médecine",

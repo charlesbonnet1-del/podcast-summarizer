@@ -152,7 +152,6 @@ TRANSITION_PHRASES = {
     # V3 ECONOMICS
     "crypto": "Direction les cryptomonnaies.",
     "macro": "Côté macroéconomie.",
-    "stocks": "Parlons marchés.",
     "deals": "Les deals du moment.",
     
     # V4 WORLD
@@ -175,7 +174,7 @@ TRANSITION_PHRASES = {
 # ============================================
 # V1 TECH: ia, cyber, deep_tech
 # V2 SCIENCE: health, space, energy
-# V3 ECONOMICS: crypto, macro, stocks, deals
+# V3 ECONOMICS: crypto, macro, deals
 # V4 WORLD: asia, regulation, resources
 # V5 INFLUENCE: info, attention, persuasion
 
@@ -221,14 +220,10 @@ Focus sur : évolutions protocolaires, adoption institutionnelle, nouvelles prim
 Quels sont les courants de fond (politiques, monétaires, intellectuels) qui déplacent les PLAQUES TECTONIQUES de l'économie mondiale ?
 Focus sur : tendances structurelles, inflexions de politique, reconfigurations géoéconomiques.""",
 
-    "stocks": """⚡ ANGLE ÉDITORIAL (STOCKS):
-Quelles sont les FORCES STRUCTURELLES (et non les bruits de séance) qui modifient la valeur des entreprises et des secteurs ?
-Focus sur : rotations sectorielles, changements de valorisation, signaux de long terme.""",
-
-    "deals": """⚡ ANGLE ÉDITORIAL (M&A, VC, DEALS):
+    "deals": """⚡ ANGLE ÉDITORIAL (DEALS - M&A, VC, IPO, MARCHÉS):
 Quels MOUVEMENTS DE CAPITAL signalent les stratégies de long terme des acteurs ?
-Analyse les LOGIQUES D'ACQUISITION et les signaux du marché VC.
-Focus sur : levées de fonds, acquisitions stratégiques, consolidations sectorielles, valorisations.""",
+Analyse les LOGIQUES D'ACQUISITION, les signaux du marché VC, et les FORCES STRUCTURELLES qui modifient la valeur des entreprises.
+Focus sur : levées de fonds, acquisitions stratégiques, IPO, consolidations sectorielles, valorisations, rotations de marché.""",
 
     # V4 WORLD
     "asia": """⚡ ANGLE ÉDITORIAL (ASIA):
@@ -957,6 +952,115 @@ def enrich_content_with_perplexity(
     except Exception as e:
         log.warning(f"⚠️ Perplexity enrichment failed: {e}")
         return None
+
+
+def inject_premium_sources_to_deals(user_id: str) -> int:
+    """
+    V14 Premium Module: Inject articles from high-score sources (>90) into deals category.
+    
+    Sources with GSheet score > 90 are considered premium and their content
+    is automatically classified into the deals topic for priority processing.
+    
+    Returns number of articles injected.
+    """
+    if not supabase:
+        return 0
+    
+    try:
+        # Get premium sources (score > 90)
+        from source_scoring import STATUS_ACTIVE
+        
+        premium_sources = supabase.table("source_performance") \
+            .select("source_domain, gsheet_score, dynamic_score") \
+            .gte("gsheet_score", 90) \
+            .eq("status", STATUS_ACTIVE) \
+            .execute()
+        
+        if not premium_sources.data:
+            log.debug("No premium sources found")
+            return 0
+        
+        premium_domains = [s["source_domain"] for s in premium_sources.data]
+        log.info(f"🌟 Found {len(premium_domains)} premium sources (score > 90)")
+        
+        # Get pending articles from premium sources not yet in deals
+        articles = supabase.table("content_queue") \
+            .select("id, title, source_name, keyword") \
+            .eq("user_id", user_id) \
+            .eq("status", "pending") \
+            .in_("source_name", premium_domains) \
+            .neq("keyword", "deals") \
+            .limit(10) \
+            .execute()
+        
+        if not articles.data:
+            return 0
+        
+        # Inject into deals with deal_type classification
+        injected = 0
+        for article in articles.data:
+            try:
+                # Classify deal type based on title
+                deal_type = classify_deal_type(article.get("title", ""))
+                
+                supabase.table("content_queue").update({
+                    "keyword": "deals",
+                    "deal_type": deal_type or "MARKET",
+                    "priority": "high",
+                    "premium_source": True
+                }).eq("id", article["id"]).execute()
+                
+                injected += 1
+                log.debug(f"🌟 Premium inject: {article['title'][:50]}... → deals/{deal_type}")
+                
+            except Exception as e:
+                log.warning(f"⚠️ Failed to inject premium article: {e}")
+        
+        if injected > 0:
+            log.info(f"🌟 Injected {injected} premium source articles into deals")
+        
+        return injected
+        
+    except ImportError:
+        log.debug("source_scoring not available")
+        return 0
+    except Exception as e:
+        log.warning(f"⚠️ Premium injection failed: {e}")
+        return 0
+
+
+def classify_deal_type(title: str) -> Optional[str]:
+    """
+    Classify deal type based on title keywords.
+    
+    Returns: MA, FUNDRAISING, IPO, PARTNERSHIP, MARKET, or None
+    """
+    if not title:
+        return None
+    
+    title_lower = title.lower()
+    
+    # M&A keywords
+    if any(kw in title_lower for kw in ["acquisition", "rachat", "fusion", "merger", "m&a", "achète", "rachète"]):
+        return "MA"
+    
+    # Fundraising keywords
+    if any(kw in title_lower for kw in ["levée", "fundrais", "série a", "série b", "série c", "seed", "investissement", "vc", "venture"]):
+        return "FUNDRAISING"
+    
+    # IPO keywords
+    if any(kw in title_lower for kw in ["ipo", "introduction en bourse", "entrée en bourse", "cotation"]):
+        return "IPO"
+    
+    # Partnership keywords
+    if any(kw in title_lower for kw in ["partenariat", "partnership", "alliance", "collaboration", "accord"]):
+        return "PARTNERSHIP"
+    
+    # Market keywords
+    if any(kw in title_lower for kw in ["bourse", "action", "cac", "dow", "nasdaq", "valorisation", "cours"]):
+        return "MARKET"
+    
+    return None
 
 
 # ============================================
@@ -2543,6 +2647,14 @@ def assemble_lego_podcast(
         first_name = user_result.data.get("first_name", "Ami") if user_result.data else "Ami"
     except:
         first_name = "Ami"
+    
+    # V14: Inject premium sources (score > 90) into deals category
+    try:
+        premium_injected = inject_premium_sources_to_deals(user_id)
+        if premium_injected > 0:
+            log.info(f"🌟 Premium Module: {premium_injected} articles injected into deals")
+    except Exception as e:
+        log.debug(f"Premium injection skipped: {e}")
     
     # V14: Try CLUSTER-BASED selection first (pre-computed daily clusters)
     # Falls back to inventory-first, then smart_content

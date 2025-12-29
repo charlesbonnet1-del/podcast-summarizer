@@ -48,8 +48,7 @@ const TOPIC_CATEGORIES = [
     topics: [
       { id: "crypto", label: "Crypto", description: "Bitcoin, Ethereum, DeFi, protocoles et adoption institutionnelle.", keywords: ["Bitcoin", "Ethereum", "crypto", "blockchain", "DeFi", "NFT"] },
       { id: "macro", label: "Macro-économie", description: "Politiques monétaires, banques centrales, inflation et tendances mondiales.", keywords: ["BCE", "Fed", "inflation", "taux", "économie mondiale", "récession"] },
-      { id: "stocks", label: "Marchés", description: "Actions, valorisations, rotations sectorielles et signaux de long terme.", keywords: ["bourse", "actions", "Wall Street", "CAC 40", "earnings", "IPO"] },
-      { id: "deals", label: "M&A & VC", description: "Fusions-acquisitions, levées de fonds, VC et mouvements de capital stratégiques.", keywords: ["M&A", "acquisition", "levée de fonds", "VC", "funding", "série A", "IPO"] },
+      { id: "deals", label: "M&A & VC", description: "Fusions-acquisitions, levées de fonds, IPO, VC et mouvements de capital stratégiques.", keywords: ["M&A", "acquisition", "levée de fonds", "VC", "funding", "série A", "IPO", "bourse", "valorisation"] },
     ]
   },
   {

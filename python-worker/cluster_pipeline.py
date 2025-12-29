@@ -73,8 +73,7 @@ TOPICS = {
     # V3 ECONOMICS
     "crypto": "Crypto-monnaies, Bitcoin, Ethereum, blockchain, DeFi, NFT, Web3",
     "macro": "Macroéconomie, inflation, taux d'intérêt, banques centrales, PIB, politique monétaire",
-    "stocks": "Bourse, actions, marchés financiers, valorisation, earnings, indices",
-    "deals": "M&A, venture capital, levées de fonds, acquisitions, startups, investissements",
+    "deals": "M&A, venture capital, levées de fonds, acquisitions, startups, investissements, bourse, actions, IPO, valorisation, earnings",
     
     # V4 WORLD
     "asia": "Asie, Chine, Japon, Corée, Inde, géopolitique asiatique, tech asiatique",
