@@ -26,32 +26,46 @@ export function usePushNotifications() {
   // Check if push is supported
   useEffect(() => {
     const checkSupport = async () => {
-      const isSupported = 
-        'serviceWorker' in navigator && 
-        'PushManager' in window &&
-        'Notification' in window;
+      // Check basic API support
+      const hasServiceWorker = 'serviceWorker' in navigator;
+      const hasPushManager = 'PushManager' in window;
+      const hasNotification = 'Notification' in window;
+      
+      console.log('[Push] Support check:', { hasServiceWorker, hasPushManager, hasNotification });
 
-      if (!isSupported) {
+      if (!hasServiceWorker || !hasPushManager || !hasNotification) {
+        console.log('[Push] APIs not supported');
         setState(prev => ({ 
           ...prev, 
           isSupported: false, 
           loading: false,
-          error: 'Push notifications not supported in this browser'
+          error: `APIs manquantes: SW=${hasServiceWorker}, Push=${hasPushManager}, Notif=${hasNotification}`
         }));
         return;
       }
 
       // Get current permission
       const permission = Notification.permission;
+      console.log('[Push] Permission:', permission);
 
-      // Check if already subscribed
+      // Try to register service worker first
       let isSubscribed = false;
       try {
-        const registration = await navigator.serviceWorker.ready;
+        // Register SW if not already registered
+        const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        console.log('[Push] SW registered:', registration.scope);
+        
+        // Wait for SW to be ready
+        await navigator.serviceWorker.ready;
+        console.log('[Push] SW ready');
+        
+        // Check subscription
         const subscription = await registration.pushManager.getSubscription();
         isSubscribed = subscription !== null;
+        console.log('[Push] Subscription:', isSubscribed);
       } catch (e) {
-        console.error('[Push] Error checking subscription:', e);
+        console.error('[Push] Error during SW setup:', e);
+        // Still mark as supported - user can try to subscribe
       }
 
       setState(prev => ({
@@ -63,7 +77,9 @@ export function usePushNotifications() {
       }));
     };
 
-    checkSupport();
+    // Small delay to ensure window is fully loaded
+    const timer = setTimeout(checkSupport, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Register service worker
