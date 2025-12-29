@@ -59,7 +59,6 @@ const TOPIC_STYLES: Record<string, { icon: string; color: string }> = {
   crypto: { icon: "₿", color: "text-orange-500" },
   macro: { icon: "🌍", color: "text-green-500" },
   deals: { icon: "💼", color: "text-purple-400" },
-  deals: { icon: "🤝", color: "text-emerald-500" },
   
   // V4 WORLD
   asia: { icon: "🌏", color: "text-red-400" },
