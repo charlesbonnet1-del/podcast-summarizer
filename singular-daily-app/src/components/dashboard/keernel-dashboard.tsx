@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Play, Pause, Layers, X, ExternalLink, Link2, Loader2,
@@ -838,7 +839,13 @@ function SignalMixerModal({
   });
   const [expandedVertical, setExpandedVertical] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
+
+  // Portal needs to wait for client-side mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -895,35 +902,47 @@ function SignalMixerModal({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  // Use Portal to render at document.body level, above all other elements
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <motion.div
-          className="fixed inset-0 z-[9999] bg-[#F7EEDD] dark:bg-[#1A1A1A] flex flex-col"
-          style={{ paddingBottom: '96px' }} // Space for player
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          {/* Header - Fixed */}
-          <div className="shrink-0 px-4 pt-6 pb-2 bg-[#F7EEDD] dark:bg-[#1A1A1A]">
-            <div className="max-w-lg mx-auto flex items-start justify-between">
-              <div>
-                <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Ajustez par verticale, affinez par topic
-                </p>
+        <>
+          {/* Backdrop that covers EVERYTHING including fixed headers */}
+          <motion.div
+            className="fixed inset-0 bg-[#F7EEDD] dark:bg-[#1A1A1A]"
+            style={{ zIndex: 99998 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          />
+          
+          {/* Modal Content */}
+          <motion.div
+            className="fixed inset-0 flex flex-col"
+            style={{ zIndex: 99999, paddingBottom: '96px' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            {/* Header - Fixed */}
+            <div className="shrink-0 px-4 pt-6 pb-2 bg-[#F7EEDD] dark:bg-[#1A1A1A]">
+              <div className="max-w-lg mx-auto flex items-start justify-between">
+                <div>
+                  <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Ajustez par verticale, affinez par topic
+                  </p>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-10 h-10 rounded-full bg-[#E5D9C3] dark:bg-[#333] flex items-center justify-center hover:bg-[#DDD0BC] dark:hover:bg-[#444] transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={onClose}
-                className="w-10 h-10 rounded-full bg-[#E5D9C3] dark:bg-[#333] flex items-center justify-center hover:bg-[#DDD0BC] dark:hover:bg-[#444] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
-          </div>
 
           {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto px-4">
@@ -1082,8 +1101,10 @@ function SignalMixerModal({
             </div>
           </div>
         </motion.div>
+        </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
