@@ -363,6 +363,44 @@ def get_or_create_transition(topic: str, vertical: str = None) -> Optional[dict]
 # DIALOGUE PROMPT - ALICE & BOB
 # ============================================
 
+# V14: Optimized prompt for pre-synthesized clusters (with thesis/antithesis)
+DIALOGUE_CLUSTER_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
+{topic_intention}
+## SYNTHÈSE À TRANSFORMER EN DIALOGUE
+**Sujet**: {theme}
+**Accroche**: {hook}
+**Thèse (fait principal)**: {thesis}
+**Antithèse (nuances/contre-arguments)**: {antithesis}
+**Données clés**: {key_data}
+**Sources**: {sources}
+
+## LES HÔTES
+- [B] L'ANALYSTE (voix masculine) = Présente la THÈSE avec les données clés
+- [A] LA SCEPTIQUE (voix féminine) = Apporte l'ANTITHÈSE et les nuances
+
+## RÈGLES ABSOLUES
+⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
+⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
+⚠️ STYLE DENSE: Chaque phrase apporte de l'information
+
+## FORMAT
+[B]
+(expose la thèse avec données)
+
+[A]
+(apporte l'antithèse ou nuance)
+
+## STRUCTURE OBLIGATOIRE
+1. [B] ouvre avec l'accroche et la thèse principale + données
+2. [A] challenge avec l'antithèse ou demande une précision
+3. [B] répond avec des données complémentaires
+4. [A] apporte une nuance finale ou perspective
+5. [B] CONCLUT avec une synthèse
+
+Minimum 6 répliques. Cite les sources naturellement.
+
+## GÉNÈRE LE DIALOGUE ({word_count} mots):"""
+
 DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
 {topic_intention}
 ## LES HÔTES (Dialectique fonctionnelle, pas d'émotions simulées)
@@ -924,6 +962,90 @@ def enrich_content_with_perplexity(
 # ============================================
 # SCRIPT GENERATION
 # ============================================
+
+def generate_cluster_dialogue_script(
+    cluster_item: dict,
+    word_count: int = 200,
+    style: str = "dynamique",
+    topic_slug: str = None,
+    user_id: str = None
+) -> Optional[str]:
+    """
+    V14: Generate DIALOGUE script from a pre-synthesized cluster.
+    Uses the thesis/antithesis structure for better dialogue.
+    """
+    if not groq_client:
+        log.error("Groq client not available")
+        return None
+    
+    # Check if this is a cluster item
+    if not cluster_item.get("_from_cluster"):
+        # Fall back to regular generation
+        return generate_dialogue_segment_script(
+            title=cluster_item.get("title", ""),
+            content=cluster_item.get("content", ""),
+            source_name=cluster_item.get("source_name", ""),
+            word_count=word_count,
+            style=style,
+            topic_slug=topic_slug,
+            user_id=user_id
+        )
+    
+    try:
+        # Extract cluster synthesis
+        theme = cluster_item.get("title", cluster_item.get("theme", "Sujet"))
+        hook = cluster_item.get("hook", "")
+        thesis = cluster_item.get("thesis", cluster_item.get("content", ""))
+        antithesis = cluster_item.get("antithesis", "")
+        key_data = cluster_item.get("key_data", [])
+        sources = cluster_item.get("source_name", "Multiple sources")
+        
+        # Format key data as string
+        key_data_str = ", ".join(key_data) if key_data else "Non disponible"
+        
+        # Get editorial intention for this topic
+        topic_intention = get_topic_intention(topic_slug) if topic_slug else ""
+        
+        prompt = DIALOGUE_CLUSTER_PROMPT.format(
+            word_count=word_count,
+            style=style,
+            theme=theme,
+            hook=hook if hook else theme,
+            thesis=thesis,
+            antithesis=antithesis if antithesis else "À explorer dans le dialogue",
+            key_data=key_data_str,
+            sources=sources,
+            topic_intention=topic_intention
+        )
+        
+        log.info(f"🎯 Generating cluster dialogue: {theme[:50]}...")
+        
+        for attempt in range(3):
+            response = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=word_count * 3
+            )
+            
+            script = response.choices[0].message.content.strip()
+            
+            # Validate dialogue format
+            has_tags = '[A]' in script or '[B]' in script
+            if has_tags:
+                script = ensure_bob_conclusion(script)
+                log.info(f"✅ Cluster dialogue generated ({len(script)} chars)")
+                return script
+            
+            log.warning(f"⚠️ Cluster dialogue attempt {attempt+1} missing tags, retrying...")
+        
+        log.error("❌ Failed to generate valid cluster dialogue after 3 attempts")
+        return None
+        
+    except Exception as e:
+        log.error(f"❌ Cluster dialogue generation failed: {e}")
+        return None
+
 
 def generate_dialogue_segment_script(
     title: str,
@@ -2308,6 +2430,59 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
 
 
 # ============================================
+# V14: CLUSTER-BASED CONTENT SELECTION
+# ============================================
+
+def select_from_clusters(user_id: str, max_topics: int = 15) -> list[dict]:
+    """
+    V14: Select content from pre-computed daily clusters.
+    Falls back to legacy selection if no clusters available.
+    
+    Returns list of cluster syntheses ready for dialogue generation.
+    """
+    try:
+        from cluster_pipeline import get_daily_clusters
+        
+        # Get today's clusters for this user
+        clusters = get_daily_clusters(user_id)
+        
+        if not clusters:
+            log.warning("⚠️ No daily clusters found, using legacy selection")
+            return []
+        
+        log.info(f"🎯 Found {len(clusters)} pre-computed clusters")
+        
+        # Convert clusters to format expected by dialogue generator
+        items = []
+        for cluster in clusters[:max_topics]:
+            items.append({
+                "keyword": cluster.get("topic", "general"),
+                "topic_slug": cluster.get("topic", "general"),
+                "title": cluster.get("theme", ""),
+                "url": cluster.get("urls", [""])[0] if cluster.get("urls") else "",
+                "source_name": ", ".join(cluster.get("sources", ["Multiple sources"])[:2]),
+                "content": f"{cluster.get('thesis', '')} {cluster.get('antithesis', '')}",
+                "hook": cluster.get("hook", ""),
+                "thesis": cluster.get("thesis", ""),
+                "antithesis": cluster.get("antithesis", ""),
+                "key_data": cluster.get("key_data", []),
+                "article_count": cluster.get("article_count", 1),
+                "_from_cluster": True,
+                "_cluster_score": cluster.get("score", 0)
+            })
+        
+        log.info(f"✅ Selected {len(items)} topics from clusters")
+        return items
+        
+    except ImportError:
+        log.warning("⚠️ cluster_pipeline not available, using legacy selection")
+        return []
+    except Exception as e:
+        log.error(f"❌ Cluster selection failed: {e}")
+        return []
+
+
+# ============================================
 # MAIN ASSEMBLY
 # ============================================
 
@@ -2369,14 +2544,18 @@ def assemble_lego_podcast(
     except:
         first_name = "Ami"
     
-    # V13: Use INVENTORY-FIRST selection (14+1 algorithm)
-    # Falls back to smart_content if not enough cached segments
+    # V14: Try CLUSTER-BASED selection first (pre-computed daily clusters)
+    # Falls back to inventory-first, then smart_content
     min_clusters = config.get("min_articles", 5)
     
-    # Try inventory-first (from segment cache with scoring)
-    items = select_inventory_first(user_id, max_articles)
+    items = select_from_clusters(user_id, max_articles)
     
-    # If not enough from cache, use content_queue with clustering
+    if len(items) < min_clusters:
+        log.info(f"📦 Only {len(items)} from clusters, trying inventory cache...")
+        # Try inventory-first (from segment cache with scoring)
+        items = select_inventory_first(user_id, max_articles)
+    
+    # If still not enough, use content_queue with topic grouping
     if len(items) < min_clusters:
         log.warning(f"⚠️ Only {len(items)} from inventory, using content_queue")
         items = select_smart_content(user_id, max_articles, min_articles=min_clusters)

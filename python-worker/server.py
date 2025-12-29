@@ -145,6 +145,82 @@ def status(user_id: str):
 
 
 # ============================================
+# V14: CLUSTER PIPELINE CRON
+# ============================================
+
+@app.route("/cron/cluster", methods=["POST"])
+def cron_cluster():
+    """
+    V14: Daily clustering job.
+    Transforms raw articles into semantic clusters.
+    Call this before podcast generation (e.g., 6am daily).
+    
+    Can be triggered by:
+    - Render Cron Job
+    - External cron service (cron-job.org, etc.)
+    - GitHub Actions scheduled workflow
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json() or {}
+    user_id = data.get("user_id")  # Optional: cluster for specific user only
+    
+    log.info("🎯 Cluster cron job triggered", user_id=user_id or "all users")
+    
+    # Run clustering in background thread
+    def run_clustering():
+        try:
+            from cluster_pipeline import run_cluster_pipeline, run_daily_clustering
+            
+            if user_id:
+                # Cluster for specific user
+                clusters = run_cluster_pipeline(user_id=user_id, store_results=True)
+                log.info(f"✅ Clustered {len(clusters)} topics for user {user_id[:8]}...")
+            else:
+                # Cluster for all users with pending content
+                run_daily_clustering()
+                log.info("✅ Daily clustering complete for all users")
+                
+        except Exception as e:
+            log.error(f"❌ Clustering error: {e}")
+    
+    thread = threading.Thread(target=run_clustering)
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "message": "Clustering job started",
+        "user_id": user_id or "all"
+    })
+
+
+@app.route("/clusters/<user_id>", methods=["GET"])
+def get_clusters(user_id: str):
+    """
+    V14: Get today's clusters for a user.
+    Useful for debugging and dashboard display.
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        from cluster_pipeline import get_daily_clusters
+        
+        clusters = get_daily_clusters(user_id=user_id)
+        
+        return jsonify({
+            "success": True,
+            "cluster_count": len(clusters),
+            "clusters": clusters
+        })
+    except ImportError:
+        return jsonify({"error": "Cluster pipeline not available"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================
 # CLOUDMAILIN WEBHOOK (Newsletter Ingestion)
 # ============================================
 
