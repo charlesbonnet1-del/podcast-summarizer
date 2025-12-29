@@ -221,6 +221,88 @@ def get_clusters(user_id: str):
 
 
 # ============================================
+# V14: SOURCE SCORING ENGINE
+# ============================================
+
+@app.route("/cron/scoring", methods=["POST"])
+def cron_scoring():
+    """
+    Daily source scoring job.
+    Updates dynamic scores for all active sources.
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    log.info("📊 Source scoring cron triggered")
+    
+    def run_scoring():
+        try:
+            from source_scoring import update_all_source_scores
+            result = update_all_source_scores()
+            log.info(f"✅ Scoring complete: {result}")
+        except Exception as e:
+            log.error(f"❌ Scoring error: {e}")
+    
+    thread = threading.Thread(target=run_scoring)
+    thread.start()
+    
+    return jsonify({"success": True, "message": "Scoring job started"})
+
+
+@app.route("/cron/redemption", methods=["POST"])
+def cron_redemption():
+    """
+    Monthly redemption job.
+    Tests quarantined sources for quality improvement.
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    log.info("🔄 Redemption cron triggered")
+    
+    def run_redemption():
+        try:
+            from source_scoring import run_monthly_redemption
+            result = run_monthly_redemption()
+            log.info(f"✅ Redemption complete: {result}")
+        except Exception as e:
+            log.error(f"❌ Redemption error: {e}")
+    
+    thread = threading.Thread(target=run_redemption)
+    thread.start()
+    
+    return jsonify({"success": True, "message": "Redemption job started"})
+
+
+@app.route("/source/<domain>/score", methods=["GET"])
+def get_source_score(domain: str):
+    """Get dynamic score for a specific source."""
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        from source_scoring import calculate_dynamic_score
+        scores = calculate_dynamic_score(domain)
+        return jsonify(scores)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/safety-check", methods=["GET"])
+def safety_check():
+    """Check if global safety lock is active."""
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        from source_scoring import check_global_safety_lock
+        result = check_global_safety_lock()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================
 # CLOUDMAILIN WEBHOOK (Newsletter Ingestion)
 # ============================================
 
