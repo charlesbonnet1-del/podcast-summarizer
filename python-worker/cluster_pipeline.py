@@ -179,41 +179,42 @@ def embed_articles(articles: list[dict]) -> list[dict]:
 
 
 # ============================================
-# STEP 2: CLUSTERER (HDBSCAN)
+# STEP 2: CLUSTERER (DBSCAN - no compilation needed)
 # ============================================
 
 def cluster_articles(articles: list[dict], min_cluster_size: int = MIN_CLUSTER_SIZE) -> dict:
     """
-    Cluster articles using HDBSCAN based on their embeddings.
+    Cluster articles using DBSCAN based on their embeddings.
+    Uses sklearn DBSCAN instead of HDBSCAN (no C compilation required).
     
     Returns:
         dict with cluster_id -> list of article indices
     """
-    try:
-        import hdbscan
-    except ImportError:
-        log.error("❌ hdbscan not installed. Run: pip install hdbscan")
-        return fallback_cluster_by_topic(articles)
+    from sklearn.cluster import DBSCAN
+    from sklearn.preprocessing import normalize
     
     if len(articles) < min_cluster_size:
         log.warning(f"⚠️ Too few articles ({len(articles)}) for clustering")
-        return {}
+        return fallback_cluster_by_topic(articles)
     
     # Extract embeddings as numpy array
     embeddings = np.array([a["embedding"] for a in articles])
     
-    log.info(f"🔬 Clustering {len(articles)} articles with HDBSCAN...")
+    # Normalize embeddings for cosine similarity
+    embeddings_normalized = normalize(embeddings)
     
-    # HDBSCAN clustering
-    clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=min_cluster_size,
-        min_samples=2,
-        metric='euclidean',
-        cluster_selection_method='eom',  # Excess of Mass
-        prediction_data=True
+    log.info(f"🔬 Clustering {len(articles)} articles with DBSCAN...")
+    
+    # DBSCAN with cosine distance (via normalized euclidean)
+    # eps=0.3 means vectors with cosine similarity > 0.7 are neighbors
+    clusterer = DBSCAN(
+        eps=0.5,  # Distance threshold (lower = tighter clusters)
+        min_samples=min_cluster_size,
+        metric='euclidean',  # On normalized vectors, euclidean ≈ cosine
+        n_jobs=-1  # Use all CPUs
     )
     
-    labels = clusterer.fit_predict(embeddings)
+    labels = clusterer.fit_predict(embeddings_normalized)
     
     # Group articles by cluster
     clusters = defaultdict(list)
@@ -222,7 +223,7 @@ def cluster_articles(articles: list[dict], min_cluster_size: int = MIN_CLUSTER_S
     for idx, label in enumerate(labels):
         if label == -1:  # Noise point
             noise_count += 1
-            # Check if high-authority source (keep it)
+            # Check if high-authority source (keep it as singleton)
             source_score = articles[idx].get("source_score", 50)
             if source_score >= 80:
                 # Create singleton cluster for high-authority articles
@@ -234,8 +235,9 @@ def cluster_articles(articles: list[dict], min_cluster_size: int = MIN_CLUSTER_S
     log.info(f"✅ Clustering complete: {len(clusters)} clusters, {noise_count} noise points")
     
     # Log cluster sizes
-    sizes = [len(indices) for indices in clusters.values()]
-    log.info(f"📊 Cluster sizes: min={min(sizes) if sizes else 0}, max={max(sizes) if sizes else 0}, avg={np.mean(sizes) if sizes else 0:.1f}")
+    if clusters:
+        sizes = [len(indices) for indices in clusters.values()]
+        log.info(f"📊 Cluster sizes: min={min(sizes)}, max={max(sizes)}, avg={np.mean(sizes):.1f}")
     
     return dict(clusters)
 
