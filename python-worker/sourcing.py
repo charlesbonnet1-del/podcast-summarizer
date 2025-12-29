@@ -431,13 +431,13 @@ def get_historical_facts_wikimedia(
     month: int = None, 
     day: int = None, 
     language: str = "fr",
-    max_facts: int = 3
+    max_facts: int = 5
 ) -> list[dict]:
     """
     Fetch verified historical facts from Wikimedia "On This Day" API.
     
-    Returns list of facts with year, text, and optional Wikipedia links.
-    Filters for tech/science/finance relevant events.
+    V13: Prioritizes GENUINELY INTERESTING facts - surprising, fun, memorable.
+    Not just "something happened" but "wow, I didn't know that!"
     """
     if month is None or day is None:
         now = datetime.now()
@@ -462,15 +462,56 @@ def get_historical_facts_wikimedia(
         
         facts = []
         
-        # Priority keywords for tech/finance relevance
-        tech_keywords = [
-            "ordinateur", "computer", "internet", "satellite", "fusée", "rocket",
-            "espace", "space", "nasa", "apple", "microsoft", "google", "ibm",
-            "téléphone", "phone", "radio", "télévision", "television",
-            "bourse", "stock", "banque", "bank", "économie", "economy",
-            "invention", "découverte", "discovery", "scientifique", "scientist",
-            "prix nobel", "nobel prize", "physique", "physics", "chimie", "chemistry",
-            "aviation", "avion", "aircraft", "vol", "flight"
+        # V13: Keywords for GENUINELY INTERESTING facts
+        # Things people would say "oh wow, cool!" about
+        interesting_keywords = [
+            # Tech milestones people care about
+            "iphone", "ipod", "macintosh", "windows", "internet", "web", "google",
+            "facebook", "twitter", "youtube", "netflix", "spotify", "amazon",
+            "playstation", "xbox", "nintendo", "game boy", "tetris", "mario",
+            "wikipedia", "linux", "android",
+            # Science that's cool
+            "lune", "moon", "mars", "jupiter", "saturne", "pluton",
+            "dinosaure", "adn", "dna", "clone", "robot", "ia", "ai",
+            "nobel", "einstein", "hawking", "curie",
+            # Pop culture icons
+            "beatles", "elvis", "michael jackson", "madonna", "queen",
+            "star wars", "harry potter", "marvel", "disney", "pixar",
+            "spielberg", "kubrick", "tarantino",
+            # Records & firsts that matter
+            "premier homme", "première femme", "premier vol", 
+            "record du monde", "world record", "guinness",
+            # Inventions people use
+            "téléphone", "télévision", "radio", "micro-ondes", "velcro",
+            "post-it", "walkman", "compact disc", "dvd", "mp3",
+            # Fun/quirky
+            "coca-cola", "mcdonald", "lego", "barbie", "monopoly",
+            "disneyland", "eurovision", "oscar", "grammy", "emmy"
+        ]
+        
+        # V13: BORING topics to skip entirely
+        boring_keywords = [
+            # Generic events
+            "traité", "treaty", "accord", "agreement", "convention",
+            "élection", "election", "vote", "référendum", "referendum",
+            "loi", "law", "décret", "decree", "constitution",
+            # Disasters (not interesting, just sad/morbid)
+            "accident", "crash", "catastrophe", "disaster",
+            "mort", "death", "décès", "tué", "killed",
+            "guerre", "war", "bataille", "battle", "conflit",
+            "attentat", "attack", "terroris", "bombe", "bomb",
+            "naufrage", "séisme", "earthquake", "tsunami", "ouragan",
+            "incendie", "fire", "explosion", "épidémie", "pandemic",
+            # Boring politics
+            "président", "president", "ministre", "minister", 
+            "gouvernement", "government", "parlement", "parliament",
+            "indépendance", "independence", "annexion", "annexation",
+            # Generic business
+            "fusion", "merger", "acquisition", "faillite", "bankruptcy",
+            "grève", "strike",
+            # Sports (unless record)
+            "match", "championnat", "championship", "coupe", "cup",
+            "finale", "final", "victoire", "victory", "défaite"
         ]
         
         # Process "events" (historical events)
@@ -483,9 +524,15 @@ def get_historical_facts_wikimedia(
             if not year or not text:
                 continue
             
-            # Check relevance (tech/science/finance keywords)
             text_lower = text.lower()
-            is_relevant = any(kw in text_lower for kw in tech_keywords)
+            
+            # V13: Skip boring topics entirely
+            is_boring = any(kw in text_lower for kw in boring_keywords)
+            if is_boring:
+                continue
+            
+            # Check if genuinely interesting
+            is_interesting = any(kw in text_lower for kw in interesting_keywords)
             
             # Get Wikipedia link if available
             pages = event.get("pages", [])
@@ -497,13 +544,21 @@ def get_historical_facts_wikimedia(
                 "year": year,
                 "text": text,
                 "wiki_url": wiki_url,
-                "is_tech_relevant": is_relevant
+                "is_interesting": is_interesting
             })
         
-        # Sort: tech-relevant first, then by year (most recent first for modern tech)
-        facts.sort(key=lambda x: (not x["is_tech_relevant"], -x["year"] if x["year"] > 1900 else x["year"]))
+        # Sort: interesting first, then by year (prefer 1970+ for relatability)
+        facts.sort(key=lambda x: (
+            not x["is_interesting"],  # Interesting first
+            0 if 1970 <= x["year"] <= 2020 else 1,  # Prefer modern era
+            -x["year"]  # Then most recent
+        ))
         
-        log.info("Fetched Wikimedia facts", date=f"{month}/{day}", total=len(facts))
+        log.info("Fetched Wikimedia facts", 
+                 date=f"{month}/{day}", 
+                 total_raw=len(events),
+                 after_filter=len(facts), 
+                 interesting=sum(1 for f in facts if f.get("is_interesting")))
         return facts[:max_facts]
         
     except Exception as e:
@@ -514,18 +569,25 @@ def get_historical_facts_wikimedia(
 def get_best_ephemeride_fact(month: int = None, day: int = None) -> dict | None:
     """
     Get the single best historical fact for the ephemeride.
-    Prioritizes tech/science/finance relevance.
+    V13: Only returns GENUINELY INTERESTING facts. Returns None if nothing good.
     """
     facts = get_historical_facts_wikimedia(month, day, max_facts=5)
     
     if not facts:
         return None
     
-    # Return the first (already sorted by relevance)
-    best = facts[0]
+    # V13: Only return if we have something interesting
+    # Otherwise skip the ephemeride entirely
+    interesting_facts = [f for f in facts if f.get("is_interesting")]
     
-    log.info("Selected ephemeride fact", year=best["year"], relevant=best["is_tech_relevant"])
-    return best
+    if interesting_facts:
+        best = interesting_facts[0]
+        log.info("Selected ephemeride fact", year=best["year"], text=best["text"][:50])
+        return best
+    
+    # No interesting fact found - better to skip than bore the listener
+    log.warning("No interesting ephemeride fact found - skipping")
+    return None
 
 
 # ============================================

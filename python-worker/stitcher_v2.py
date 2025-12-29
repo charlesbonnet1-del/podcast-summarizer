@@ -1645,7 +1645,9 @@ def get_or_create_intro(first_name: str) -> Optional[dict]:
 
 
 def get_or_create_ephemeride() -> Optional[dict]:
-    """Generate daily ephemeride segment (NOT cached - changes daily)."""
+    """Generate daily ephemeride segment (NOT cached - changes daily).
+    V13: Short and punchy - 5-10 seconds max, fun facts only.
+    """
     from sourcing import get_best_ephemeride_fact
     
     # Get today's date in French
@@ -1660,25 +1662,41 @@ def get_or_create_ephemeride() -> Optional[dict]:
     if ephemeride:
         year = ephemeride.get("year", "")
         fact_text = ephemeride.get("text", "")
-        # Shorten if too long
-        if len(fact_text) > 150:
-            fact_text = fact_text[:147] + "..."
         
-        ephemeride_text = f"Nous sommes le {date_str}. En ce jour, en {year}, {fact_text}"
+        # V13: Keep it SHORT - max 80 chars for the fact (~5-8 seconds spoken)
+        # Truncate at sentence boundary if possible
+        if len(fact_text) > 80:
+            # Try to cut at a sentence boundary
+            sentences = fact_text.split('. ')
+            if sentences and len(sentences[0]) <= 80:
+                fact_text = sentences[0]
+            else:
+                # Hard truncate
+                fact_text = fact_text[:77] + "..."
+        
+        # V13: Shorter format - no "Nous sommes le", just the fun fact
+        ephemeride_text = f"Le {date_str}, en {year}, {fact_text}"
         log.info(f"📅 Ephemeride: {year} - {fact_text[:50]}...")
     else:
-        ephemeride_text = f"Nous sommes le {date_str}."
-        log.warning("⚠️ No ephemeride fact available")
+        # V13: Skip ephemeride entirely if no fun fact
+        log.warning("⚠️ No ephemeride fact available - skipping")
+        return None
     
     timestamp = datetime.now().strftime("%H%M%S")
     ephemeride_path = os.path.join(tempfile.gettempdir(), f"ephemeride_{timestamp}.mp3")
     
-    # Use Alice's voice
+    # Use Alice's voice (female - la sceptique)
     if not generate_tts(ephemeride_text, "alice", ephemeride_path):
         log.error("❌ Failed to generate ephemeride")
         return None
     
     duration = get_audio_duration(ephemeride_path)
+    
+    # V13: If too long (>12s), skip it
+    if duration > 12:
+        log.warning(f"⚠️ Ephemeride too long ({duration}s > 12s) - skipping")
+        return None
+    
     log.info(f"✅ Ephemeride generated: {duration}s")
     
     return {
