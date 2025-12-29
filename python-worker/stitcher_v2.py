@@ -610,12 +610,20 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
     try:
         log.info(f"🎤 Cartesia TTS: {len(text)} chars, voice={voice_id[:8]}...")
         
-        # Generate audio bytes
+        # Generate audio bytes with optimized settings
         audio_bytes = b""
         for chunk in cartesia_client.tts.bytes(
             model_id=CARTESIA_MODEL,
             transcript=text,
-            voice={"mode": "id", "id": voice_id},
+            voice={
+                "mode": "id", 
+                "id": voice_id,
+                # V13: Voice settings for better delivery
+                "__experimental_controls": {
+                    "speed": "normal",  # Will be processed at 1.1x in post
+                    "emotion": ["positivity:high", "curiosity:medium"]  # Content/engaged tone
+                }
+            },
             language="fr",
             output_format={
                 "container": "mp3",
@@ -628,6 +636,19 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
         # Save to file
         with open(output_path, "wb") as f:
             f.write(audio_bytes)
+        
+        # V13: Apply speed 1.1x and volume 1.5x using pydub
+        try:
+            from pydub import AudioSegment
+            audio = AudioSegment.from_mp3(output_path)
+            # Speed up 1.1x (without changing pitch using speedup)
+            faster_audio = audio.speedup(playback_speed=1.1)
+            # Increase volume by ~3.5dB (1.5x perceived loudness)
+            louder_audio = faster_audio + 3.5
+            louder_audio.export(output_path, format="mp3", bitrate="192k")
+            log.info(f"✅ Cartesia audio processed: speed=1.1x, volume=+3.5dB")
+        except Exception as e:
+            log.warning(f"⚠️ Post-processing skipped: {e}")
         
         log.info(f"✅ Cartesia audio saved: {len(audio_bytes)} bytes")
         return True

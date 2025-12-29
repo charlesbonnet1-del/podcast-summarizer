@@ -140,6 +140,8 @@ def sanitize_for_tts(text: str) -> str:
     Uses word boundaries (\\b) to avoid partial matches.
     Example: "CEO" becomes "cé-i-o" but "CEOship" is left alone.
     
+    V13: Also triples question marks (? → ???) for proper interrogative intonation.
+    
     Args:
         text: Raw text to sanitize
         
@@ -194,9 +196,18 @@ def sanitize_for_tts(text: str) -> str:
             sanitized = re.sub(pattern, replace_fn, sanitized, flags=re.IGNORECASE)
             replacements_made += matches
     
-    if replacements_made > 0:
+    # V13: Triple question marks for proper TTS interrogation
+    # Replace single ? with ??? (but avoid creating more than 3)
+    # First normalize any existing multiple ? to single
+    sanitized = re.sub(r'\?+', '?', sanitized)
+    # Then triple them
+    question_count = sanitized.count('?')
+    sanitized = sanitized.replace('?', '???')
+    
+    if replacements_made > 0 or question_count > 0:
         log.debug("TTS sanitization complete", 
-                  replacements=replacements_made,
+                  phonetic_replacements=replacements_made,
+                  questions_tripled=question_count,
                   original_length=len(text),
                   sanitized_length=len(sanitized))
     
