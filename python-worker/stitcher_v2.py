@@ -428,7 +428,7 @@ La sceptique challenge ou met en perspective.
 4. Style DENSE et INFORMATIF - pas de remplissage
 5. ⚠️ [A] LA SCEPTIQUE: Maximum 50% de ses répliques peuvent être des questions. Les autres doivent être des AFFIRMATIONS sceptiques, des contre-arguments, ou des mises en perspective. Exemples: "C'est du marketing pur.", "Les contraintes physiques rendent ça improbable.", "On a déjà vu ça échouer avec X."
 6. ZÉRO liste, ZÉRO bullet points
-7. CITE LA SOURCE dans la première réplique de [B]: "Selon {source_name}..."
+7. CITE LA SOURCE dans la première réplique de [B]: {attribution_instruction}
 8. INTERDIT: prénoms, didascalies, tics de langage, formules creuses
 9. ⚠️ [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse factuelle ou une projection
 10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question ou objection de [A]
@@ -442,7 +442,7 @@ La sceptique challenge ou met en perspective.
 
 ## SOURCE
 Titre: {title}
-Source: {source_name}
+{source_label}
 Contenu:
 {content}
 {previous_segment_context}
@@ -1159,7 +1159,9 @@ def generate_dialogue_segment_script(
     style: str = "dynamique",
     use_enrichment: bool = False,
     topic_slug: str = None,
-    user_id: str = None
+    user_id: str = None,
+    source_type: str = None,
+    metadata: dict = None
 ) -> Optional[str]:
     """
     Generate DIALOGUE script for a segment.
@@ -1168,6 +1170,8 @@ def generate_dialogue_segment_script(
         use_enrichment: If True, uses Perplexity to add context (for Digest mode)
         topic_slug: Topic identifier to fetch previous segment
         user_id: User ID for context (optional)
+        source_type: Type of source ("youtube_video", "article", etc.)
+        metadata: Additional metadata (attribution_prefix for YouTube)
     """
     if not groq_client:
         log.error("Groq client not available")
@@ -1210,11 +1214,23 @@ CONTEXTE ENRICHI (sources additionnelles):
         if topic_intention:
             log.info(f"🎯 Applying editorial angle for topic '{topic_slug}'")
         
+        # V14: LEGAL - YouTube Attribution
+        # If source is YouTube, use specific attribution format
+        if source_type == "youtube_video" and metadata:
+            attribution_prefix = metadata.get("attribution_prefix", f"{source_name} explique dans sa vidéo que")
+            attribution_instruction = f'"{attribution_prefix}..."'
+            source_label = f"Vidéo YouTube: {source_name}"
+            log.info(f"🎬 YouTube attribution: {attribution_prefix}")
+        else:
+            attribution_instruction = f'"Selon {source_name}..."'
+            source_label = f"Source: {source_name}"
+        
         prompt = DIALOGUE_SEGMENT_PROMPT.format(
             word_count=word_count,
             style=style,
             title=title,
-            source_name=source_name,
+            attribution_instruction=attribution_instruction,
+            source_label=source_label,
             content=full_content,
             previous_segment_rule=previous_segment_rule,
             previous_segment_context=previous_segment_context,

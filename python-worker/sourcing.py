@@ -797,3 +797,71 @@ def fetch_content_for_user(
              has_ephemeride=result["ephemeride"] is not None)
     
     return result
+
+
+# ============================================
+# YOUTUBE INTEGRATION
+# ============================================
+
+def process_youtube_url(url: str, user_id: str = None) -> Optional[dict]:
+    """
+    Process a YouTube URL and return content ready for queue.
+    
+    LEGAL: This function ensures YouTube sources are NEVER labeled as "article".
+    Always uses "youtube_video" source_type and includes attribution_prefix.
+    
+    Returns:
+        dict ready for content_queue insertion, or None on failure
+    """
+    try:
+        from youtube_parser import YouTubeParser, YouTubeParserError
+        
+        parser = YouTubeParser()
+        
+        # Check if valid YouTube URL
+        if not parser.is_youtube_url(url):
+            return None
+        
+        # Process the video
+        result = parser.process(url)
+        
+        # Format for content_queue
+        # LEGAL: source_type is "youtube_video" (never "article")
+        queue_entry = {
+            "user_id": user_id,
+            "url": result["original_url"],
+            "title": result["video_title"],
+            "source_type": "youtube_video",
+            "source_name": result["channel_name"],
+            "source": "youtube",
+            "processed_content": result["cleaned_text"][:10000],
+            "status": "pending",
+            "priority": "high",  # Manual YouTube submissions are high priority
+            # LEGAL: Store attribution for dialogue generation
+            "metadata": json.dumps({
+                "attribution_prefix": result["attribution_prefix"],
+                "source_label": result["source_label"],
+                "citation_format": result["citation_format"],
+                "video_id": result["video_id"],
+                "duration_seconds": result["duration_seconds"],
+                "transcript_type": result["transcript_type"]
+            })
+        }
+        
+        log.info(f"✅ YouTube processed: {result['channel_name']} - {result['video_title'][:50]}")
+        return queue_entry
+        
+    except ImportError:
+        log.error("❌ youtube_parser module not available")
+        return None
+    except Exception as e:
+        log.error(f"❌ YouTube processing failed: {e}")
+        return None
+
+
+def is_youtube_url(url: str) -> bool:
+    """Quick check if URL is YouTube without importing full parser."""
+    if not url:
+        return False
+    return any(domain in url.lower() for domain in ['youtube.com', 'youtu.be'])
+
