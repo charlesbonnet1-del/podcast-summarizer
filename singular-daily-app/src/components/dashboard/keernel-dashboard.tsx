@@ -901,13 +901,14 @@ function SignalMixerModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-x-0 top-0 bottom-24 z-[100] bg-[#F7EEDD] dark:bg-[#1A1A1A] flex flex-col"
+          className="fixed inset-0 z-[9999] bg-[#F7EEDD] dark:bg-[#1A1A1A] flex flex-col"
+          style={{ paddingBottom: '96px' }} // Space for player
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           {/* Header - Fixed */}
-          <div className="shrink-0 px-4 pt-6 pb-2">
+          <div className="shrink-0 px-4 pt-6 pb-2 bg-[#F7EEDD] dark:bg-[#1A1A1A]">
             <div className="max-w-lg mx-auto flex items-start justify-between">
               <div>
                 <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
