@@ -369,9 +369,13 @@ DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {
 - [B] L'ANALYSTE (voix masculine) = Voix stable, factuelle. Il apporte les données brutes, les faits techniques et le potentiel futuriste.
 - [A] LA SCEPTIQUE (voix féminine) = Voix incisive, inquisitrice. Elle challenge avec des objections, contre-arguments, ou questions percutantes.
 
-## RÈGLES ABSOLUES SUR LES NOMS
+## RÈGLES ABSOLUES SUR LE STYLE
 ⚠️ LES HÔTES NE S'APPELLENT JAMAIS PAR LEUR NOM. Pas de "Bob", "Alice", ou tout autre prénom.
-Ils se tutoient et utilisent des formules impersonnelles : "Tu vois,", "Écoute,", "En fait,", "Attends,"
+⚠️ INTERDIT les tics de langage et formules creuses :
+   - PAS DE: "Tu vois", "Écoute", "Attends", "En fait", "Justement"
+   - PAS DE: "C'est une perspective intéressante", "Bonne question", "Effectivement", "Absolument"
+   - PAS DE: phrases de transition artificielles ou compliments entre hôtes
+Le dialogue doit être DIRECT et SUBSTANTIEL - chaque phrase apporte de l'information.
 
 ## STRUCTURE: [B] expose → [A] challenge ou met en perspective → [B] conclut
 
@@ -388,14 +392,14 @@ La sceptique challenge ou met en perspective.
 1. ALTERNER [B] et [A] - jamais deux [B] ou deux [A] de suite
 2. [B] commence TOUJOURS en premier (il expose)
 3. Minimum 6 répliques (3 de chaque)
-4. Style oral naturel français: "Écoute,", "En fait,", "Tu vois,", "Attends,"
-5. ⚠️ [A] LA SCEPTIQUE: Maximum 50% de ses répliques peuvent être des questions. Les autres doivent être des AFFIRMATIONS sceptiques, des contre-arguments, ou des mises en perspective. Exemples d'affirmations: "C'est du marketing pur.", "Les contraintes physiques rendent ça improbable.", "On a déjà vu ça échouer avec X."
+4. Style DENSE et INFORMATIF - pas de remplissage
+5. ⚠️ [A] LA SCEPTIQUE: Maximum 50% de ses répliques peuvent être des questions. Les autres doivent être des AFFIRMATIONS sceptiques, des contre-arguments, ou des mises en perspective. Exemples: "C'est du marketing pur.", "Les contraintes physiques rendent ça improbable.", "On a déjà vu ça échouer avec X."
 6. ZÉRO liste, ZÉRO bullet points
 7. CITE LA SOURCE dans la première réplique de [B]: "Selon {source_name}..."
-8. INTERDIT: Ne jamais utiliser de prénoms, ne jamais écrire de didascalies
+8. INTERDIT: prénoms, didascalies, tics de langage, formules creuses
 9. ⚠️ [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse factuelle ou une projection
 10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question ou objection de [A]
-11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être sourcable dans le contenu fourni. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
+11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être sourcable dans le contenu fourni.
 {previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
@@ -437,9 +441,13 @@ Tu dois CROISER et COMPARER les informations des différentes sources.
 - [B] L'ANALYSTE (voix masculine) = Voix stable, factuelle. Il synthétise les données des différentes sources et expose le potentiel.
 - [A] LA SCEPTIQUE (voix féminine) = Voix incisive. Elle challenge les incohérences entre sources, questionne le ROI, la faisabilité.
 
-## RÈGLES ABSOLUES SUR LES NOMS
+## RÈGLES ABSOLUES SUR LE STYLE
 ⚠️ LES HÔTES NE S'APPELLENT JAMAIS PAR LEUR NOM. Pas de "Bob", "Alice", ou tout autre prénom.
-Ils se tutoient et utilisent des formules impersonnelles : "Tu vois,", "Écoute,", "En fait,", "Attends,"
+⚠️ INTERDIT les tics de langage et formules creuses :
+   - PAS DE: "Tu vois", "Écoute", "Attends", "En fait", "Justement"
+   - PAS DE: "C'est une perspective intéressante", "Bonne question", "Effectivement", "Absolument"
+   - PAS DE: phrases de transition artificielles ou compliments entre hôtes
+Le dialogue doit être DIRECT et SUBSTANTIEL - chaque phrase apporte de l'information.
 
 ## STRUCTURE: [B] expose et compare → [A] challenge ou met en perspective → [B] conclut
 
@@ -456,15 +464,15 @@ La sceptique challenge ou souligne les contradictions.
 1. ALTERNER [B] et [A] - jamais deux [B] ou deux [A] de suite
 2. [B] commence TOUJOURS en premier
 3. Minimum 8 répliques (4 de chaque) - sujet plus riche !
-4. Style oral naturel français: "Écoute,", "En fait,", "Tu vois,", "Attends,"
+4. Style DENSE et INFORMATIF - pas de remplissage
 5. ⚠️ [A] LA SCEPTIQUE: Maximum 50% de ses répliques peuvent être des questions. Les autres doivent être des AFFIRMATIONS sceptiques ou des contre-arguments. Exemples: "Les chiffres ne collent pas.", "C'est contradictoire avec ce que disait X.", "Ça ressemble à du marketing."
 6. CITE LES DIFFÉRENTES SOURCES: "Selon Le Monde...", "De son côté, Les Échos rapportent..."
 7. COMPARE les points de vue ou informations complémentaires
 8. ZÉRO liste, ZÉRO bullet points
 9. ⚠️ [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
 10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question ou objection de [A]
-11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être présent dans les sources fournies. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
-12. INTERDIT: Ne jamais utiliser de prénoms, ne jamais écrire de didascalies
+11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être présent dans les sources fournies.
+12. INTERDIT: prénoms, didascalies, tics de langage, formules creuses
 {previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
@@ -2349,22 +2357,20 @@ def assemble_lego_podcast(
     total_duration = 0
     target_seconds = target_minutes * 60
     
-    # Group items by cluster for multi-source processing
-    # For Flash: each article is its own "cluster" (no grouping)
+    # V13 FIX: Group items by TOPIC (keyword) for consolidation
+    # This ensures ONE segment per topic, not one per article
     clusters = {}
     for item in items:
-        if format_type == "flash":
-            # Flash mode: each article is its own cluster (use URL as unique key)
-            cluster_theme = item.get("url", item.get("title", ""))
-        else:
-            # Digest mode: use clustering
-            cluster_theme = item.get("_cluster_theme", item.get("title", ""))
+        # Always group by topic (keyword), regardless of format
+        topic_key = item.get("keyword", item.get("topic_slug", "general"))
         
-        if cluster_theme not in clusters:
-            clusters[cluster_theme] = []
-        clusters[cluster_theme].append(item)
+        if topic_key not in clusters:
+            clusters[topic_key] = []
+        clusters[topic_key].append(item)
     
-    log.info(f"📊 Processing {len(clusters)} topics/clusters")
+    log.info(f"📊 Processing {len(clusters)} topics (consolidated from {len(items)} articles)")
+    for topic, topic_items in clusters.items():
+        log.info(f"   - {topic}: {len(topic_items)} article(s)")
     
     # Track chapters for player navigation
     chapters = []
