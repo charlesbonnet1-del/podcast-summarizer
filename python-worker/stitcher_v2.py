@@ -2582,21 +2582,42 @@ def assemble_lego_podcast(
         
         # Mark USED articles as processed
         processed_urls = [s["url"] for s in sources_data]
-        supabase.table("content_queue") \
-            .update({"status": "processed"}) \
-            .eq("user_id", user_id) \
-            .in_("url", processed_urls) \
-            .execute()
+        if processed_urls:
+            supabase.table("content_queue") \
+                .update({"status": "processed"}) \
+                .eq("user_id", user_id) \
+                .in_("url", processed_urls) \
+                .execute()
+            log.info(f"✅ Marked {len(processed_urls)} articles as processed")
         
-        # CLEAR ALL remaining pending articles
-        clear_result = supabase.table("content_queue") \
-            .delete() \
+        # V13: Get the topics that were covered in this episode
+        covered_topics = set()
+        for s in sources_data:
+            if s.get("topic"):
+                covered_topics.add(s["topic"])
+        
+        # Only delete remaining pending articles from COVERED topics
+        # Keep articles from topics that weren't included in this episode
+        # Note: 'keyword' is the column name in content_queue
+        if covered_topics:
+            for topic in covered_topics:
+                supabase.table("content_queue") \
+                    .delete() \
+                    .eq("user_id", user_id) \
+                    .eq("status", "pending") \
+                    .eq("keyword", topic) \
+                    .execute()
+            log.info(f"🗑️ Cleared remaining pending articles from {len(covered_topics)} covered topics: {covered_topics}")
+        
+        # Count remaining pending articles (from uncovered topics)
+        remaining = supabase.table("content_queue") \
+            .select("id", count="exact") \
             .eq("user_id", user_id) \
             .eq("status", "pending") \
             .execute()
-        
-        cleared_count = len(clear_result.data) if clear_result.data else 0
-        log.info(f"🗑️ Cleared {cleared_count} stale pending articles")
+        remaining_count = remaining.count if remaining.count else 0
+        if remaining_count > 0:
+            log.info(f"📋 {remaining_count} articles still pending for future episodes (from uncovered topics)")
         
         if episode.data:
             episode_id = episode.data[0]["id"]
