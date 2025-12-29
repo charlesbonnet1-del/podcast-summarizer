@@ -1,19 +1,17 @@
 """
-Keernel Stitcher V11 - Cartesia TTS with Alice & Bob
+Keernel Stitcher V13 - Cartesia TTS with Analyst & Skeptic
 
 VOICE SYSTEM:
 - Primary: Cartesia Sonic 3.0
-  - Alice (Helpful French Lady) = Lead, explains
-  - Bob (Pierre) = Challenger, questions
+  - [B] L'Analyste (Pierre) = Lead, exposes facts (voix masculine)
+  - [A] La Sceptique (Helpful French Lady) = Challenger (voix féminine)
 - Fallback: OpenAI TTS (nova/onyx)
 
-NO Azure voices - completely removed.
-
-CHANGES:
-- Breeze/Vale → Alice/Bob
-- Azure removed
-- Cartesia as primary TTS
-- OpenAI as fallback only
+V13 CHANGES:
+- Inverted roles: [B] leads, [A] challenges
+- No names in dialogue (just [A] and [B] markers)
+- Skeptic limited to 50% questions max (rest are affirmations)
+- Inventory-first architecture
 """
 import os
 import hashlib
@@ -37,22 +35,18 @@ log = structlog.get_logger()
 # ============================================
 
 # Cartesia Voice IDs (Sonic 3.0)
-# Alice = "Helpful French Lady" - friendly, helpful, leads the conversation
-# Bob = "Pierre" - French male voice, asks questions
+# V13 Voice Roles (INVERTED from V11):
+# [A] La Sceptique = "Helpful French Lady" - challenges, questions (max 50% questions)
+# [B] L'Analyste = "Pierre" - French male voice, leads and exposes facts
 #
-# ⚠️ IMPORTANT: Find the correct Voice IDs in Cartesia Playground:
-#    1. Go to https://play.cartesia.ai/
-#    2. Search for "Helpful French Lady" → Copy the voice ID
-#    3. Search for "Pierre" (French male) → Copy the voice ID
-#    4. Replace the placeholders below
+# ⚠️ The dialogue uses [A] and [B] markers, NEVER names like "Alice" or "Bob"
 #
-# These are placeholder IDs - replace with actual IDs from Cartesia
-CARTESIA_VOICE_ALICE = os.getenv("CARTESIA_VOICE_ALICE", "a3520a8f-226a-428d-9fcd-b0a4711a6829")
-CARTESIA_VOICE_BOB = os.getenv("CARTESIA_VOICE_BOB", "ab7c61f5-3daa-47dd-a23b-4ac0aac5f5c3")
+CARTESIA_VOICE_ALICE = os.getenv("CARTESIA_VOICE_ALICE", "a3520a8f-226a-428d-9fcd-b0a4711a6829")  # [A] Skeptic
+CARTESIA_VOICE_BOB = os.getenv("CARTESIA_VOICE_BOB", "ab7c61f5-3daa-47dd-a23b-4ac0aac5f5c3")      # [B] Analyst
 
 # Fallback OpenAI voices (only used if Cartesia fails)
-OPENAI_VOICE_ALICE = "nova"    # Female
-OPENAI_VOICE_BOB = "onyx"      # Male
+OPENAI_VOICE_ALICE = "nova"    # Female - [A] Skeptic
+OPENAI_VOICE_BOB = "onyx"      # Male - [B] Analyst
 
 # Model
 CARTESIA_MODEL = "sonic-3"
@@ -372,38 +366,42 @@ def get_or_create_transition(topic: str, vertical: str = None) -> Optional[dict]
 DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
 {topic_intention}
 ## LES HÔTES (Dialectique fonctionnelle, pas d'émotions simulées)
-- [B] BOB (L'Analyste) = Voix stable, factuelle. Il apporte les données brutes, les faits techniques et le potentiel futuriste.
-- [A] ALICE (La Sceptique) = Voix incisive, inquisitrice. Elle pose les questions qui fâchent : "Quel est le ROI réel ?", "Est-ce juste du marketing ?", "Quelles sont les contraintes physiques ?"
+- [B] L'ANALYSTE (voix masculine) = Voix stable, factuelle. Il apporte les données brutes, les faits techniques et le potentiel futuriste.
+- [A] LA SCEPTIQUE (voix féminine) = Voix incisive, inquisitrice. Elle challenge avec des objections, contre-arguments, ou questions percutantes.
 
-## STRUCTURE: Bob expose → Alice challenge ou demande une mise en perspective
+## RÈGLES ABSOLUES SUR LES NOMS
+⚠️ LES HÔTES NE S'APPELLENT JAMAIS PAR LEUR NOM. Pas de "Bob", "Alice", ou tout autre prénom.
+Ils se tutoient et utilisent des formules impersonnelles : "Tu vois,", "Écoute,", "En fait,", "Attends,"
+
+## STRUCTURE: [B] expose → [A] challenge ou met en perspective → [B] conclut
 
 ## FORMAT OBLIGATOIRE
 Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
 
 [B]
-Bob expose les faits et données.
+L'analyste expose les faits et données.
 
 [A]
-Alice challenge ou met en perspective.
+La sceptique challenge ou met en perspective.
 
 ## RÈGLES STRICTES
 1. ALTERNER [B] et [A] - jamais deux [B] ou deux [A] de suite
-2. BOB [B] commence TOUJOURS en premier (il expose)
+2. [B] commence TOUJOURS en premier (il expose)
 3. Minimum 6 répliques (3 de chaque)
-4. Style oral naturel français: "Écoute,", "En fait,", "Tu vois,"
-5. ⚠️ ALICE [A]: Pose des questions INCISIVES (ROI, faisabilité, contraintes, marketing vs réalité). Elle peut aussi affirmer son scepticisme.
+4. Style oral naturel français: "Écoute,", "En fait,", "Tu vois,", "Attends,"
+5. ⚠️ [A] LA SCEPTIQUE: Maximum 50% de ses répliques peuvent être des questions. Les autres doivent être des AFFIRMATIONS sceptiques, des contre-arguments, ou des mises en perspective. Exemples d'affirmations: "C'est du marketing pur.", "Les contraintes physiques rendent ça improbable.", "On a déjà vu ça échouer avec X."
 6. ZÉRO liste, ZÉRO bullet points
-7. CITE LA SOURCE dans la première réplique de Bob: "Selon {source_name}..."
-8. INTERDIT: Ne jamais écrire "Bob expose", "Alice questionne" ou toute didascalie
-9. ⚠️ BOB [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse factuelle ou une projection
-10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question d'Alice
+7. CITE LA SOURCE dans la première réplique de [B]: "Selon {source_name}..."
+8. INTERDIT: Ne jamais utiliser de prénoms, ne jamais écrire de didascalies
+9. ⚠️ [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse factuelle ou une projection
+10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question ou objection de [A]
 11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être sourcable dans le contenu fourni. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
 {previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
-- Début: Bob expose les faits clés en citant la source
-- Milieu: Alice challenge (ROI, faisabilité, limites), Bob répond avec des données
-- Fin: Bob CONCLUT avec une synthèse factuelle ou une perspective future
+- Début: [B] expose les faits clés en citant la source
+- Milieu: [A] challenge (affirmations sceptiques OU questions incisives), [B] répond avec des données
+- Fin: [B] CONCLUT avec une synthèse factuelle ou une perspective future
 
 ## SOURCE
 Titre: {title}
@@ -412,7 +410,7 @@ Contenu:
 {content}
 {previous_segment_context}
 
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}) - BOB DOIT CONCLURE:"""
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}) - [B] DOIT CONCLURE:"""
 
 # Rule to add when there's a previous segment
 PREVIOUS_SEGMENT_RULE = """12. ⚠️ NON-RÉPÉTITION: Un segment récent sur ce sujet existe. NE RÉPÈTE PAS les informations déjà couvertes (voir ci-dessous). Apporte des NOUVELLES informations ou un nouvel angle. Tu peux brièvement rappeler le contexte si nécessaire, mais le cœur du dialogue doit être NOUVEAU."""
@@ -436,44 +434,49 @@ Ce sujet est couvert par PLUSIEURS SOURCES - c'est donc un sujet d'actualité ma
 Tu dois CROISER et COMPARER les informations des différentes sources.
 
 ## LES HÔTES (Dialectique fonctionnelle, pas d'émotions simulées)
-- [B] BOB (L'Analyste) = Voix stable, factuelle. Il synthétise les données des différentes sources et expose le potentiel.
-- [A] ALICE (La Sceptique) = Voix incisive. Elle challenge les incohérences entre sources, questionne le ROI, la faisabilité.
+- [B] L'ANALYSTE (voix masculine) = Voix stable, factuelle. Il synthétise les données des différentes sources et expose le potentiel.
+- [A] LA SCEPTIQUE (voix féminine) = Voix incisive. Elle challenge les incohérences entre sources, questionne le ROI, la faisabilité.
 
-## STRUCTURE: Bob expose et compare → Alice challenge ou met en perspective
+## RÈGLES ABSOLUES SUR LES NOMS
+⚠️ LES HÔTES NE S'APPELLENT JAMAIS PAR LEUR NOM. Pas de "Bob", "Alice", ou tout autre prénom.
+Ils se tutoient et utilisent des formules impersonnelles : "Tu vois,", "Écoute,", "En fait,", "Attends,"
+
+## STRUCTURE: [B] expose et compare → [A] challenge ou met en perspective → [B] conclut
 
 ## FORMAT OBLIGATOIRE
 Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
 
 [B]
-Bob synthétise et compare les sources.
+L'analyste synthétise et compare les sources.
 
 [A]
-Alice challenge ou souligne les contradictions.
+La sceptique challenge ou souligne les contradictions.
 
 ## RÈGLES STRICTES
 1. ALTERNER [B] et [A] - jamais deux [B] ou deux [A] de suite
-2. BOB [B] commence TOUJOURS en premier
+2. [B] commence TOUJOURS en premier
 3. Minimum 8 répliques (4 de chaque) - sujet plus riche !
-4. Style oral naturel français
-5. ⚠️ ALICE [A]: Questions INCISIVES sur les divergences entre sources, le marketing vs réalité, les contraintes ignorées
+4. Style oral naturel français: "Écoute,", "En fait,", "Tu vois,", "Attends,"
+5. ⚠️ [A] LA SCEPTIQUE: Maximum 50% de ses répliques peuvent être des questions. Les autres doivent être des AFFIRMATIONS sceptiques ou des contre-arguments. Exemples: "Les chiffres ne collent pas.", "C'est contradictoire avec ce que disait X.", "Ça ressemble à du marketing."
 6. CITE LES DIFFÉRENTES SOURCES: "Selon Le Monde...", "De son côté, Les Échos rapportent..."
 7. COMPARE les points de vue ou informations complémentaires
 8. ZÉRO liste, ZÉRO bullet points
-9. ⚠️ BOB [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
-10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question d'Alice
+9. ⚠️ [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
+10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question ou objection de [A]
 11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être présent dans les sources fournies. Pas de statistiques inventées, pas de dates approximatives, pas d'extrapolation.
+12. INTERDIT: Ne jamais utiliser de prénoms, ne jamais écrire de didascalies
 {previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
-- Début: Bob présente le sujet multi-sources avec les faits clés
-- Milieu: Alice challenge (contradictions, limites, ROI), Bob répond avec des données croisées
-- Fin: Bob CONCLUT en synthétisant ce qui ressort des différentes sources
+- Début: [B] présente le sujet multi-sources avec les faits clés
+- Milieu: [A] challenge (affirmations sceptiques OU questions), [B] répond avec des données croisées
+- Fin: [B] CONCLUT en synthétisant ce qui ressort des différentes sources
 
 ## SOURCES ({source_count} articles sur ce sujet)
 {sources_content}
 {previous_segment_context}
 
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources) - BOB DOIT CONCLURE:"""
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources) - [B] DOIT CONCLURE:"""
 
 # ============================================
 # DIGEST EXTRACTION PROMPT
