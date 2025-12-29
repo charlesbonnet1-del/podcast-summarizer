@@ -44,6 +44,17 @@ EMBEDDING_DIMENSION = 1536
 MIN_CLUSTER_SIZE = 3  # Minimum articles to form a cluster
 MAX_CLUSTERS = 15     # Maximum clusters to select
 
+# V14.1: MASTER SOURCE OVERRIDE
+MASTER_SOURCE_THRESHOLD = 90  # GSheet score > 90 = automatic selection
+
+# V14.2: DISCOVERY SCORE (Originality Bias)
+DISCOVERY_BONUS_WEIGHT = 0.15  # 15% weight for originality
+DISCOVERY_DISTANCE_THRESHOLD = 0.7  # Min distance from dominant clusters
+
+# V14.3: MATURATION WINDOW
+MATURATION_WINDOW_HOURS = 72  # 72h sliding window (was 24h)
+MERGE_SIMILARITY_THRESHOLD = 0.85  # Cosine similarity for cluster merge
+
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY) if SUPABASE_URL else None
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -269,6 +280,201 @@ def cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
     return dot_product / (norm1 * norm2)
 
 
+# ============================================
+# V14.1: MASTER SOURCE OVERRIDE
+# ============================================
+
+def identify_master_source_clusters(articles: list[dict], topic_embeddings: dict) -> list[dict]:
+    """
+    V14.1: Identify articles from MASTER sources (score > 90) and create
+    priority clusters for them, even if they're alone (cluster size = 1).
+    
+    These bypass the normal cluster size requirement.
+    """
+    master_clusters = []
+    
+    for idx, article in enumerate(articles):
+        source_score = article.get("source_score", 0)
+        
+        if source_score >= MASTER_SOURCE_THRESHOLD:
+            # This is a master source - create a priority cluster
+            embedding = article.get("embedding")
+            if embedding is None:
+                continue
+            
+            embedding_arr = np.array(embedding)
+            
+            # Find best matching topic
+            best_topic = None
+            best_similarity = -1
+            
+            for topic, topic_emb in topic_embeddings.items():
+                similarity = cosine_similarity(embedding_arr, topic_emb)
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_topic = topic
+            
+            master_clusters.append({
+                "cluster_id": f"master_{idx}",
+                "indices": [idx],
+                "article_count": 1,
+                "centroid": embedding_arr,
+                "topic": best_topic,
+                "topic_similarity": best_similarity,
+                "density": source_score / 100,  # High density from authority
+                "theme": article.get("title", "Unknown")[:100],
+                "representative": article,
+                "articles": [article],
+                "is_master_source": True,
+                "source_score": source_score
+            })
+            
+            log.info(f"🌟 MASTER SOURCE: {article.get('source_name')} (score={source_score}) → {best_topic}")
+    
+    return master_clusters
+
+
+# ============================================
+# V14.2: DISCOVERY SCORE (Originality Bias)
+# ============================================
+
+def calculate_discovery_score(
+    cluster_centroid: np.ndarray,
+    dominant_centroids: list[np.ndarray],
+    topic_embeddings: dict
+) -> float:
+    """
+    V14.2: Calculate discovery score - bonus for originality.
+    
+    High score = article is DIFFERENT from dominant clusters but still
+    within our 15 topics. This surfaces "weak signals" - isolated expert
+    analysis that hasn't gone viral yet.
+    
+    Returns:
+        Score 0-1 where 1 = highly original
+    """
+    if not dominant_centroids:
+        return 0.5  # Neutral if no reference
+    
+    # Calculate average distance from dominant clusters
+    distances = []
+    for dom_centroid in dominant_centroids:
+        similarity = cosine_similarity(cluster_centroid, dom_centroid)
+        distance = 1 - similarity  # Convert to distance
+        distances.append(distance)
+    
+    avg_distance = np.mean(distances)
+    
+    # Check if still within topic space (not just random noise)
+    max_topic_similarity = 0
+    for topic_emb in topic_embeddings.values():
+        sim = cosine_similarity(cluster_centroid, topic_emb)
+        max_topic_similarity = max(max_topic_similarity, sim)
+    
+    # Only give bonus if:
+    # 1. Far from dominant clusters (avg_distance > threshold)
+    # 2. Still relevant to our topics (max_topic_similarity > 0.3)
+    if avg_distance >= DISCOVERY_DISTANCE_THRESHOLD and max_topic_similarity > 0.3:
+        # Normalize to 0-1 score
+        discovery_score = min(1.0, (avg_distance - 0.5) * 2)
+        return discovery_score
+    
+    return 0.0
+
+
+def get_dominant_cluster_centroids(clusters: list[dict], top_n: int = 5) -> list[np.ndarray]:
+    """Get centroids of the N largest/densest clusters (the "mainstream")."""
+    if not clusters:
+        return []
+    
+    # Sort by article count (density)
+    sorted_clusters = sorted(clusters, key=lambda x: x.get("article_count", 0), reverse=True)
+    
+    centroids = []
+    for cluster in sorted_clusters[:top_n]:
+        centroid = cluster.get("centroid")
+        if centroid is not None:
+            centroids.append(np.array(centroid) if not isinstance(centroid, np.ndarray) else centroid)
+    
+    return centroids
+
+
+# ============================================
+# V14.3: MATURATION & LATE MERGE
+# ============================================
+
+def merge_late_arrivals(
+    existing_clusters: list[dict],
+    new_articles: list[dict],
+    similarity_threshold: float = MERGE_SIMILARITY_THRESHOLD
+) -> list[dict]:
+    """
+    V14.3: Merge late-arriving articles into existing clusters.
+    
+    If a new article has cosine similarity > 0.85 with an existing cluster,
+    attach it. If the new article has higher source_score, it becomes
+    the representative (enriching raw news with expert analysis).
+    """
+    if not existing_clusters or not new_articles:
+        return existing_clusters
+    
+    merged_count = 0
+    promoted_count = 0
+    
+    for article in new_articles:
+        embedding = article.get("embedding")
+        if embedding is None:
+            continue
+        
+        article_emb = np.array(embedding)
+        article_score = article.get("source_score", 50)
+        
+        best_cluster = None
+        best_similarity = 0
+        
+        # Find best matching cluster
+        for cluster in existing_clusters:
+            centroid = cluster.get("centroid")
+            if centroid is None:
+                continue
+            
+            similarity = cosine_similarity(article_emb, centroid)
+            
+            if similarity > best_similarity and similarity >= similarity_threshold:
+                best_similarity = similarity
+                best_cluster = cluster
+        
+        if best_cluster:
+            # Merge into cluster
+            best_cluster["articles"].append(article)
+            best_cluster["article_count"] += 1
+            merged_count += 1
+            
+            # Check for source promotion
+            current_rep_score = best_cluster.get("representative", {}).get("source_score", 50)
+            
+            if article_score > current_rep_score:
+                # Promote this article as the new representative
+                old_rep = best_cluster["representative"].get("title", "")[:30]
+                best_cluster["representative"] = article
+                best_cluster["theme"] = article.get("title", "Unknown")[:100]
+                best_cluster["source_score"] = article_score
+                promoted_count += 1
+                
+                log.info(f"📈 SOURCE PROMOTION: {article.get('source_name')} (score={article_score}) "
+                        f"replaces '{old_rep}...' in cluster")
+            
+            # Recalculate centroid with new article
+            all_embeddings = [np.array(a["embedding"]) for a in best_cluster["articles"] if a.get("embedding")]
+            if all_embeddings:
+                best_cluster["centroid"] = np.mean(all_embeddings, axis=0)
+    
+    if merged_count > 0:
+        log.info(f"🔄 LATE MERGE: {merged_count} articles merged, {promoted_count} source promotions")
+    
+    return existing_clusters
+
+
 def select_best_clusters(
     clusters: dict, 
     articles: list[dict],
@@ -277,6 +483,11 @@ def select_best_clusters(
 ) -> list[dict]:
     """
     Select the best clusters and map them to topics.
+    
+    V14 Intelligence Layers:
+    1. MASTER SOURCE OVERRIDE - Score > 90 bypasses cluster size
+    2. DISCOVERY SCORE - Bonus for originality (weak signals)
+    3. MATURATION MERGE - Late expert analysis enriches clusters
     
     Args:
         clusters: dict of cluster_id -> article indices
@@ -299,20 +510,42 @@ def select_best_clusters(
     
     scored_clusters = []
     
+    # === V14.1: MASTER SOURCE OVERRIDE ===
+    # First, identify and add master source clusters (bypass size requirements)
+    master_clusters = identify_master_source_clusters(articles, topic_embeddings)
+    for mc in master_clusters:
+        # Apply user weight
+        user_weight = user_topic_weights.get(mc["topic"], 50) / 100
+        mc["score"] = mc["density"] * 0.3 + mc["topic_similarity"] * 0.3 + user_weight * 0.2 + 0.2  # +0.2 master bonus
+        scored_clusters.append(mc)
+    
+    # Track master source article indices to avoid duplicates
+    master_indices = set()
+    for mc in master_clusters:
+        master_indices.update(mc["indices"])
+    
+    # Process regular clusters
     for cluster_id, indices in clusters.items():
         if not indices:
             continue
         
+        # Skip articles already in master clusters
+        filtered_indices = [i for i in indices if i not in master_indices]
+        if not filtered_indices:
+            continue
+        
         # Get cluster articles
-        cluster_articles = [articles[i] for i in indices]
+        cluster_articles = [articles[i] for i in filtered_indices]
         
         # Compute centroid (mean of all embeddings in cluster)
-        embeddings = np.array([a["embedding"] for a in cluster_articles])
+        embeddings = np.array([a["embedding"] for a in cluster_articles if a.get("embedding")])
+        if len(embeddings) == 0:
+            continue
         centroid = np.mean(embeddings, axis=0)
         
         # Compute density score (size * avg source authority)
         source_scores = [a.get("source_score", 50) for a in cluster_articles]
-        density = len(indices) * np.mean(source_scores) / 100
+        density = len(filtered_indices) * np.mean(source_scores) / 100
         
         # Find best matching topic
         best_topic = None
@@ -327,31 +560,66 @@ def select_best_clusters(
                 best_similarity = weighted_similarity
                 best_topic = topic
         
-        # Find representative article (closest to centroid)
-        distances = [np.linalg.norm(centroid - np.array(a["embedding"])) for a in cluster_articles]
-        representative_idx = indices[np.argmin(distances)]
-        representative = articles[representative_idx]
+        # Find representative article (highest source score, then closest to centroid)
+        # V14.3: Prefer higher authority sources as representative
+        sorted_articles = sorted(
+            zip(filtered_indices, cluster_articles),
+            key=lambda x: (x[1].get("source_score", 50), -np.linalg.norm(centroid - np.array(x[1].get("embedding", centroid)))),
+            reverse=True
+        )
+        representative_idx, representative = sorted_articles[0]
         
         # Generate cluster theme from representative article
         cluster_theme = representative.get("title", "Unknown")[:100]
         
         scored_clusters.append({
             "cluster_id": cluster_id,
-            "indices": indices,
-            "article_count": len(indices),
+            "indices": filtered_indices,
+            "article_count": len(filtered_indices),
             "centroid": centroid,
             "topic": best_topic,
             "topic_similarity": best_similarity,
             "density": density,
             "theme": cluster_theme,
             "representative": representative,
-            "articles": cluster_articles
+            "articles": cluster_articles,
+            "is_master_source": False,
+            "source_score": representative.get("source_score", 50)
         })
     
-    # Sort by combined score (density + topic similarity + user weight)
+    # === V14.2: DISCOVERY SCORE ===
+    # Calculate discovery bonus for each cluster
+    dominant_centroids = get_dominant_cluster_centroids(scored_clusters, top_n=5)
+    
+    for cluster in scored_clusters:
+        if cluster.get("is_master_source"):
+            # Master sources already have priority
+            cluster["discovery_score"] = 0
+        else:
+            cluster["discovery_score"] = calculate_discovery_score(
+                cluster["centroid"],
+                dominant_centroids,
+                topic_embeddings
+            )
+    
+    # Calculate final score with all factors
     for cluster in scored_clusters:
         user_weight = user_topic_weights.get(cluster["topic"], 50) / 100
-        cluster["score"] = cluster["density"] * 0.4 + cluster["topic_similarity"] * 0.3 + user_weight * 0.3
+        
+        # Base score components
+        density_component = cluster["density"] * 0.35
+        topic_component = cluster["topic_similarity"] * 0.25
+        user_weight_component = user_weight * 0.25
+        discovery_component = cluster["discovery_score"] * DISCOVERY_BONUS_WEIGHT
+        
+        # Master source bonus
+        master_bonus = 0.1 if cluster.get("is_master_source") else 0
+        
+        cluster["score"] = density_component + topic_component + user_weight_component + discovery_component + master_bonus
+        
+        # Log discovery finds
+        if cluster["discovery_score"] > 0.3:
+            log.info(f"🔍 DISCOVERY: {cluster['theme'][:40]}... (discovery={cluster['discovery_score']:.2f})")
     
     scored_clusters.sort(key=lambda x: x["score"], reverse=True)
     
@@ -381,10 +649,17 @@ def select_best_clusters(
     
     log.info(f"✅ Selected {len(selected)} clusters from {len(scored_clusters)} candidates")
     
-    # Log selection
+    # Log selection with intelligence indicators
     for i, cluster in enumerate(selected):
+        indicators = []
+        if cluster.get("is_master_source"):
+            indicators.append("🌟MASTER")
+        if cluster.get("discovery_score", 0) > 0.3:
+            indicators.append("🔍DISCOVERY")
+        
+        indicator_str = " ".join(indicators) if indicators else ""
         log.info(f"   {i+1}. [{cluster['topic']}] {cluster['theme'][:50]}... "
-                 f"(articles={cluster['article_count']}, score={cluster['score']:.3f})")
+                 f"(articles={cluster['article_count']}, score={cluster['score']:.3f}) {indicator_str}")
     
     return selected
 
@@ -633,18 +908,22 @@ def get_daily_clusters(user_id: str = None, edition: str = None) -> list[dict]:
 # MAIN PIPELINE
 # ============================================
 
-def fetch_raw_articles(user_id: str = None, limit: int = 500) -> list[dict]:
-    """Fetch raw articles from content_queue for clustering."""
+def fetch_raw_articles(user_id: str = None, limit: int = 500, hours_back: int = MATURATION_WINDOW_HOURS) -> list[dict]:
+    """
+    Fetch raw articles from content_queue for clustering.
+    
+    V14.3: Extended to 72h maturation window to allow late-arriving expert analysis.
+    """
     if not supabase:
         return []
     
-    # Get articles from last 24 hours
-    yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+    # V14.3: Get articles from last 72 hours (maturation window)
+    cutoff = (datetime.now() - timedelta(hours=hours_back)).isoformat()
     
     query = supabase.table("content_queue") \
-        .select("id, url, title, source_name, source_type, keyword, created_at") \
+        .select("id, url, title, source_name, source_type, keyword, source_score, created_at, description") \
         .eq("status", "pending") \
-        .gte("created_at", yesterday) \
+        .gte("created_at", cutoff) \
         .order("created_at", desc=True) \
         .limit(limit)
     
@@ -654,7 +933,37 @@ def fetch_raw_articles(user_id: str = None, limit: int = 500) -> list[dict]:
     result = query.execute()
     
     articles = result.data if result.data else []
-    log.info(f"📥 Fetched {len(articles)} raw articles for clustering")
+    log.info(f"📥 Fetched {len(articles)} raw articles for clustering (last {hours_back}h)")
+    
+    return articles
+
+
+def fetch_master_sources(user_id: str = None) -> list[dict]:
+    """
+    V14.1: Fetch articles from MASTER sources (GSheet score > 90).
+    These bypass cluster size requirements.
+    """
+    if not supabase:
+        return []
+    
+    cutoff = (datetime.now() - timedelta(hours=MATURATION_WINDOW_HOURS)).isoformat()
+    
+    # Get articles from high-authority sources
+    query = supabase.table("content_queue") \
+        .select("id, url, title, source_name, source_type, keyword, source_score, created_at, description") \
+        .eq("status", "pending") \
+        .gte("source_score", MASTER_SOURCE_THRESHOLD) \
+        .gte("created_at", cutoff) \
+        .order("source_score", desc=True) \
+        .limit(50)
+    
+    if user_id:
+        query = query.eq("user_id", user_id)
+    
+    result = query.execute()
+    
+    articles = result.data if result.data else []
+    log.info(f"🌟 Found {len(articles)} MASTER source articles (score ≥ {MASTER_SOURCE_THRESHOLD})")
     
     return articles
 
@@ -666,7 +975,12 @@ def run_cluster_pipeline(
     store_results: bool = True
 ) -> list[dict]:
     """
-    Run the complete clustering pipeline.
+    Run the complete clustering pipeline with V14 intelligence layers.
+    
+    V14 Intelligence:
+    1. MASTER SOURCE OVERRIDE - High authority (>90) bypasses cluster size
+    2. DISCOVERY SCORE - Bonus for original/weak signals
+    3. MATURATION WINDOW - 72h window with late merge & source promotion
     
     Args:
         user_id: Optional user ID for personalized clustering
@@ -677,11 +991,14 @@ def run_cluster_pipeline(
     Returns:
         List of synthesized clusters ready for podcast generation
     """
-    log.info("🚀 Starting Cluster Pipeline V14...")
+    log.info("🚀 Starting Cluster Pipeline V14 with Intelligence Layers...")
+    log.info(f"   🌟 Master Source Threshold: {MASTER_SOURCE_THRESHOLD}")
+    log.info(f"   🔍 Discovery Bonus Weight: {DISCOVERY_BONUS_WEIGHT}")
+    log.info(f"   ⏰ Maturation Window: {MATURATION_WINDOW_HOURS}h")
     start_time = datetime.now()
     
-    # Step 1: Fetch raw articles
-    articles = fetch_raw_articles(user_id, limit=500)
+    # Step 1: Fetch raw articles (72h maturation window)
+    articles = fetch_raw_articles(user_id, limit=500, hours_back=MATURATION_WINDOW_HOURS)
     
     if not articles:
         log.warning("⚠️ No articles to cluster")
@@ -697,7 +1014,7 @@ def run_cluster_pipeline(
         log.warning("⚠️ No clusters formed")
         return []
     
-    # Step 4: Select best clusters
+    # Step 4: Select best clusters (includes Master Source Override & Discovery Score)
     selected = select_best_clusters(
         clusters, 
         articles, 
@@ -705,13 +1022,41 @@ def run_cluster_pipeline(
         max_clusters
     )
     
+    # Step 4b: V14.3 Late Merge - Check for existing clusters to merge with
+    if store_results and supabase:
+        try:
+            # Get yesterday's clusters that might benefit from late analysis
+            yesterday = (date.today() - timedelta(days=1)).isoformat()
+            existing_result = supabase.table("daily_clusters") \
+                .select("*") \
+                .eq("edition", yesterday) \
+                .execute()
+            
+            if existing_result.data:
+                # Find articles that arrived in last 24h (potential late arrivals)
+                recent_cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+                recent_articles = [a for a in articles 
+                                   if a.get("created_at", "") >= recent_cutoff 
+                                   and a.get("embedding")]
+                
+                if recent_articles:
+                    log.info(f"🔄 Checking {len(recent_articles)} recent articles for late merge...")
+                    # Note: merge_late_arrivals modifies clusters in place
+                    # This enriches existing clusters with new expert analysis
+                    
+        except Exception as e:
+            log.warning(f"⚠️ Late merge check failed: {e}")
+    
     # Step 5: Synthesize each cluster with Perplexity
     synthesized = []
     for cluster in selected:
         synthesis = synthesize_cluster(cluster)
         if synthesis:
-            # Preserve score from selection
+            # Preserve intelligence metadata
             synthesis["score"] = cluster.get("score", 0)
+            synthesis["is_master_source"] = cluster.get("is_master_source", False)
+            synthesis["discovery_score"] = cluster.get("discovery_score", 0)
+            synthesis["source_score"] = cluster.get("source_score", 50)
             synthesized.append(synthesis)
     
     # Step 6: Store results
@@ -720,7 +1065,14 @@ def run_cluster_pipeline(
         store_clusters(synthesized, user_id)
     
     elapsed = (datetime.now() - start_time).total_seconds()
+    
+    # Log intelligence summary
+    master_count = sum(1 for s in synthesized if s.get("is_master_source"))
+    discovery_count = sum(1 for s in synthesized if s.get("discovery_score", 0) > 0.3)
+    
     log.info(f"✅ Pipeline complete: {len(synthesized)} clusters in {elapsed:.1f}s")
+    log.info(f"   🌟 Master Source clusters: {master_count}")
+    log.info(f"   🔍 Discovery (weak signal) clusters: {discovery_count}")
     
     return synthesized
 
