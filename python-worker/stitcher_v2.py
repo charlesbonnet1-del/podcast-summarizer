@@ -1718,34 +1718,54 @@ def get_or_create_multi_source_segment(
 
 INTRO_MUSIC_PATH = os.path.join(os.path.dirname(__file__), "intro_music.mp3")
 
-def mix_intro_with_music(voice_audio, intro_music_path: str, first_segment_audio=None) -> tuple:
+def mix_intro_with_music(voice_audio, intro_music_path: str, ephemeride_audio=None) -> tuple:
     """
     Mix voice intro with background music using professional ducking.
     
-    If first_segment_audio is provided, it starts playing during the music fade-out
-    to avoid dead air between intro and content.
+    V14: Music plays to the end. If ephemeride_audio is provided,
+    it starts during the music fade-out for seamless transition.
+    
+    Timeline:
+    0s-4s: Music solo (full volume)
+    4s-6s: Music ducks progressively
+    6s+: Voice intro plays over ducked music
+    Voice ends → Music fades out over 3s
+    If ephemeride: starts 1s before music ends (crossfade)
     """
     from pydub import AudioSegment
     
     MUSIC_SOLO_END = 4000      # 0-4s: music solo
-    DUCK_DURATION = 2000       # 4-6s: ducking
-    DUCK_END = 6000            # 6s: ducked
-    FADE_START = 10000         # 10s: start fade (was 12s - shortened)
-    MUSIC_END = 14000          # 14s: music ends
-    DUCK_DB = -20
+    DUCK_DURATION = 2000       # 4-6s: ducking transition
+    DUCK_END = 6000            # 6s: fully ducked
+    DUCK_DB = -18              # Ducked volume (slightly louder than before)
+    FADE_OUT_DURATION = 3000   # 3s fade out at the end
     
     if not os.path.exists(intro_music_path):
         log.warning(f"⚠️ Intro music not found, using voice only")
         return voice_audio, len(voice_audio) // 1000
     
     music = AudioSegment.from_mp3(intro_music_path)
+    music_length = len(music)
     
-    if len(music) > MUSIC_END:
-        music = music[:MUSIC_END]
-    elif len(music) < MUSIC_END:
-        music = music + AudioSegment.silent(duration=MUSIC_END - len(music))
+    log.info(f"🎵 Intro music length: {music_length/1000:.1f}s")
     
-    # Part 1: Solo music (0s - 4s)
+    # Calculate where voice ends
+    voice_duration = len(voice_audio)
+    voice_end_time = MUSIC_SOLO_END + voice_duration  # Voice starts at 4s
+    
+    # Music should continue a bit after voice, then fade
+    # Minimum music length: voice_end + 2s buffer + 3s fade
+    min_music_length = voice_end_time + 2000 + FADE_OUT_DURATION
+    
+    # Use full music length, but at least min_music_length
+    target_length = max(music_length, min_music_length)
+    
+    # If music is shorter than needed, loop or pad
+    if len(music) < target_length:
+        # Pad with silence (or loop music if you prefer)
+        music = music + AudioSegment.silent(duration=target_length - len(music))
+    
+    # Part 1: Solo music (0s - 4s) at full volume
     part1_solo = music[:MUSIC_SOLO_END]
     
     # Part 2: Progressive ducking (4s - 6s)
@@ -1757,78 +1777,100 @@ def mix_intro_with_music(voice_audio, intro_music_path: str, first_segment_audio
     for i in range(num_slices):
         start = i * slice_duration
         end = start + slice_duration
-        slice_audio = part2_ducking[start:end]
-        progress = i / num_slices
-        db_reduction = DUCK_DB * progress
-        ducked_part2 += slice_audio + db_reduction
+        if end <= len(part2_ducking):
+            slice_audio = part2_ducking[start:end]
+            progress = i / num_slices
+            db_reduction = DUCK_DB * progress
+            ducked_part2 += slice_audio + db_reduction
     
-    # Part 3: Background (6s - 10s) at -20dB - SHORTENED
-    part3_background = music[DUCK_END:FADE_START] + DUCK_DB
+    # Part 3: Ducked background until near the end
+    fade_start = target_length - FADE_OUT_DURATION
+    part3_background = music[DUCK_END:fade_start] + DUCK_DB
     
-    # Part 4: Fade out (10s - 14s) - LONGER FADE
-    part4_fadeout = (music[FADE_START:MUSIC_END] + DUCK_DB).fade_out(4000)
+    # Part 4: Fade out
+    part4_fadeout = (music[fade_start:target_length] + DUCK_DB).fade_out(FADE_OUT_DURATION)
     
     # Combine music parts
     processed_music = part1_solo + ducked_part2 + part3_background + part4_fadeout
     
-    # Position intro voice starting at 4s
+    # Position intro voice starting at 4s (after music solo)
     voice_with_padding = AudioSegment.silent(duration=MUSIC_SOLO_END) + voice_audio
     
     # Extend voice track to match music length
-    if len(voice_with_padding) < MUSIC_END:
-        voice_with_padding += AudioSegment.silent(duration=MUSIC_END - len(voice_with_padding))
+    if len(voice_with_padding) < len(processed_music):
+        voice_with_padding += AudioSegment.silent(duration=len(processed_music) - len(voice_with_padding))
     
     # Mix intro voice on music
     mixed = processed_music.overlay(voice_with_padding)
     
-    # Apply gentle fade in
+    # Apply gentle fade in at start
     mixed = mixed.fade_in(500)
     
-    # IMPORTANT: Trim to 8 seconds to avoid dead air
-    # The first dialogue segment will start immediately after
-    TRIM_POINT = 8000  # 8 seconds - just after intro voice ends
+    # V14: If ephemeride audio provided, crossfade it at the end
+    if ephemeride_audio is not None:
+        # Crossfade: ephemeride starts 1.5s before music ends
+        crossfade_duration = 1500
+        overlap_point = len(mixed) - crossfade_duration
+        
+        # Fade out end of intro
+        intro_end = mixed[overlap_point:].fade_out(crossfade_duration)
+        intro_start = mixed[:overlap_point]
+        
+        # Fade in start of ephemeride
+        ephemeride_start = ephemeride_audio[:crossfade_duration].fade_in(crossfade_duration)
+        ephemeride_rest = ephemeride_audio[crossfade_duration:]
+        
+        # Combine with crossfade
+        crossfade_section = intro_end.overlay(ephemeride_start)
+        mixed = intro_start + crossfade_section + ephemeride_rest
+        
+        log.info(f"✅ Intro+Ephemeride crossfaded at {overlap_point/1000:.1f}s")
     
-    # Only trim if voice is short (< 4 seconds of speech)
-    voice_duration = len(voice_audio)
-    if voice_duration < 4000:
-        # Trim and add quick fade out on music
-        mixed = mixed[:TRIM_POINT]
-        # Quick fade out on last 500ms
-        fade_portion = mixed[-500:].fade_out(500)
-        mixed = mixed[:-500] + fade_portion
+    total_duration = len(mixed) // 1000
+    log.info(f"✅ Final intro mix: {total_duration}s (music played full track)")
     
-    return mixed, len(mixed) // 1000
+    return mixed, total_duration
 
 
-def get_or_create_intro(first_name: str) -> Optional[dict]:
-    """Get or create personalized intro WITH background music (CACHED per name)."""
+def get_or_create_intro(first_name: str, ephemeride_audio=None) -> Optional[dict]:
+    """
+    Get or create personalized intro WITH background music.
+    
+    V14: If ephemeride_audio is provided, crossfades into it for seamless transition.
+    Only caches the base intro (without ephemeride) for reuse.
+    """
     from pydub import AudioSegment
     
     display_name = first_name.strip().title() if first_name else "Ami"
     
-    # Check cache first
+    # V14: If we have ephemeride, we need to generate fresh (with crossfade)
+    # So we skip cache lookup but can still use cached voice
     cache_key = f"intro_{display_name.lower()}"
-    try:
-        cached = supabase.table("cached_intros") \
-            .select("audio_url, audio_duration") \
-            .eq("name_key", cache_key) \
-            .single() \
-            .execute()
-        
-        if cached.data and cached.data.get("audio_url"):
-            log.info(f"✅ Using cached intro for {display_name}")
-            return {
-                "audio_url": cached.data["audio_url"],
-                "duration": cached.data["audio_duration"],
-                "audio_duration": cached.data["audio_duration"]
-            }
-    except:
-        pass
     
-    # Generate new intro
+    # Check cache for the base intro voice (without music/ephemeride)
+    cached_voice_url = None
+    if not ephemeride_audio:
+        try:
+            cached = supabase.table("cached_intros") \
+                .select("audio_url, audio_duration") \
+                .eq("name_key", cache_key) \
+                .single() \
+                .execute()
+            
+            if cached.data and cached.data.get("audio_url"):
+                log.info(f"✅ Using cached intro for {display_name}")
+                return {
+                    "audio_url": cached.data["audio_url"],
+                    "duration": cached.data["audio_duration"],
+                    "audio_duration": cached.data["audio_duration"]
+                }
+        except:
+            pass
+    
+    # Generate new intro voice
     intro_text = f"{display_name}, c'est parti pour votre Keernel!"
     
-    log.info(f"🎤 Creating NEW intro for {display_name}")
+    log.info(f"🎤 Creating intro for {display_name}" + (" (with ephemeride crossfade)" if ephemeride_audio else ""))
     
     timestamp = datetime.now().strftime("%H%M%S")
     voice_path = os.path.join(tempfile.gettempdir(), f"intro_voice_{timestamp}.mp3")
@@ -1844,7 +1886,7 @@ def get_or_create_intro(first_name: str) -> Optional[dict]:
     
     if os.path.exists(INTRO_MUSIC_PATH):
         log.info(f"🎵 Mixing with intro music")
-        mixed_audio, total_duration = mix_intro_with_music(voice_audio, INTRO_MUSIC_PATH)
+        mixed_audio, total_duration = mix_intro_with_music(voice_audio, INTRO_MUSIC_PATH, ephemeride_audio)
         
         final_path = os.path.join(tempfile.gettempdir(), f"intro_mixed_{timestamp}.mp3")
         mixed_audio.export(final_path, format="mp3", bitrate="192k")
@@ -1854,35 +1896,39 @@ def get_or_create_intro(first_name: str) -> Optional[dict]:
         except:
             pass
         
-        # Upload and cache
-        remote_path = f"intros/{cache_key}.mp3"
-        audio_url = upload_segment(final_path, remote_path)
+        # Only cache if no ephemeride (base intro only)
+        audio_url = None
+        if not ephemeride_audio:
+            remote_path = f"intros/{cache_key}.mp3"
+            audio_url = upload_segment(final_path, remote_path)
+            
+            if audio_url:
+                try:
+                    supabase.table("cached_intros").upsert({
+                        "name_key": cache_key,
+                        "audio_url": audio_url,
+                        "audio_duration": total_duration
+                    }).execute()
+                    log.info(f"✅ Intro cached for {display_name}")
+                except Exception as e:
+                    log.warning(f"⚠️ Failed to cache intro: {e}")
         
-        if audio_url:
-            try:
-                supabase.table("cached_intros").upsert({
-                    "name_key": cache_key,
-                    "audio_url": audio_url,
-                    "audio_duration": total_duration
-                }).execute()
-                log.info(f"✅ Intro cached for {display_name}")
-            except Exception as e:
-                log.warning(f"⚠️ Failed to cache intro: {e}")
-        
-        log.info(f"✅ Intro with music: {total_duration}s")
+        log.info(f"✅ Intro {'with ephemeride crossfade' if ephemeride_audio else 'with music'}: {total_duration}s")
         
         return {
             "local_path": final_path,
             "audio_url": audio_url,
             "duration": total_duration,
-            "audio_duration": total_duration
+            "audio_duration": total_duration,
+            "includes_ephemeride": ephemeride_audio is not None
         }
     else:
         log.warning(f"⚠️ No intro music, using voice only")
         return {
             "local_path": voice_path,
             "duration": voice_duration,
-            "audio_duration": voice_duration
+            "audio_duration": voice_duration,
+            "includes_ephemeride": False
         }
 
 
@@ -2721,11 +2767,25 @@ def assemble_lego_podcast(
     # Track chapters for player navigation
     chapters = []
     
-    # 1. INTRO (cached per name)
-    intro = get_or_create_intro(first_name)
+    # V14: Generate EPHEMERIDE AUDIO FIRST (to crossfade into intro)
+    from pydub import AudioSegment
+    ephemeride_audio = None
+    ephemeride_data = None
+    
+    ephemeride_raw = get_or_create_ephemeride()
+    if ephemeride_raw and ephemeride_raw.get("local_path"):
+        try:
+            ephemeride_audio = AudioSegment.from_mp3(ephemeride_raw["local_path"])
+            ephemeride_data = ephemeride_raw
+            log.info(f"🎤 Ephemeride audio loaded: {len(ephemeride_audio)//1000}s")
+        except Exception as e:
+            log.warning(f"⚠️ Could not load ephemeride audio: {e}")
+    
+    # 1. INTRO (with optional ephemeride crossfade)
+    intro = get_or_create_intro(first_name, ephemeride_audio=ephemeride_audio)
     if intro:
         segments.append({
-            "type": "intro",
+            "type": "intro",  # V14: Now includes ephemeride if crossfaded
             "audio_url": intro.get("audio_url"),
             "audio_path": intro.get("local_path"),
             "duration": intro.get("audio_duration", intro.get("duration", 5))
@@ -2736,11 +2796,22 @@ def assemble_lego_podcast(
             "type": "intro"
         })
         total_duration += intro.get("audio_duration", intro.get("duration", 5))
-        log.info(f"✅ Intro: {total_duration}s")
+        
+        # If ephemeride was crossfaded, add chapter marker
+        if intro.get("includes_ephemeride") and ephemeride_data:
+            # Ephemeride chapter starts ~2s before intro ends
+            ephemeride_chapter_start = max(0, total_duration - (ephemeride_data.get("duration", 10)))
+            chapters.append({
+                "title": "Éphéméride",
+                "start_time": ephemeride_chapter_start,
+                "type": "ephemeride"
+            })
+            log.info(f"✅ Intro+Ephemeride (crossfaded): {total_duration}s")
+        else:
+            log.info(f"✅ Intro: {total_duration}s")
     
-    # 2. EPHEMERIDE (generated daily - NOT cached)
-    ephemeride = get_or_create_ephemeride()
-    if ephemeride:
+    # 2. EPHEMERIDE (only if NOT crossfaded into intro)
+    if ephemeride_data and not (intro and intro.get("includes_ephemeride")):
         chapters.append({
             "title": "Éphéméride",
             "start_time": total_duration,
@@ -2748,11 +2819,11 @@ def assemble_lego_podcast(
         })
         segments.append({
             "type": "ephemeride",
-            "audio_path": ephemeride.get("local_path"),
-            "duration": ephemeride.get("audio_duration", ephemeride.get("duration", 10))
+            "audio_path": ephemeride_data.get("local_path"),
+            "duration": ephemeride_data.get("audio_duration", ephemeride_data.get("duration", 10))
         })
-        total_duration += ephemeride.get("audio_duration", ephemeride.get("duration", 10))
-        log.info(f"✅ Ephemeride: {ephemeride.get('duration', 0)}s | Total: {total_duration}s")
+        total_duration += ephemeride_data.get("audio_duration", ephemeride_data.get("duration", 10))
+        log.info(f"✅ Ephemeride (separate): {ephemeride_data.get('duration', 0)}s | Total: {total_duration}s")
     
     # 3. NEWS SEGMENTS - Process by cluster with TRANSITIONS
     cluster_idx = 0

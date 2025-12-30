@@ -511,7 +511,17 @@ def get_historical_facts_wikimedia(
             "grève", "strike",
             # Sports (unless record)
             "match", "championnat", "championship", "coupe", "cup",
-            "finale", "final", "victoire", "victory", "défaite"
+            "finale", "final", "victoire", "victory", "défaite",
+            # V14: Boring astronomy/nature events (not interesting unless human achievement)
+            "pleine lune", "full moon", "nouvelle lune", "new moon",
+            "éclipse", "eclipse", "solstice", "équinoxe", "equinox",
+            "marée", "tide", "météore", "meteor", "comète visible",
+            "alignement", "alignment", "conjonction", "conjunction",
+            # V14: Generic religious/cultural
+            "canonisation", "canonized", "béatification", "beatified",
+            "pèlerinage", "pilgrimage", "fête nationale", "national day",
+            # V14: Vague events
+            "dernier", "dernière", "last", "premier jour", "first day"
         ]
         
         # Process "events" (historical events)
@@ -569,25 +579,115 @@ def get_historical_facts_wikimedia(
 def get_best_ephemeride_fact(month: int = None, day: int = None) -> dict | None:
     """
     Get the single best historical fact for the ephemeride.
-    V13: Only returns GENUINELY INTERESTING facts. Returns None if nothing good.
+    V14: Enhanced scoring system with excitement factor.
+    Returns None if nothing genuinely exciting.
     """
-    facts = get_historical_facts_wikimedia(month, day, max_facts=5)
+    facts = get_historical_facts_wikimedia(month, day, max_facts=20)  # Get more to filter better
     
     if not facts:
         return None
     
-    # V13: Only return if we have something interesting
-    # Otherwise skip the ephemeride entirely
-    interesting_facts = [f for f in facts if f.get("is_interesting")]
+    # V14: Score each fact by "excitement factor"
+    def calculate_excitement_score(fact: dict) -> float:
+        text = fact.get("text", "").lower()
+        year = fact.get("year", 1900)
+        score = 0.0
+        
+        # High excitement keywords (things that make people go "wow!")
+        high_excitement = [
+            # Space achievements
+            ("premier homme sur la lune", 10), ("first man on the moon", 10),
+            ("moon landing", 10), ("alunissage", 10),
+            ("premier pas", 8), ("first step", 8),
+            ("station spatiale", 7), ("space station", 7),
+            ("navette spatiale", 7), ("space shuttle", 7),
+            # Tech milestones
+            ("iphone", 9), ("macintosh", 8), ("ipod", 7),
+            ("premier ordinateur", 8), ("first computer", 8),
+            ("world wide web", 9), ("www", 7),
+            ("google", 7), ("facebook", 6), ("youtube", 7),
+            # Pop culture icons
+            ("beatles", 8), ("elvis", 7), ("michael jackson", 7),
+            ("star wars", 8), ("harry potter", 7),
+            # Science breakthroughs
+            ("adn", 8), ("dna", 8), ("double helix", 9),
+            ("clone", 7), ("dolly", 8),
+            ("prix nobel", 6), ("nobel prize", 6),
+            # Cool inventions
+            ("premier vol", 7), ("first flight", 7),
+            ("frères wright", 8), ("wright brothers", 8),
+            ("premier avion", 7), ("first airplane", 7),
+            ("television", 6), ("télévision", 6),
+            # Entertainment/Gaming
+            ("playstation", 7), ("xbox", 6), ("nintendo", 7),
+            ("super mario", 8), ("tetris", 7),
+            ("disneyland", 7), ("disney", 6),
+            # Records that impress
+            ("record du monde", 7), ("world record", 7),
+            ("le plus", 5), ("la plus", 5),
+        ]
+        
+        for keyword, points in high_excitement:
+            if keyword in text:
+                score += points
+        
+        # Bonus for being a "first" or "invention"
+        if any(w in text for w in ["premier", "première", "first", "invention", "invented", "créé", "created", "fondé", "founded"]):
+            score += 3
+        
+        # Bonus for relatability (modern era)
+        if 1950 <= year <= 2020:
+            score += 2
+        if 1980 <= year <= 2010:
+            score += 2  # Peak nostalgia zone
+        
+        # Penalty for being too old (hard to relate)
+        if year < 1900:
+            score -= 2
+        
+        return score
     
-    if interesting_facts:
-        best = interesting_facts[0]
-        log.info("Selected ephemeride fact", year=best["year"], text=best["text"][:50])
-        return best
+    # Score all facts
+    scored_facts = []
+    for fact in facts:
+        if fact.get("is_interesting"):  # Must pass basic interest filter
+            excitement = calculate_excitement_score(fact)
+            if excitement >= 5:  # Minimum excitement threshold
+                scored_facts.append((excitement, fact))
     
-    # No interesting fact found - better to skip than bore the listener
-    log.warning("No interesting ephemeride fact found - skipping")
-    return None
+    if not scored_facts:
+        # V14: Try a different day if today has nothing exciting
+        log.warning("No exciting ephemeride for today, trying adjacent days...")
+        
+        # Try yesterday and tomorrow
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        
+        for delta in [-1, 1, -2, 2]:
+            alt_date = today + timedelta(days=delta)
+            alt_facts = get_historical_facts_wikimedia(alt_date.month, alt_date.day, max_facts=10)
+            
+            for fact in alt_facts:
+                if fact.get("is_interesting"):
+                    excitement = calculate_excitement_score(fact)
+                    if excitement >= 7:  # Higher threshold for non-today facts
+                        # Add a note that it's from a different day
+                        fact["text"] = fact["text"]  # Keep original
+                        fact["alt_day"] = delta
+                        log.info(f"Found exciting fact from {delta} days: {fact['text'][:50]}")
+                        return fact
+        
+        log.warning("No interesting ephemeride fact found - skipping")
+        return None
+    
+    # Sort by excitement score (highest first)
+    scored_facts.sort(key=lambda x: x[0], reverse=True)
+    
+    best_score, best_fact = scored_facts[0]
+    log.info(f"Selected ephemeride (excitement={best_score})", 
+             year=best_fact["year"], 
+             text=best_fact["text"][:50])
+    return best_fact
 
 
 # ============================================
