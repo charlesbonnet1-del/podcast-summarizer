@@ -35,14 +35,25 @@ log = structlog.get_logger()
 # ============================================
 
 # Cartesia Voice IDs (Sonic 3.0)
-# V13 Voice Roles (INVERTED from V11):
-# [A] La Sceptique = "Helpful French Lady" - challenges, questions (max 50% questions)
-# [B] L'Analyste = "Pierre" - French male voice, leads and exposes facts
+# V14: French FRANCE accent voices (not Canadian)
 #
-# ⚠️ The dialogue uses [A] and [B] markers, NEVER names like "Alice" or "Bob"
+# To find voice IDs, go to https://play.cartesia.ai/ and browse French voices
+# Look for voices with "France" or "Parisian" in description
 #
-CARTESIA_VOICE_ALICE = os.getenv("CARTESIA_VOICE_ALICE", "a3520a8f-226a-428d-9fcd-b0a4711a6829")  # [A] Skeptic
-CARTESIA_VOICE_BOB = os.getenv("CARTESIA_VOICE_BOB", "ab7c61f5-3daa-47dd-a23b-4ac0aac5f5c3")      # [B] Analyst
+# [A] La Sceptique = Female French voice (France accent) - challenges, questions
+# [B] L'Analyste = Male French voice (France accent) - leads and exposes facts
+#
+# DEFAULT VOICE IDs (update these in .env with your preferred voices):
+# - CARTESIA_VOICE_ALICE: French female voice
+# - CARTESIA_VOICE_BOB: French male voice
+#
+# Recommended French (France) voices from Cartesia library:
+# - "French Narrator Lady" (female, France accent)
+# - "French Narrator Man" (male, France accent)
+# - Look for voices tagged with language "fr" and France/Parisian in description
+#
+CARTESIA_VOICE_ALICE = os.getenv("CARTESIA_VOICE_ALICE", "a3520a8f-226a-428d-9fcd-b0a4711a6829")  # [A] Skeptic - UPDATE THIS
+CARTESIA_VOICE_BOB = os.getenv("CARTESIA_VOICE_BOB", "ab7c61f5-3daa-47dd-a23b-4ac0aac5f5c3")      # [B] Analyst - UPDATE THIS
 
 # Fallback OpenAI voices (only used if Cartesia fails)
 OPENAI_VOICE_ALICE = "nova"    # Female - [A] Skeptic
@@ -51,8 +62,10 @@ OPENAI_VOICE_BOB = "onyx"      # Male - [B] Analyst
 # Model
 CARTESIA_MODEL = "sonic-3"
 
-# Speed (Cartesia uses -1.0 to 1.0, 0 = normal)
-CARTESIA_SPEED = 0.0  # Normal speed
+# V14: Speed setting for Cartesia API
+# Range: -1.0 (slowest) to 1.0 (fastest), 0.0 = normal
+# We use 0.15 for slightly faster delivery (then apply 1.1x in post-processing)
+CARTESIA_SPEED = 0.15  # Slightly faster than normal
 
 # ============================================
 # TTS CLIENTS
@@ -636,14 +649,23 @@ def save_episode_digest(
 # ============================================
 
 def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
-    """Generate TTS using Cartesia Sonic 3.0"""
+    """
+    Generate TTS using Cartesia Sonic
+    
+    V14 FIX: 
+    - Speed and emotion must be in __experimental_controls inside voice object
+    - Speed: 0.1 = 10% faster (range -1.0 to 1.0)
+    - Emotion: ["positivity:high", "curiosity:high"] for engaged tone
+    - Post-processing: 1.1x speed boost
+    - Total effective speed: ~1.2x
+    """
     if not cartesia_client:
         return False
     
     try:
         log.info(f"🎤 Cartesia TTS: {len(text)} chars, voice={voice_id[:8]}...")
         
-        # Generate audio bytes with optimized settings
+        # V14: Correct API format - speed/emotion in __experimental_controls
         audio_bytes = b""
         for chunk in cartesia_client.tts.bytes(
             model_id=CARTESIA_MODEL,
@@ -651,10 +673,10 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
             voice={
                 "mode": "id", 
                 "id": voice_id,
-                # V13: Voice settings for better delivery
+                # V14: Speed and emotion controls (experimental API)
                 "__experimental_controls": {
-                    "speed": "normal",  # Will be processed at 1.1x in post
-                    "emotion": ["positivity:high", "curiosity:medium"]  # Content/engaged tone
+                    "speed": 0.1,  # 10% faster than normal (range: -1.0 to 1.0)
+                    "emotion": ["positivity:high", "curiosity:high"]  # Engaged, enthusiastic
                 }
             },
             language="fr",
@@ -670,16 +692,17 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
         with open(output_path, "wb") as f:
             f.write(audio_bytes)
         
-        # V13: Apply speed 1.1x and volume 1.5x using pydub
+        # V14: Apply additional 1.1x speed and volume boost in post-processing
+        # Total speed: 1.1 (API) × 1.1 (post) ≈ 1.2x
         try:
             from pydub import AudioSegment
             audio = AudioSegment.from_mp3(output_path)
-            # Speed up 1.1x (without changing pitch using speedup)
+            # Speed up 1.1x (without changing pitch)
             faster_audio = audio.speedup(playback_speed=1.1)
-            # Increase volume by ~3.5dB (1.5x perceived loudness)
+            # Increase volume by ~3.5dB
             louder_audio = faster_audio + 3.5
             louder_audio.export(output_path, format="mp3", bitrate="192k")
-            log.info(f"✅ Cartesia audio processed: speed=1.1x, volume=+3.5dB")
+            log.info(f"✅ Cartesia audio processed: speed=1.1x API + 1.1x post, volume=+3.5dB")
         except Exception as e:
             log.warning(f"⚠️ Post-processing skipped: {e}")
         
@@ -688,7 +711,37 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
         
     except Exception as e:
         log.error(f"❌ Cartesia TTS failed: {e}")
-        return False
+        # V14: Try with simpler params if advanced features fail
+        try:
+            log.info("🔄 Retrying Cartesia TTS with basic params...")
+            audio_bytes = b""
+            for chunk in cartesia_client.tts.bytes(
+                model_id=CARTESIA_MODEL,
+                transcript=text,
+                voice={"mode": "id", "id": voice_id},
+                language="fr",
+                output_format={"container": "mp3", "bit_rate": 192000, "sample_rate": 44100}
+            ):
+                audio_bytes += chunk
+            
+            with open(output_path, "wb") as f:
+                f.write(audio_bytes)
+            
+            # Still apply post-processing
+            try:
+                from pydub import AudioSegment
+                audio = AudioSegment.from_mp3(output_path)
+                faster_audio = audio.speedup(playback_speed=1.15)  # Compensate for no API speed
+                louder_audio = faster_audio + 3.5
+                louder_audio.export(output_path, format="mp3", bitrate="192k")
+            except:
+                pass
+            
+            log.info(f"✅ Cartesia TTS (basic mode) saved: {len(audio_bytes)} bytes")
+            return True
+        except Exception as e2:
+            log.error(f"❌ Cartesia TTS basic mode also failed: {e2}")
+            return False
 
 
 def generate_tts_openai(text: str, voice: str, output_path: str) -> bool:

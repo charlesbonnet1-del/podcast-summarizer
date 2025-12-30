@@ -378,6 +378,141 @@ def calculate_discovery_score(
         # Normalize to 0-1 score
         discovery_score = min(1.0, (avg_distance - 0.5) * 2)
         return discovery_score
+
+
+# ============================================
+# V14.4: TIMELINESS SCORE (Freshness + Specificity)
+# ============================================
+
+# Generic/evergreen phrases that indicate non-timely content
+GENERIC_PHRASES = [
+    # Trend statements (could be published anytime)
+    "en pleine expansion", "en pleine croissance", "continue de croître",
+    "ne cesse de", "de plus en plus", "est en train de",
+    "connaît une forte", "prend de l'ampleur", "gagne du terrain",
+    # Vague future predictions
+    "va transformer", "pourrait changer", "risque de",
+    "devrait connaître", "est appelé à", "promet de",
+    # Generic analyses
+    "les experts estiment", "selon les analystes", "d'après les spécialistes",
+    "il est important de", "il convient de noter",
+    # Evergreen topics
+    "l'importance de", "les avantages de", "comment fonctionne",
+    "qu'est-ce que", "tout savoir sur", "guide complet",
+    # English equivalents
+    "is growing", "continues to grow", "is expanding",
+    "is transforming", "experts say", "analysts predict",
+    "the rise of", "the future of", "how to",
+]
+
+# Specific/timely indicators
+TIMELY_INDICATORS = [
+    # Recent time markers
+    "aujourd'hui", "hier", "cette semaine", "ce mois",
+    "vient de", "vient d'annoncer", "vient de lancer",
+    "annonce", "lance", "dévoile", "révèle", "confirme",
+    # Specific events
+    "a été acquis", "a levé", "a signé", "a conclu",
+    "a atteint", "a dépassé", "a battu",
+    # Concrete numbers with context
+    "millions de dollars", "milliards", "% de croissance",
+    # English equivalents
+    "today", "yesterday", "this week", "just announced",
+    "has acquired", "raised", "launched", "revealed",
+]
+
+
+def calculate_timeliness_score(cluster: dict, articles: list) -> float:
+    """
+    V14.4: Calculate timeliness score to penalize generic/evergreen topics.
+    
+    Analyzes:
+    1. Publication dates of articles in cluster
+    2. Presence of specific vs generic language
+    3. Concrete facts vs vague trends
+    
+    Returns:
+        Score 0-1 where 1 = very timely/specific, 0 = generic/evergreen
+    """
+    from datetime import datetime, timedelta
+    
+    cluster_indices = cluster.get("article_indices", [])
+    if not cluster_indices:
+        return 0.5  # Neutral if no articles
+    
+    cluster_articles = [articles[i] for i in cluster_indices if i < len(articles)]
+    if not cluster_articles:
+        return 0.5
+    
+    # Component 1: FRESHNESS (based on publication dates)
+    freshness_score = 0.5
+    now = datetime.now()
+    ages_hours = []
+    
+    for article in cluster_articles:
+        pub_date = article.get("published_at") or article.get("created_at")
+        if pub_date:
+            try:
+                if isinstance(pub_date, str):
+                    # Handle ISO format
+                    pub_date = pub_date.replace('Z', '+00:00')
+                    dt = datetime.fromisoformat(pub_date.split('+')[0])
+                else:
+                    dt = pub_date
+                age_hours = (now - dt).total_seconds() / 3600
+                ages_hours.append(age_hours)
+            except:
+                pass
+    
+    if ages_hours:
+        avg_age_hours = np.mean(ages_hours)
+        # Score based on age: <24h = 1.0, 24-48h = 0.8, 48-72h = 0.6, >72h = 0.3
+        if avg_age_hours < 24:
+            freshness_score = 1.0
+        elif avg_age_hours < 48:
+            freshness_score = 0.8
+        elif avg_age_hours < 72:
+            freshness_score = 0.6
+        else:
+            freshness_score = 0.3
+    
+    # Component 2: SPECIFICITY (language analysis)
+    theme = cluster.get("theme", "")
+    representative_title = cluster.get("representative", {}).get("title", "")
+    text_to_analyze = f"{theme} {representative_title}".lower()
+    
+    # Count generic phrases
+    generic_count = sum(1 for phrase in GENERIC_PHRASES if phrase in text_to_analyze)
+    
+    # Count timely indicators
+    timely_count = sum(1 for indicator in TIMELY_INDICATORS if indicator in text_to_analyze)
+    
+    # Calculate specificity score
+    if generic_count > 2:
+        specificity_score = 0.2  # Very generic
+    elif generic_count > 0 and timely_count == 0:
+        specificity_score = 0.4  # Somewhat generic
+    elif timely_count > 0:
+        specificity_score = min(1.0, 0.6 + timely_count * 0.1)  # Timely
+    else:
+        specificity_score = 0.5  # Neutral
+    
+    # Component 3: CONCRETENESS (presence of specific facts)
+    # Check for numbers, names, specific entities
+    import re
+    has_numbers = bool(re.search(r'\d+', text_to_analyze))
+    has_proper_nouns = bool(re.search(r'[A-Z][a-z]+', theme))  # Capitalized words in theme
+    
+    concreteness_score = 0.5
+    if has_numbers and has_proper_nouns:
+        concreteness_score = 0.9
+    elif has_numbers or has_proper_nouns:
+        concreteness_score = 0.7
+    
+    # Combine components: freshness 40%, specificity 40%, concreteness 20%
+    final_score = (freshness_score * 0.4 + specificity_score * 0.4 + concreteness_score * 0.2)
+    
+    return final_score
     
     return 0.0
 
@@ -473,6 +608,120 @@ def merge_late_arrivals(
         log.info(f"🔄 LATE MERGE: {merged_count} articles merged, {promoted_count} source promotions")
     
     return existing_clusters
+
+
+def calculate_timeliness_score(cluster: dict, articles: list[dict]) -> float:
+    """
+    Calculate how "newsworthy" a cluster is vs being generic/evergreen content.
+    
+    V14.4: Penalizes topics that could be published anytime (e.g., "Asia is growing")
+    Rewards topics with specific events, names, dates, numbers.
+    
+    Returns:
+        Score from 0.0 (evergreen/generic) to 1.0 (very timely/specific)
+    """
+    theme = cluster.get("theme", "")
+    cluster_articles = cluster.get("articles", [])
+    
+    if not theme:
+        return 0.5  # Default neutral
+    
+    theme_lower = theme.lower()
+    score = 0.5  # Start at neutral
+    
+    # === SPECIFICITY SIGNALS (increase score) ===
+    
+    # Named entities (proper nouns indicate specific news)
+    # Check for capital letters in the middle of sentences (names)
+    import re
+    proper_nouns = re.findall(r'(?<!\. )[A-Z][a-zéèêëàâäîïôöûü]+', theme)
+    if len(proper_nouns) >= 2:
+        score += 0.15  # Multiple proper nouns = specific story
+    elif len(proper_nouns) >= 1:
+        score += 0.08
+    
+    # Numbers and stats (quantified news)
+    has_numbers = bool(re.search(r'\d+', theme))
+    has_percentage = bool(re.search(r'\d+\s*%', theme))
+    has_money = bool(re.search(r'(\$|€|£|¥)\s*\d+|\d+\s*(million|milliard|billion|M\$|B\$|M€|B€)', theme, re.IGNORECASE))
+    
+    if has_money:
+        score += 0.15
+    elif has_percentage:
+        score += 0.12
+    elif has_numbers:
+        score += 0.08
+    
+    # Action verbs indicating events (launches, announces, acquires)
+    event_verbs = [
+        "lance", "annonce", "acquiert", "rachète", "lève", "signe",
+        "dévoile", "présente", "révèle", "confirme", "rejette",
+        "launches", "announces", "acquires", "raises", "signs",
+        "unveils", "reveals", "confirms", "rejects", "releases"
+    ]
+    if any(verb in theme_lower for verb in event_verbs):
+        score += 0.12
+    
+    # Date/time references (today, yesterday, this week)
+    time_refs = [
+        "aujourd'hui", "hier", "cette semaine", "ce mois", "2024", "2025",
+        "today", "yesterday", "this week", "this month", "janvier", "février",
+        "mars", "avril", "mai", "juin", "juillet", "août", "septembre",
+        "octobre", "novembre", "décembre", "january", "february", "Q1", "Q2", "Q3", "Q4"
+    ]
+    if any(ref in theme_lower for ref in time_refs):
+        score += 0.10
+    
+    # === GENERIC/EVERGREEN SIGNALS (decrease score) ===
+    
+    # Generic trend words without specifics
+    generic_patterns = [
+        r"^l'(asie|europe|afrique|amérique)\s+(est|se|va|continue)",
+        r"^(la|le|les)\s+\w+\s+(est|sont|va|vont)\s+en\s+(croissance|expansion|hausse|baisse)",
+        r"(tendance|trend|avenir|futur|future|évolution|transformation)\s+(de|du|des|of)",
+        r"^(comment|how|why|pourquoi)\s+",
+        r"^(les|the)\s+\d+\s+(meilleures?|best|top)",
+        r"(guide|introduction|comprendre|understand)",
+        r"(impact|importance|rôle|role)\s+(de|du|des|of)",
+    ]
+    
+    for pattern in generic_patterns:
+        if re.search(pattern, theme_lower):
+            score -= 0.20
+            break
+    
+    # Vague superlatives without specifics
+    vague_superlatives = [
+        "en pleine expansion", "en forte croissance", "en plein essor",
+        "de plus en plus", "de moins en moins", "toujours plus",
+        "growing rapidly", "expanding fast", "increasingly"
+    ]
+    if any(phrase in theme_lower for phrase in vague_superlatives):
+        score -= 0.15
+    
+    # Check article freshness (publication dates)
+    recent_count = 0
+    for article in cluster_articles[:5]:
+        pub_date = article.get("published_at") or article.get("created_at")
+        if pub_date:
+            # If published in last 48h, it's fresher
+            try:
+                from datetime import datetime, timedelta
+                if isinstance(pub_date, str):
+                    # Parse ISO date
+                    pub_dt = datetime.fromisoformat(pub_date.replace('Z', '+00:00'))
+                    if datetime.now(pub_dt.tzinfo) - pub_dt < timedelta(hours=48):
+                        recent_count += 1
+            except:
+                pass
+    
+    if recent_count >= 3:
+        score += 0.10  # Multiple very recent articles
+    
+    # Clamp score to [0, 1]
+    score = max(0.0, min(1.0, score))
+    
+    return score
 
 
 def select_best_clusters(
@@ -607,19 +856,29 @@ def select_best_clusters(
         user_weight = user_topic_weights.get(cluster["topic"], 50) / 100
         
         # Base score components
-        density_component = cluster["density"] * 0.35
-        topic_component = cluster["topic_similarity"] * 0.25
-        user_weight_component = user_weight * 0.25
+        density_component = cluster["density"] * 0.30  # Reduced from 0.35
+        topic_component = cluster["topic_similarity"] * 0.20  # Reduced from 0.25
+        user_weight_component = user_weight * 0.20  # Reduced from 0.25
         discovery_component = cluster["discovery_score"] * DISCOVERY_BONUS_WEIGHT
+        
+        # V14: TIMELINESS SCORE - penalize generic/evergreen topics
+        timeliness_score = calculate_timeliness_score(cluster, articles)
+        timeliness_component = timeliness_score * 0.15  # 15% weight for freshness
         
         # Master source bonus
         master_bonus = 0.1 if cluster.get("is_master_source") else 0
         
-        cluster["score"] = density_component + topic_component + user_weight_component + discovery_component + master_bonus
+        cluster["score"] = (density_component + topic_component + user_weight_component + 
+                           discovery_component + timeliness_component + master_bonus)
+        cluster["timeliness_score"] = timeliness_score
         
         # Log discovery finds
         if cluster["discovery_score"] > 0.3:
             log.info(f"🔍 DISCOVERY: {cluster['theme'][:40]}... (discovery={cluster['discovery_score']:.2f})")
+        
+        # Log low timeliness (potential generic topic)
+        if timeliness_score < 0.3:
+            log.warning(f"⏰ LOW TIMELINESS: {cluster['theme'][:40]}... (timeliness={timeliness_score:.2f}) - may be generic topic")
     
     scored_clusters.sort(key=lambda x: x["score"], reverse=True)
     
