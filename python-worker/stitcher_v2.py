@@ -1915,6 +1915,148 @@ def mix_intro_with_music(voice_audio, intro_music_path: str, ephemeride_audio=No
     )
 
 
+# ============================================
+# AMBIENT TRACKS (Background music for podcast)
+# ============================================
+
+AMBIENT_BUCKET = "ambient-tracks"
+AMBIENT_CACHE_DIR = os.path.join(tempfile.gettempdir(), "ambient_cache")
+
+def list_ambient_tracks() -> list[str]:
+    """
+    List all ambient tracks available in Supabase Storage.
+    Returns list of file names.
+    """
+    try:
+        files = supabase.storage.from_(AMBIENT_BUCKET).list()
+        # Filter for mp3 files only
+        tracks = [f["name"] for f in files if f["name"].endswith(".mp3")]
+        log.info(f"🎵 Found {len(tracks)} ambient tracks in storage")
+        return tracks
+    except Exception as e:
+        log.warning(f"⚠️ Could not list ambient tracks: {e}")
+        return []
+
+
+def get_random_ambient_track() -> Optional[str]:
+    """
+    Download a random ambient track and return local path.
+    Caches downloaded tracks to avoid re-downloading.
+    """
+    import random
+    
+    # Ensure cache directory exists
+    os.makedirs(AMBIENT_CACHE_DIR, exist_ok=True)
+    
+    # List available tracks
+    tracks = list_ambient_tracks()
+    if not tracks:
+        log.warning("⚠️ No ambient tracks available")
+        return None
+    
+    # Pick random track
+    selected = random.choice(tracks)
+    log.info(f"🎲 Selected ambient track: {selected}")
+    
+    # Check cache
+    safe_name = selected.replace(" ", "_").replace("(", "").replace(")", "")
+    cache_path = os.path.join(AMBIENT_CACHE_DIR, safe_name)
+    
+    if os.path.exists(cache_path):
+        log.info(f"✅ Using cached ambient track: {cache_path}")
+        return cache_path
+    
+    # Download from Supabase
+    try:
+        data = supabase.storage.from_(AMBIENT_BUCKET).download(selected)
+        with open(cache_path, 'wb') as f:
+            f.write(data)
+        log.info(f"✅ Downloaded ambient track: {selected} -> {cache_path}")
+        return cache_path
+    except Exception as e:
+        log.error(f"❌ Failed to download ambient track {selected}: {e}")
+        return None
+
+
+def mix_ambient_under_dialogue(dialogue_segments: list, intro_block_duration: int) -> Optional[AudioSegment]:
+    """
+    Mix a random ambient track underneath the dialogue segments.
+    
+    Args:
+        dialogue_segments: List of dialogue audio segments (AudioSegment objects)
+        intro_block_duration: Duration of intro block in seconds (ambient starts 2s after)
+    
+    Returns:
+        Combined audio with ambient underneath, or None if no ambient available
+    
+    Timeline:
+    ┌────────────────────────────────────────────────────────────────────────────┐
+    │ [INTRO BLOCK]  │ 2s │        [DIALOGUE SEGMENTS]                          │
+    │                │gap │                                                      │
+    │                │    │ ═══════════════════════════════════════════════════  │
+    │                │    │ │  AMBIENT TRACK (very low volume, -25dB)    │FADE│  │
+    │                │    │ ═══════════════════════════════════════════════════  │
+    │                │    │ ████████████████████████████████████████████████████ │
+    │                │    │ │              DIALOGUE                            │ │
+    └────────────────────────────────────────────────────────────────────────────┘
+    """
+    from pydub import AudioSegment
+    
+    AMBIENT_VOLUME_DB = -25  # Very quiet background
+    AMBIENT_FADE_OUT = 3000  # 3s fade out at end
+    GAP_AFTER_INTRO = 2000   # 2s gap after intro block
+    
+    # Get random ambient track
+    ambient_path = get_random_ambient_track()
+    if not ambient_path:
+        return None
+    
+    try:
+        ambient = AudioSegment.from_mp3(ambient_path)
+        log.info(f"🎵 Ambient track duration: {len(ambient)//1000}s")
+    except Exception as e:
+        log.error(f"❌ Failed to load ambient track: {e}")
+        return None
+    
+    # Concatenate all dialogue segments
+    dialogue_combined = AudioSegment.empty()
+    for seg in dialogue_segments:
+        if isinstance(seg, AudioSegment):
+            dialogue_combined += seg
+        elif isinstance(seg, dict) and seg.get("audio"):
+            dialogue_combined += seg["audio"]
+    
+    if len(dialogue_combined) == 0:
+        log.warning("⚠️ No dialogue to mix with ambient")
+        return None
+    
+    dialogue_duration = len(dialogue_combined)
+    log.info(f"🎤 Dialogue duration: {dialogue_duration//1000}s")
+    
+    # Process ambient: lower volume + fade out
+    ambient_processed = ambient + AMBIENT_VOLUME_DB
+    
+    # If ambient is longer than dialogue, trim and fade
+    if len(ambient_processed) > dialogue_duration:
+        ambient_processed = ambient_processed[:dialogue_duration]
+    
+    # Add fade out at the end
+    if len(ambient_processed) > AMBIENT_FADE_OUT:
+        ambient_processed = ambient_processed.fade_out(AMBIENT_FADE_OUT)
+    
+    # Pad ambient if shorter than dialogue
+    if len(ambient_processed) < dialogue_duration:
+        # Ambient ends naturally, rest is dialogue only
+        ambient_processed += AudioSegment.silent(duration=dialogue_duration - len(ambient_processed))
+    
+    # Mix ambient under dialogue
+    mixed = ambient_processed.overlay(dialogue_combined)
+    
+    log.info(f"✅ Mixed ambient under dialogue: {len(mixed)//1000}s")
+    
+    return mixed
+
+
 def get_or_create_intro(first_name: str, ephemeride_audio=None) -> Optional[dict]:
     """
     Get or create personalized intro WITH background music.
@@ -3249,16 +3391,22 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
     """
     Combine all segments into final audio file.
     
-    V14.5: Simple concatenation - intro block already contains music+voice+ephemeride+first dialogue
+    V14.5: 
+    - Intro block contains music + voice + ephemeride + first dialogue
+    - Ambient track plays underneath remaining dialogue segments
     """
     try:
         from pydub import AudioSegment
         import httpx
         
-        combined = AudioSegment.empty()
-        transition_silence = AudioSegment.silent(duration=300)  # 300ms between segments
+        AMBIENT_VOLUME_DB = -25  # Very quiet background
+        AMBIENT_FADE_OUT = 3000  # 3s fade out
+        AMBIENT_START_DELAY = 2000  # 2s after intro block
         
-        for i, seg in enumerate(segments):
+        intro_block_audio = None
+        dialogue_audios = []
+        
+        for seg in segments:
             audio_path = seg.get("audio_path")
             audio_url = seg.get("audio_url")
             seg_type = seg.get("type", "unknown")
@@ -3280,14 +3428,78 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
             
             try:
                 audio = AudioSegment.from_mp3(audio_path)
-                combined += audio
                 
-                # Add small silence between segments (except after intro_block which has its own fade)
-                if seg_type != "intro_block":
-                    combined += transition_silence
+                if seg_type == "intro_block":
+                    intro_block_audio = audio
+                else:
+                    dialogue_audios.append(audio)
                     
             except Exception as e:
                 log.warning(f"Failed to load segment: {e}")
+        
+        # Start with intro block
+        if intro_block_audio is None:
+            log.error("❌ No intro block found")
+            return None
+        
+        combined = intro_block_audio
+        log.info(f"🎵 Intro block: {len(intro_block_audio)//1000}s")
+        
+        # Concatenate dialogue segments
+        if not dialogue_audios:
+            log.info("📝 No additional dialogue segments (all in intro block)")
+        else:
+            transition = AudioSegment.silent(duration=300)
+            dialogue_combined = AudioSegment.empty()
+            
+            for i, audio in enumerate(dialogue_audios):
+                dialogue_combined += audio
+                if i < len(dialogue_audios) - 1:
+                    dialogue_combined += transition
+            
+            log.info(f"🎤 Dialogue segments: {len(dialogue_combined)//1000}s")
+            
+            # Get ambient track and mix under dialogue
+            ambient_path = get_random_ambient_track()
+            
+            if ambient_path:
+                try:
+                    ambient = AudioSegment.from_mp3(ambient_path)
+                    log.info(f"🎵 Ambient track: {len(ambient)//1000}s")
+                    
+                    # Process ambient: lower volume
+                    ambient_processed = ambient + AMBIENT_VOLUME_DB
+                    
+                    # Trim or pad ambient to match dialogue
+                    if len(ambient_processed) > len(dialogue_combined):
+                        ambient_processed = ambient_processed[:len(dialogue_combined)]
+                    
+                    # Add fade out
+                    if len(ambient_processed) > AMBIENT_FADE_OUT:
+                        ambient_processed = ambient_processed.fade_out(AMBIENT_FADE_OUT)
+                    
+                    # Pad if shorter than dialogue
+                    if len(ambient_processed) < len(dialogue_combined):
+                        ambient_processed += AudioSegment.silent(
+                            duration=len(dialogue_combined) - len(ambient_processed)
+                        )
+                    
+                    # Mix ambient under dialogue
+                    dialogue_with_ambient = ambient_processed.overlay(dialogue_combined)
+                    log.info(f"✅ Mixed ambient under dialogue")
+                    
+                    # Add 2s silence then dialogue with ambient
+                    combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
+                    combined += dialogue_with_ambient
+                    
+                except Exception as e:
+                    log.warning(f"⚠️ Failed to mix ambient: {e}, using dialogue without ambient")
+                    combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
+                    combined += dialogue_combined
+            else:
+                # No ambient available, just add dialogue
+                combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
+                combined += dialogue_combined
         
         if len(combined) == 0:
             return None
