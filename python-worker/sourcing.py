@@ -164,24 +164,26 @@ class GSheetSourceLibrary:
     
     Single worksheet "sources" with dynamic range A2:G (no upper limit).
     
-    Column mapping (0-indexed from A2):
-    A (0): vertical (WORLD, TECH, ECONOMICS, SCIENCE, CULTURE)
-    B (1): topic (must be in SUPPORTED_TOPICS)
-    C (2): origin (FR/INT)
-    D (3): source_name
-    E (4): type (Flux RSS, etc.)
-    F (5): url_rss
-    G (6): score (optional, default 50)
+    Column mapping (0-indexed from A2) - V14 FIX matches actual GSheet:
+    A (0): topic (asia, ia, crypto, etc. - must be in SUPPORTED_TOPICS)
+    B (1): origin (FR/INT)
+    C (2): source_name
+    D (3): type (Flux RSS, etc.)
+    E (4): url_rss
+    F (5): score (optional, default 50)
+    G (6): system_status (optional)
+    
+    Note: vertical is derived from topic, not stored in GSheet
     """
     
-    # Column indices (0-indexed)
-    COL_VERTICAL = 0
-    COL_TOPIC = 1
-    COL_ORIGIN = 2
-    COL_SOURCE_NAME = 3
-    COL_TYPE = 4
-    COL_URL_RSS = 5
-    COL_SCORE = 6
+    # Column indices (0-indexed) - V14: Fixed to match actual GSheet structure
+    COL_TOPIC = 0       # A: topic (asia, ia, etc.)
+    COL_ORIGIN = 1      # B: origin (FR/INT)
+    COL_SOURCE_NAME = 2 # C: source_name
+    COL_TYPE = 3        # D: type
+    COL_URL_RSS = 4     # E: url_rss
+    COL_SCORE = 5       # F: score
+    COL_STATUS = 6      # G: system_status (optional)
     
     # Single worksheet name
     WORKSHEET_NAME = "sources"
@@ -244,12 +246,12 @@ class GSheetSourceLibrary:
             
             sources = []
             for row_idx, row in enumerate(all_values, start=2):  # Start at row 2
-                # Skip empty rows
-                if not row or len(row) < 6:
+                # Skip empty rows - V14: Need at least 5 columns (topic, origin, name, type, url)
+                if not row or len(row) < 5:
                     continue
                 
-                # Extract values with safe indexing
-                vertical = row[self.COL_VERTICAL].strip().upper() if len(row) > self.COL_VERTICAL else ""
+                # V14 FIX: Extract values with correct column mapping
+                # A=topic, B=origin, C=source_name, D=type, E=url_rss, F=score
                 topic = row[self.COL_TOPIC].strip().lower() if len(row) > self.COL_TOPIC else ""
                 origin = row[self.COL_ORIGIN].strip().upper() if len(row) > self.COL_ORIGIN else "FR"
                 source_name = row[self.COL_SOURCE_NAME].strip() if len(row) > self.COL_SOURCE_NAME else ""
@@ -274,11 +276,14 @@ class GSheetSourceLibrary:
                 
                 # Validate topic is in SUPPORTED_TOPICS (after mapping)
                 if topic not in [t.lower() for t in SUPPORTED_TOPICS]:
-                    log.debug("Skipping unknown topic", topic=topic, row=row_idx)
+                    log.warning(f"⚠️ Unknown topic '{topic}' at row {row_idx} - skipping")
                     continue
                 
+                # V14: Derive vertical from topic (not stored in GSheet)
+                vertical = get_vertical_for_topic(topic) or "GENERAL"
+                
                 sources.append({
-                    "vertical": vertical,
+                    "vertical": vertical.upper(),
                     "topic": topic,
                     "origin": origin,
                     "name": source_name,
@@ -288,7 +293,14 @@ class GSheetSourceLibrary:
                     "row_index": row_idx
                 })
             
-            log.info("Valid sources found", count=len(sources))
+            log.info(f"✅ Valid sources found: {len(sources)} from GSheet")
+            
+            # Log topic distribution
+            topic_counts = {}
+            for s in sources:
+                topic_counts[s["topic"]] = topic_counts.get(s["topic"], 0) + 1
+            log.info(f"📊 Topics in GSheet: {dict(sorted(topic_counts.items(), key=lambda x: -x[1]))}")
+            
             return sources
             
         except Exception as e:

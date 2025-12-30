@@ -653,11 +653,9 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
     Generate TTS using Cartesia Sonic
     
     V14 FIX: 
-    - Speed and emotion must be in __experimental_controls inside voice object
-    - Speed: 0.1 = 10% faster (range -1.0 to 1.0)
+    - Speed: Only post-processing 1.1x (not API speed + post)
     - Emotion: ["positivity:high", "curiosity:high"] for engaged tone
-    - Post-processing: 1.1x speed boost
-    - Total effective speed: ~1.2x
+    - No API speed parameter (was causing double speedup)
     """
     if not cartesia_client:
         return False
@@ -665,7 +663,7 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
     try:
         log.info(f"🎤 Cartesia TTS: {len(text)} chars, voice={voice_id[:8]}...")
         
-        # V14: Correct API format - speed/emotion in __experimental_controls
+        # V14 FIX: No speed in API - only apply 1.1x in post-processing
         audio_bytes = b""
         for chunk in cartesia_client.tts.bytes(
             model_id=CARTESIA_MODEL,
@@ -673,9 +671,8 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
             voice={
                 "mode": "id", 
                 "id": voice_id,
-                # V14: Speed and emotion controls (experimental API)
+                # V14: Emotion controls only (no speed here - applied in post)
                 "__experimental_controls": {
-                    "speed": 0.1,  # 10% faster than normal (range: -1.0 to 1.0)
                     "emotion": ["positivity:high", "curiosity:high"]  # Engaged, enthusiastic
                 }
             },
@@ -692,17 +689,16 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
         with open(output_path, "wb") as f:
             f.write(audio_bytes)
         
-        # V14: Apply additional 1.1x speed and volume boost in post-processing
-        # Total speed: 1.1 (API) × 1.1 (post) ≈ 1.2x
+        # V14 FIX: Apply ONLY 1.1x speed in post-processing (not doubled)
         try:
             from pydub import AudioSegment
             audio = AudioSegment.from_mp3(output_path)
-            # Speed up 1.1x (without changing pitch)
+            # Speed up 1.1x only (not doubled)
             faster_audio = audio.speedup(playback_speed=1.1)
             # Increase volume by ~3.5dB
             louder_audio = faster_audio + 3.5
             louder_audio.export(output_path, format="mp3", bitrate="192k")
-            log.info(f"✅ Cartesia audio processed: speed=1.1x API + 1.1x post, volume=+3.5dB")
+            log.info(f"✅ Cartesia audio processed: speed=1.1x, volume=+3.5dB")
         except Exception as e:
             log.warning(f"⚠️ Post-processing skipped: {e}")
         
@@ -3140,18 +3136,30 @@ def assemble_lego_podcast(
 
 
 def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional[str]:
-    """Combine all segments into final audio file."""
+    """
+    Combine all segments into final audio file.
+    
+    V14 FIX: Intro overlaps with next segment (ephemeride or first news)
+    The next segment starts 3 seconds before intro ends.
+    """
     try:
         from pydub import AudioSegment
         import httpx
         
         combined = AudioSegment.empty()
-        transition = AudioSegment.silent(duration=500)
+        transition_silence = AudioSegment.silent(duration=300)  # 300ms between segments
         
-        for seg in segments:
+        INTRO_OVERLAP_MS = 3000  # Next segment starts 3s before intro ends
+        
+        prev_segment_type = None
+        prev_segment_audio = None
+        
+        for i, seg in enumerate(segments):
             audio_path = seg.get("audio_path")
             audio_url = seg.get("audio_url")
+            seg_type = seg.get("type", "unknown")
             
+            # Download if needed
             if not audio_path and audio_url:
                 audio_path = os.path.join(tempfile.gettempdir(), f"temp_{hash(audio_url)}.mp3")
                 try:
@@ -3163,13 +3171,60 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
                     log.warning(f"Failed to download: {e}")
                     continue
             
-            if audio_path and os.path.exists(audio_path):
-                try:
-                    audio = AudioSegment.from_mp3(audio_path)
-                    combined += audio
-                    combined += transition
-                except Exception as e:
-                    log.warning(f"Failed to load segment: {e}")
+            if not audio_path or not os.path.exists(audio_path):
+                continue
+            
+            try:
+                audio = AudioSegment.from_mp3(audio_path)
+            except Exception as e:
+                log.warning(f"Failed to load segment: {e}")
+                continue
+            
+            # V14 FIX: If previous was intro, overlap with current segment
+            if prev_segment_type == "intro" and prev_segment_audio is not None:
+                intro_audio = prev_segment_audio
+                
+                # Only overlap if intro is long enough
+                if len(intro_audio) > INTRO_OVERLAP_MS + 1000:
+                    # Split intro: main part + overlap part
+                    intro_main = intro_audio[:-INTRO_OVERLAP_MS]
+                    intro_overlap = intro_audio[-INTRO_OVERLAP_MS:].fade_out(INTRO_OVERLAP_MS)
+                    
+                    # Current segment start (fade in)
+                    current_start = audio[:INTRO_OVERLAP_MS].fade_in(500)
+                    current_rest = audio[INTRO_OVERLAP_MS:]
+                    
+                    # Mix the overlap section
+                    overlap_mix = intro_overlap.overlay(current_start)
+                    
+                    # Build: intro_main + overlap_mix + current_rest
+                    combined += intro_main
+                    combined += overlap_mix
+                    combined += current_rest
+                    combined += transition_silence
+                    
+                    log.info(f"🎵 Overlapped intro ({len(intro_audio)//1000}s) with {seg_type} ({len(audio)//1000}s)")
+                    
+                    prev_segment_type = seg_type
+                    prev_segment_audio = audio
+                    continue
+                else:
+                    # Intro too short, just concatenate
+                    combined += intro_audio
+                    combined += transition_silence
+            
+            # Normal case: add previous segment if exists
+            if prev_segment_audio is not None and prev_segment_type != "intro":
+                combined += prev_segment_audio
+                combined += transition_silence
+            
+            # Store current for next iteration
+            prev_segment_type = seg_type
+            prev_segment_audio = audio
+        
+        # Don't forget the last segment
+        if prev_segment_audio is not None:
+            combined += prev_segment_audio
         
         if len(combined) == 0:
             return None
@@ -3177,6 +3232,8 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(tempfile.gettempdir(), f"podcast_{timestamp}.mp3")
         combined.export(output_path, format="mp3", bitrate="192k")
+        
+        log.info(f"✅ Final podcast: {len(combined)//1000}s")
         
         remote_path = f"{user_id}/keernel_{target_date.isoformat()}_{timestamp}.mp3"
         
