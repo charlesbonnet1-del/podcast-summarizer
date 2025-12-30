@@ -579,115 +579,296 @@ def get_historical_facts_wikimedia(
 def get_best_ephemeride_fact(month: int = None, day: int = None) -> dict | None:
     """
     Get the single best historical fact for the ephemeride.
-    V14: Enhanced scoring system with excitement factor.
-    Returns None if nothing genuinely exciting.
+    
+    V14 HYBRID APPROACH:
+    1. Fetch 20 raw facts from Wikipedia
+    2. Filter obvious boring (minimal keyword filter)
+    3. Embedding + Multi-Centroïdes → Keep top 5 closest to ANY "wow" cluster
+    4. LLM Arbiter → Pick the single best among survivors
+    
+    This avoids both keyword maintenance AND topic lock-in.
     """
-    facts = get_historical_facts_wikimedia(month, day, max_facts=20)  # Get more to filter better
+    facts = get_historical_facts_wikimedia(month, day, max_facts=20)
     
     if not facts:
         return None
     
-    # V14: Score each fact by "excitement factor"
-    def calculate_excitement_score(fact: dict) -> float:
-        text = fact.get("text", "").lower()
-        year = fact.get("year", 1900)
-        score = 0.0
-        
-        # High excitement keywords (things that make people go "wow!")
-        high_excitement = [
-            # Space achievements
-            ("premier homme sur la lune", 10), ("first man on the moon", 10),
-            ("moon landing", 10), ("alunissage", 10),
-            ("premier pas", 8), ("first step", 8),
-            ("station spatiale", 7), ("space station", 7),
-            ("navette spatiale", 7), ("space shuttle", 7),
-            # Tech milestones
-            ("iphone", 9), ("macintosh", 8), ("ipod", 7),
-            ("premier ordinateur", 8), ("first computer", 8),
-            ("world wide web", 9), ("www", 7),
-            ("google", 7), ("facebook", 6), ("youtube", 7),
-            # Pop culture icons
-            ("beatles", 8), ("elvis", 7), ("michael jackson", 7),
-            ("star wars", 8), ("harry potter", 7),
-            # Science breakthroughs
-            ("adn", 8), ("dna", 8), ("double helix", 9),
-            ("clone", 7), ("dolly", 8),
-            ("prix nobel", 6), ("nobel prize", 6),
-            # Cool inventions
-            ("premier vol", 7), ("first flight", 7),
-            ("frères wright", 8), ("wright brothers", 8),
-            ("premier avion", 7), ("first airplane", 7),
-            ("television", 6), ("télévision", 6),
-            # Entertainment/Gaming
-            ("playstation", 7), ("xbox", 6), ("nintendo", 7),
-            ("super mario", 8), ("tetris", 7),
-            ("disneyland", 7), ("disney", 6),
-            # Records that impress
-            ("record du monde", 7), ("world record", 7),
-            ("le plus", 5), ("la plus", 5),
-        ]
-        
-        for keyword, points in high_excitement:
-            if keyword in text:
-                score += points
-        
-        # Bonus for being a "first" or "invention"
-        if any(w in text for w in ["premier", "première", "first", "invention", "invented", "créé", "created", "fondé", "founded"]):
-            score += 3
-        
-        # Bonus for relatability (modern era)
-        if 1950 <= year <= 2020:
-            score += 2
-        if 1980 <= year <= 2010:
-            score += 2  # Peak nostalgia zone
-        
-        # Penalty for being too old (hard to relate)
-        if year < 1900:
-            score -= 2
-        
-        return score
+    # Step 1: Minimal keyword filter (only the absolute worst)
+    minimal_boring = [
+        "traité", "treaty", "élection", "election", "vote",
+        "mort", "death", "décès", "guerre", "war", "accident",
+        "pleine lune", "full moon", "éclipse", "eclipse"
+    ]
     
-    # Score all facts
-    scored_facts = []
+    filtered_facts = []
     for fact in facts:
-        if fact.get("is_interesting"):  # Must pass basic interest filter
-            excitement = calculate_excitement_score(fact)
-            if excitement >= 5:  # Minimum excitement threshold
-                scored_facts.append((excitement, fact))
+        text_lower = fact.get("text", "").lower()
+        if not any(kw in text_lower for kw in minimal_boring):
+            filtered_facts.append(fact)
     
-    if not scored_facts:
-        # V14: Try a different day if today has nothing exciting
-        log.warning("No exciting ephemeride for today, trying adjacent days...")
-        
-        # Try yesterday and tomorrow
-        from datetime import datetime, timedelta
-        today = datetime.now()
-        
-        for delta in [-1, 1, -2, 2]:
-            alt_date = today + timedelta(days=delta)
-            alt_facts = get_historical_facts_wikimedia(alt_date.month, alt_date.day, max_facts=10)
-            
-            for fact in alt_facts:
-                if fact.get("is_interesting"):
-                    excitement = calculate_excitement_score(fact)
-                    if excitement >= 7:  # Higher threshold for non-today facts
-                        # Add a note that it's from a different day
-                        fact["text"] = fact["text"]  # Keep original
-                        fact["alt_day"] = delta
-                        log.info(f"Found exciting fact from {delta} days: {fact['text'][:50]}")
-                        return fact
-        
-        log.warning("No interesting ephemeride fact found - skipping")
+    if not filtered_facts:
+        log.warning("All facts filtered by basic keywords")
         return None
     
-    # Sort by excitement score (highest first)
-    scored_facts.sort(key=lambda x: x[0], reverse=True)
+    log.info(f"📊 Ephemeride: {len(filtered_facts)} facts after basic filter")
     
-    best_score, best_fact = scored_facts[0]
-    log.info(f"Selected ephemeride (excitement={best_score})", 
-             year=best_fact["year"], 
-             text=best_fact["text"][:50])
-    return best_fact
+    # Step 2: Embedding + Multi-Centroïdes filter
+    top_candidates = filter_by_embedding_centroids(filtered_facts, max_candidates=5)
+    
+    if not top_candidates:
+        log.warning("No facts passed embedding filter")
+        return None
+    
+    log.info(f"📊 Ephemeride: {len(top_candidates)} candidates after embedding filter")
+    
+    # Step 3: LLM Arbiter for final selection
+    if len(top_candidates) == 1:
+        best = top_candidates[0]
+    else:
+        best = select_best_fact_with_llm(top_candidates)
+    
+    if best:
+        log.info(f"✅ Selected ephemeride: [{best.get('year')}] {best.get('text', '')[:60]}...")
+        return best
+    
+    # Fallback to first candidate if LLM fails
+    return top_candidates[0] if top_candidates else None
+
+
+# ============================================
+# EMBEDDING-BASED EPHEMERIDE FILTER
+# ============================================
+
+# Reference "wow" facts for each category (embeddings computed once, cached)
+EPHEMERIDE_REFERENCE_FACTS = {
+    "tech": [
+        "Apple lance le premier iPhone, révolutionnant l'industrie mobile",
+        "Google est fondé par Larry Page et Sergey Brin",
+        "Le World Wide Web est rendu public par Tim Berners-Lee",
+        "IBM présente le premier PC personnel",
+        "Facebook atteint un milliard d'utilisateurs",
+    ],
+    "space": [
+        "Neil Armstrong devient le premier homme à marcher sur la Lune",
+        "Lancement de Spoutnik, premier satellite artificiel",
+        "Le télescope spatial Hubble est déployé en orbite",
+        "SpaceX réussit le premier atterrissage de fusée réutilisable",
+        "Youri Gagarine devient le premier homme dans l'espace",
+    ],
+    "science": [
+        "Watson et Crick découvrent la structure en double hélice de l'ADN",
+        "Dolly devient le premier mammifère cloné",
+        "Le CERN annonce la découverte du boson de Higgs",
+        "Marie Curie reçoit son deuxième prix Nobel",
+        "Einstein publie sa théorie de la relativité générale",
+    ],
+    "culture": [
+        "Les Beatles se produisent au Shea Stadium devant 55 000 fans",
+        "Sortie de Star Wars Episode IV dans les cinémas américains",
+        "Le festival de Woodstock réunit 400 000 personnes",
+        "Michael Jackson présente le moonwalk pour la première fois",
+        "Première diffusion de la série Friends",
+    ],
+    "sports": [
+        "Usain Bolt établit le record du monde du 100m en 9.58 secondes",
+        "Bob Beamon pulvérise le record du monde de saut en longueur",
+        "L'équipe américaine de hockey bat l'URSS au Miracle on Ice",
+        "Muhammad Ali bat George Foreman au Rumble in the Jungle",
+        "Nadia Comaneci obtient le premier 10 parfait en gymnastique olympique",
+    ],
+    "french": [
+        "Le Concorde effectue son premier vol commercial",
+        "Inauguration du tunnel sous la Manche",
+        "La France remporte la Coupe du Monde de football à domicile",
+        "Lancement du Minitel par France Télécom",
+        "Ouverture du Centre Pompidou à Paris",
+    ],
+}
+
+# Cache for reference embeddings (computed once at startup)
+_reference_centroids_cache = None
+
+
+def get_reference_centroids() -> dict:
+    """
+    Compute and cache centroid embeddings for each reference category.
+    Returns dict of category -> centroid_vector
+    """
+    global _reference_centroids_cache
+    
+    if _reference_centroids_cache is not None:
+        return _reference_centroids_cache
+    
+    try:
+        from openai import OpenAI
+        import numpy as np
+        
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            log.warning("OpenAI API key not available for embeddings")
+            return {}
+        
+        client = OpenAI(api_key=api_key)
+        centroids = {}
+        
+        for category, facts in EPHEMERIDE_REFERENCE_FACTS.items():
+            # Get embeddings for all reference facts in this category
+            response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=facts
+            )
+            
+            # Compute centroid (mean of all embeddings)
+            embeddings = [item.embedding for item in response.data]
+            centroid = np.mean(embeddings, axis=0).tolist()
+            centroids[category] = centroid
+        
+        _reference_centroids_cache = centroids
+        log.info(f"✅ Computed {len(centroids)} reference centroids for ephemeride")
+        return centroids
+        
+    except Exception as e:
+        log.error(f"Failed to compute reference centroids: {e}")
+        return {}
+
+
+def cosine_similarity(vec1: list, vec2: list) -> float:
+    """Compute cosine similarity between two vectors."""
+    import numpy as np
+    v1 = np.array(vec1)
+    v2 = np.array(vec2)
+    return float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
+
+
+def filter_by_embedding_centroids(facts: list, max_candidates: int = 5) -> list:
+    """
+    Filter facts by their proximity to reference "wow" centroids.
+    Returns facts that are close to ANY category centroid (diversity preserved).
+    """
+    try:
+        from openai import OpenAI
+        
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            log.warning("OpenAI not available, skipping embedding filter")
+            return facts[:max_candidates]
+        
+        client = OpenAI(api_key=api_key)
+        centroids = get_reference_centroids()
+        
+        if not centroids:
+            return facts[:max_candidates]
+        
+        # Get embeddings for all candidate facts
+        fact_texts = [f"{f.get('year', '')}: {f.get('text', '')}" for f in facts]
+        
+        response = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=fact_texts
+        )
+        
+        # Score each fact by its BEST similarity to ANY centroid
+        scored_facts = []
+        for i, fact in enumerate(facts):
+            fact_embedding = response.data[i].embedding
+            
+            # Find best matching category
+            best_similarity = 0
+            best_category = None
+            for category, centroid in centroids.items():
+                sim = cosine_similarity(fact_embedding, centroid)
+                if sim > best_similarity:
+                    best_similarity = sim
+                    best_category = category
+            
+            scored_facts.append({
+                **fact,
+                "embedding_score": best_similarity,
+                "best_category": best_category
+            })
+        
+        # Sort by score (highest first)
+        scored_facts.sort(key=lambda x: x["embedding_score"], reverse=True)
+        
+        # Filter: keep only facts with similarity > 0.3 (reasonably close to a "wow" topic)
+        MIN_SIMILARITY = 0.30
+        good_facts = [f for f in scored_facts if f["embedding_score"] >= MIN_SIMILARITY]
+        
+        if not good_facts:
+            log.warning(f"No facts above similarity threshold {MIN_SIMILARITY}")
+            # Return top N anyway as fallback
+            return scored_facts[:max_candidates]
+        
+        log.info(f"📊 Top candidates: {[(f['best_category'], round(f['embedding_score'], 2)) for f in good_facts[:max_candidates]]}")
+        
+        return good_facts[:max_candidates]
+        
+    except Exception as e:
+        log.error(f"Embedding filter failed: {e}")
+        return facts[:max_candidates]
+
+
+def select_best_fact_with_llm(candidates: list) -> dict | None:
+    """
+    Use LLM to pick the single best fact from candidates.
+    Quick and cheap with Groq.
+    """
+    try:
+        from groq import Groq
+        
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            log.warning("Groq not available for LLM selection")
+            return candidates[0] if candidates else None
+        
+        client = Groq(api_key=api_key)
+        
+        # Format candidates for the prompt
+        facts_list = "\n".join([
+            f"{i+1}. [{f.get('year')}] {f.get('text')}"
+            for i, f in enumerate(candidates)
+        ])
+        
+        prompt = f"""Tu es l'éditeur d'un podcast matinal. Choisis LE MEILLEUR fait historique pour une éphéméride de 10 secondes.
+
+CRITÈRES DE SÉLECTION :
+- Effet "wow" : L'auditeur doit se dire "ah tiens, je ne savais pas !"
+- Relatabilité : Le sujet doit être connu du grand public
+- Variété : Privilégie les faits originaux (pas toujours tech/espace)
+- Positivité : Préfère les accomplissements aux catastrophes
+
+CANDIDATS :
+{facts_list}
+
+Réponds UNIQUEMENT par le numéro du meilleur fait (1, 2, 3, etc.) suivi d'un tiret et d'une justification en 5 mots max.
+Exemple : "2 - Iconique et universel"
+"""
+        
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=50
+        )
+        
+        answer = response.choices[0].message.content.strip()
+        log.info(f"🤖 LLM choice: {answer}")
+        
+        # Parse the number from response
+        import re
+        match = re.match(r'^(\d+)', answer)
+        if match:
+            idx = int(match.group(1)) - 1  # Convert to 0-indexed
+            if 0 <= idx < len(candidates):
+                return candidates[idx]
+        
+        # Fallback to first candidate
+        log.warning(f"Could not parse LLM response: {answer}")
+        return candidates[0]
+        
+    except Exception as e:
+        log.error(f"LLM selection failed: {e}")
+        return candidates[0] if candidates else None
 
 
 # ============================================
