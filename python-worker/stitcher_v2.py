@@ -472,63 +472,22 @@ def get_prompt_from_db(prompt_name: str, default: str) -> str:
     return default
 
 
-DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
-{topic_intention}
-## LES HÔTES (Dialectique fonctionnelle, pas d'émotions simulées)
-- [B] L'ANALYSTE (voix masculine) = Voix stable, factuelle. Il apporte les données brutes, les faits techniques et le potentiel futuriste.
-- [A] LA SCEPTIQUE (voix féminine) = Voix incisive, inquisitrice. Elle challenge avec des objections, contre-arguments, ou questions percutantes.
+# ============================================
+# DEPRECATED PROMPTS - REMOVED IN V14.5
+# ============================================
+# DIALOGUE_SEGMENT_PROMPT - Removed: Use dialogue_cluster instead (all content goes through Perplexity synthesis)
+# DIALOGUE_MULTI_SOURCE_PROMPT - Removed: Use dialogue_cluster instead (clustering handles multi-source)
+# 
+# Only DIALOGUE_CLUSTER_PROMPT remains for dialogue generation
 
-## RÈGLES ABSOLUES SUR LE STYLE
-⚠️ LES HÔTES NE S'APPELLENT JAMAIS PAR LEUR NOM. Pas de "Bob", "Alice", ou tout autre prénom.
-⚠️ INTERDIT les tics de langage et formules creuses :
-   - PAS DE: "Tu vois", "Écoute", "Attends", "En fait", "Justement"
-   - PAS DE: "C'est une perspective intéressante", "Bonne question", "Effectivement", "Absolument"
-   - PAS DE: phrases de transition artificielles ou compliments entre hôtes
-Le dialogue doit être DIRECT et SUBSTANTIEL - chaque phrase apporte de l'information.
+# Fallback for code that still references removed prompts
+DIALOGUE_SEGMENT_PROMPT = DIALOGUE_CLUSTER_PROMPT  # Redirect to cluster prompt
+DIALOGUE_MULTI_SOURCE_PROMPT = DIALOGUE_CLUSTER_PROMPT  # Redirect to cluster prompt
 
-## STRUCTURE: [B] expose → [A] challenge ou met en perspective → [B] conclut
+# Rule to add when there's a previous segment (still used)
+PREVIOUS_SEGMENT_RULE = """⚠️ NON-RÉPÉTITION: Un segment récent sur ce sujet existe. NE RÉPÈTE PAS les informations déjà couvertes. Apporte des NOUVELLES informations ou un nouvel angle."""
 
-## FORMAT OBLIGATOIRE
-Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
-
-[B]
-L'analyste expose les faits et données.
-
-[A]
-La sceptique challenge ou met en perspective.
-
-## RÈGLES STRICTES
-1. ALTERNER [B] et [A] - jamais deux [B] ou deux [A] de suite
-2. [B] commence TOUJOURS en premier (il expose)
-3. Minimum 6 répliques (3 de chaque)
-4. Style DENSE et INFORMATIF - pas de remplissage
-5. ⚠️ [A] LA SCEPTIQUE: Maximum 50% de ses répliques peuvent être des questions. Les autres doivent être des AFFIRMATIONS sceptiques, des contre-arguments, ou des mises en perspective. Exemples: "C'est du marketing pur.", "Les contraintes physiques rendent ça improbable.", "On a déjà vu ça échouer avec X."
-6. ZÉRO liste, ZÉRO bullet points
-7. CITE LA SOURCE dans la première réplique de [B]: {attribution_instruction}
-8. INTERDIT: prénoms, didascalies, tics de langage, formules creuses
-9. ⚠️ [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse factuelle ou une projection
-10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question ou objection de [A]
-11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être sourcable dans le contenu fourni.
-{previous_segment_rule}
-
-## STRUCTURE DU DIALOGUE
-- Début: [B] expose les faits clés en citant la source
-- Milieu: [A] challenge (affirmations sceptiques OU questions incisives), [B] répond avec des données
-- Fin: [B] CONCLUT avec une synthèse factuelle ou une perspective future
-
-## SOURCE
-Titre: {title}
-{source_label}
-Contenu:
-{content}
-{previous_segment_context}
-
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}) - [B] DOIT CONCLURE:"""
-
-# Rule to add when there's a previous segment
-PREVIOUS_SEGMENT_RULE = """12. ⚠️ NON-RÉPÉTITION: Un segment récent sur ce sujet existe. NE RÉPÈTE PAS les informations déjà couvertes (voir ci-dessous). Apporte des NOUVELLES informations ou un nouvel angle. Tu peux brièvement rappeler le contexte si nécessaire, mais le cœur du dialogue doit être NOUVEAU."""
-
-# Context block for previous segment
+# Context block for previous segment (still used)
 PREVIOUS_SEGMENT_CONTEXT = """
 
 ## SEGMENT PRÉCÉDENT SUR CE SUJET (ne pas répéter)
@@ -537,63 +496,6 @@ Ce qui a été couvert:
 {prev_script}
 
 ⚠️ NE RÉPÈTE PAS ces informations. Apporte du NOUVEAU."""
-
-
-# Multi-source prompt for topics covered by multiple articles
-DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE ENRICHI de {word_count} mots entre deux hôtes.
-{topic_intention}
-## CONTEXTE SPÉCIAL
-Ce sujet est couvert par PLUSIEURS SOURCES - c'est donc un sujet d'actualité majeur !
-Tu dois CROISER et COMPARER les informations des différentes sources.
-
-## LES HÔTES (Dialectique fonctionnelle, pas d'émotions simulées)
-- [B] L'ANALYSTE (voix masculine) = Voix stable, factuelle. Il synthétise les données des différentes sources et expose le potentiel.
-- [A] LA SCEPTIQUE (voix féminine) = Voix incisive. Elle challenge les incohérences entre sources, questionne le ROI, la faisabilité.
-
-## RÈGLES ABSOLUES SUR LE STYLE
-⚠️ LES HÔTES NE S'APPELLENT JAMAIS PAR LEUR NOM. Pas de "Bob", "Alice", ou tout autre prénom.
-⚠️ INTERDIT les tics de langage et formules creuses :
-   - PAS DE: "Tu vois", "Écoute", "Attends", "En fait", "Justement"
-   - PAS DE: "C'est une perspective intéressante", "Bonne question", "Effectivement", "Absolument"
-   - PAS DE: phrases de transition artificielles ou compliments entre hôtes
-Le dialogue doit être DIRECT et SUBSTANTIEL - chaque phrase apporte de l'information.
-
-## STRUCTURE: [B] expose et compare → [A] challenge ou met en perspective → [B] conclut
-
-## FORMAT OBLIGATOIRE
-Chaque réplique DOIT commencer par [A] ou [B] seul sur une ligne:
-
-[B]
-L'analyste synthétise et compare les sources.
-
-[A]
-La sceptique challenge ou souligne les contradictions.
-
-## RÈGLES STRICTES
-1. ALTERNER [B] et [A] - jamais deux [B] ou deux [A] de suite
-2. [B] commence TOUJOURS en premier
-3. Minimum 8 répliques (4 de chaque) - sujet plus riche !
-4. Style DENSE et INFORMATIF - pas de remplissage
-5. ⚠️ [A] LA SCEPTIQUE: Maximum 50% de ses répliques peuvent être des questions. Les autres doivent être des AFFIRMATIONS sceptiques ou des contre-arguments. Exemples: "Les chiffres ne collent pas.", "C'est contradictoire avec ce que disait X.", "Ça ressemble à du marketing."
-6. CITE LES DIFFÉRENTES SOURCES: "Selon Le Monde...", "De son côté, Les Échos rapportent..."
-7. COMPARE les points de vue ou informations complémentaires
-8. ZÉRO liste, ZÉRO bullet points
-9. ⚠️ [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
-10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question ou objection de [A]
-11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être présent dans les sources fournies.
-12. INTERDIT: prénoms, didascalies, tics de langage, formules creuses
-{previous_segment_rule}
-
-## STRUCTURE DU DIALOGUE
-- Début: [B] présente le sujet multi-sources avec les faits clés
-- Milieu: [A] challenge (affirmations sceptiques OU questions), [B] répond avec des données croisées
-- Fin: [B] CONCLUT en synthétisant ce qui ressort des différentes sources
-
-## SOURCES ({source_count} articles sur ce sujet)
-{sources_content}
-{previous_segment_context}
-
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}, en croisant les sources) - [B] DOIT CONCLURE:"""
 
 # ============================================
 # DIGEST EXTRACTION PROMPT
