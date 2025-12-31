@@ -227,16 +227,17 @@ def get_clusters(user_id: str):
 @app.route("/test-script", methods=["POST"])
 def test_script():
     """
-    TEST ENDPOINT: Generate script only (no TTS).
+    TEST ENDPOINT: Debug the full pipeline.
     
-    Returns the LLM-generated dialogue text without audio generation.
-    Useful for iterating on prompts quickly.
+    Shows for EACH TOPIC:
+    - Raw articles fetched from RSS
+    - Selected articles after scoring/filtering
+    - Generated script (optional)
     
     Body params:
     - user_id: Required
-    - format: Optional, "flash" (4min) or "digest" (15min)
-    - topic: Optional, filter to specific topic
-    - skip_script: Optional, if true only show articles (no LLM call)
+    - format: Optional, "flash" or "digest"
+    - with_script: Optional, if true generate LLM scripts (slower)
     """
     if not verify_auth():
         return jsonify({"error": "Unauthorized"}), 401
@@ -244,142 +245,100 @@ def test_script():
     data = request.get_json() or {}
     user_id = data.get("user_id")
     format_type = data.get("format", "flash")
-    topic_filter = data.get("topic")  # Optional: only test specific topic
-    skip_script = data.get("skip_script", False)  # Skip LLM, just show articles
+    with_script = data.get("with_script", False)
     
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
     
-    log.info("🧪 Test script generation", user_id=user_id, format=format_type)
+    log.info("🧪 Test pipeline", user_id=user_id, format=format_type)
     
     try:
-        from stitcher_v2 import (
-            get_podcast_config, 
-            generate_dialogue_script,
-            get_or_create_ephemeride
-        )
-        from sourcing import get_content_for_podcast, fetch_all_sources
+        from stitcher_v2 import get_podcast_config, generate_dialogue_script
+        from sourcing import fetch_all_sources, get_content_for_podcast
         
-        # 1. Get config
         config = get_podcast_config(format_type)
         target_minutes = config.get("target_minutes", 4)
         
-        # 2. Get RAW articles from all sources (before any filtering)
+        # ========== STEP 1: RAW ARTICLES BY TOPIC ==========
         raw_articles = fetch_all_sources(user_id=user_id)
-        raw_articles_summary = []
-        for art in raw_articles[:50]:  # Limit to 50 for response size
-            raw_articles_summary.append({
-                "title": art.get("title", "")[:100],
+        
+        # Group raw by topic
+        raw_by_topic = {}
+        for art in raw_articles:
+            topic = art.get("keyword", art.get("topic_slug", "unknown"))
+            if topic not in raw_by_topic:
+                raw_by_topic[topic] = []
+            raw_by_topic[topic].append({
+                "title": art.get("title", "")[:80],
                 "source": art.get("source_name", ""),
-                "topic": art.get("keyword", art.get("topic_slug", "")),
-                "url": art.get("url", "")[:100],
-                "published": art.get("published", ""),
+                "published": str(art.get("published", ""))[:16],
+                "score": art.get("score", 0),
+                "url": art.get("url", "")[:60]
+            })
+        
+        # ========== STEP 2: SELECTED ARTICLES BY TOPIC ==========
+        selected = get_content_for_podcast(user_id=user_id, target_minutes=target_minutes)
+        
+        selected_by_topic = {}
+        for art in selected:
+            topic = art.get("keyword", art.get("topic_slug", "unknown"))
+            if topic not in selected_by_topic:
+                selected_by_topic[topic] = []
+            selected_by_topic[topic].append({
+                "title": art.get("title", "")[:80],
+                "source": art.get("source_name", ""),
                 "score": art.get("score", 0)
             })
         
-        # 3. Get SELECTED content (after scoring/filtering)
-        items = get_content_for_podcast(
-            user_id=user_id,
-            target_minutes=target_minutes
-        )
+        # ========== BUILD RESPONSE BY TOPIC ==========
+        all_topics = sorted(set(list(raw_by_topic.keys()) + list(selected_by_topic.keys())))
         
-        if not items:
-            return jsonify({
-                "success": False,
-                "error": "No content selected for podcast",
-                "raw_articles_count": len(raw_articles),
-                "raw_articles": raw_articles_summary,
-                "suggestion": "Check scoring or add more sources"
-            }), 200  # Return 200 so you can see the raw articles
-        
-        # Filter by topic if specified
-        if topic_filter:
-            items = [i for i in items if i.get("keyword") == topic_filter or i.get("topic_slug") == topic_filter]
-            if not items:
-                return jsonify({
-                    "error": f"No content for topic '{topic_filter}'",
-                    "available_topics": list(set(i.get("keyword", "") for i in items))
-                }), 404
-        
-        # 4. Group by topic (show clustering)
-        clusters = {}
-        for item in items:
-            topic_key = item.get("keyword", item.get("topic_slug", "general"))
-            if topic_key not in clusters:
-                clusters[topic_key] = []
-            clusters[topic_key].append(item)
-        
-        # Selected articles summary
-        selected_articles = []
-        for item in items:
-            selected_articles.append({
-                "title": item.get("title", "")[:100],
-                "source": item.get("source_name", ""),
-                "topic": item.get("keyword", ""),
-                "url": item.get("url", "")[:100],
-                "score": item.get("score", 0)
-            })
-        
-        # If skip_script, return just the articles
-        if skip_script:
-            return jsonify({
-                "success": True,
-                "mode": "articles_only",
-                "format": format_type,
-                "target_minutes": target_minutes,
-                "raw_articles_count": len(raw_articles),
-                "raw_articles": raw_articles_summary,
-                "selected_articles_count": len(items),
-                "selected_articles": selected_articles,
-                "topics": {topic: len(arts) for topic, arts in clusters.items()}
-            })
-        
-        # 5. Generate scripts for each topic cluster
-        scripts = []
-        
-        for topic, topic_items in clusters.items():
-            # Get articles info
-            articles_for_script = []
-            for item in topic_items[:3]:  # Max 3 per topic
-                articles_for_script.append({
-                    "title": item.get("title", ""),
-                    "summary": item.get("summary", item.get("content", ""))[:500],
-                    "source": item.get("source_name", ""),
-                    "url": item.get("url", "")
-                })
+        topics_detail = []
+        for topic in all_topics:
+            raw_list = raw_by_topic.get(topic, [])
+            selected_list = selected_by_topic.get(topic, [])
             
-            # Generate script
-            script = generate_dialogue_script(
-                articles=articles_for_script,
-                format_config=config
-            )
-            
-            scripts.append({
+            topic_data = {
                 "topic": topic,
-                "article_count": len(topic_items),
-                "articles": [{"title": a["title"], "source": a["source"]} for a in articles_for_script],
-                "script": script
-            })
-        
-        # 6. Also get ephemeride for reference
-        ephemeride = get_or_create_ephemeride()
-        ephemeride_script = ephemeride.get("script", "") if ephemeride else None
+                "raw_count": len(raw_list),
+                "raw_articles": raw_list[:10],  # Max 10 per topic
+                "selected_count": len(selected_list),
+                "selected_articles": selected_list,
+                "script": None
+            }
+            
+            # Generate script if requested
+            if with_script and selected_list:
+                articles_for_llm = []
+                for item in (selected or []):
+                    if item.get("keyword") == topic:
+                        articles_for_llm.append({
+                            "title": item.get("title", ""),
+                            "summary": item.get("summary", item.get("content", ""))[:500],
+                            "source": item.get("source_name", ""),
+                            "url": item.get("url", "")
+                        })
+                
+                if articles_for_llm:
+                    script = generate_dialogue_script(
+                        articles=articles_for_llm[:3],
+                        format_config=config
+                    )
+                    topic_data["script"] = script
+            
+            topics_detail.append(topic_data)
         
         return jsonify({
             "success": True,
             "format": format_type,
             "target_minutes": target_minutes,
-            "raw_articles_count": len(raw_articles),
-            "raw_articles": raw_articles_summary[:20],  # First 20 for reference
-            "selected_articles_count": len(items),
-            "selected_articles": selected_articles,
-            "topic_count": len(clusters),
-            "ephemeride_script": ephemeride_script,
-            "scripts": scripts
+            "total_raw": len(raw_articles),
+            "total_selected": len(selected) if selected else 0,
+            "topics": topics_detail
         })
         
     except Exception as e:
-        log.error(f"Test script error: {e}")
+        log.error(f"Test error: {e}")
         import traceback
         return jsonify({
             "error": str(e),
