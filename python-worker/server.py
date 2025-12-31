@@ -224,6 +224,120 @@ def get_clusters(user_id: str):
 # V14: SOURCE SCORING ENGINE
 # ============================================
 
+@app.route("/test-script", methods=["POST"])
+def test_script():
+    """
+    TEST ENDPOINT: Generate script only (no TTS).
+    
+    Returns the LLM-generated dialogue text without audio generation.
+    Useful for iterating on prompts quickly.
+    
+    Body params:
+    - user_id: Required
+    - format: Optional, "flash" (4min) or "digest" (15min)
+    - topic: Optional, filter to specific topic
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    format_type = data.get("format", "flash")
+    topic_filter = data.get("topic")  # Optional: only test specific topic
+    
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+    
+    log.info("🧪 Test script generation", user_id=user_id, format=format_type)
+    
+    try:
+        from stitcher_v2 import (
+            get_podcast_config, 
+            generate_dialogue_script,
+            get_or_create_ephemeride
+        )
+        from sourcing import get_content_for_podcast
+        
+        # 1. Get config
+        config = get_podcast_config(format_type)
+        target_minutes = config.get("target_minutes", 4)
+        
+        # 2. Get content (same as real generation)
+        items = get_content_for_podcast(
+            user_id=user_id,
+            target_minutes=target_minutes
+        )
+        
+        if not items:
+            return jsonify({
+                "error": "No content available",
+                "suggestion": "Run /cron/cluster first or add content to queue"
+            }), 404
+        
+        # Filter by topic if specified
+        if topic_filter:
+            items = [i for i in items if i.get("keyword") == topic_filter or i.get("topic_slug") == topic_filter]
+            if not items:
+                return jsonify({"error": f"No content for topic '{topic_filter}'"}), 404
+        
+        # 3. Generate scripts for each topic cluster
+        scripts = []
+        
+        # Group by topic
+        clusters = {}
+        for item in items:
+            topic_key = item.get("keyword", item.get("topic_slug", "general"))
+            if topic_key not in clusters:
+                clusters[topic_key] = []
+            clusters[topic_key].append(item)
+        
+        for topic, topic_items in clusters.items():
+            # Get articles info
+            articles_for_script = []
+            for item in topic_items[:3]:  # Max 3 per topic
+                articles_for_script.append({
+                    "title": item.get("title", ""),
+                    "summary": item.get("summary", item.get("content", ""))[:500],
+                    "source": item.get("source_name", ""),
+                    "url": item.get("url", "")
+                })
+            
+            # Generate script
+            script = generate_dialogue_script(
+                articles=articles_for_script,
+                format_config=config
+            )
+            
+            scripts.append({
+                "topic": topic,
+                "article_count": len(topic_items),
+                "articles": [{"title": a["title"], "source": a["source"]} for a in articles_for_script],
+                "script": script
+            })
+        
+        # 4. Also get ephemeride for reference
+        ephemeride = get_or_create_ephemeride()
+        ephemeride_script = ephemeride.get("script", "") if ephemeride else None
+        
+        return jsonify({
+            "success": True,
+            "format": format_type,
+            "target_minutes": target_minutes,
+            "total_articles": len(items),
+            "topic_count": len(clusters),
+            "ephemeride_script": ephemeride_script,
+            "scripts": scripts
+        })
+        
+    except Exception as e:
+        log.error(f"Test script error: {e}")
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
 @app.route("/cron/scoring", methods=["POST"])
 def cron_scoring():
     """
