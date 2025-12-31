@@ -352,8 +352,8 @@ def run_fetcher(edition: str = "morning"):
             log.info("No topics for user, skipping", user_id=user_id[:8])
             continue
         
-        # V14: Increased from 4 to 8 topics
-        topic_ids = topic_ids[:8]
+        # V14: No limit - use all user topics
+        # topic_ids = topic_ids[:8]  # Removed artificial limit
         
         articles = []
         seen_urls = set()
@@ -467,8 +467,8 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
             log.warning(f"No topics for user {user_id[:8]}")
             return 0
         
-        # V14: Increased from 4 to 8 topics
-        topic_ids = topic_ids[:8]
+        # V14: No limit - use all user topics
+        # topic_ids = topic_ids[:8]  # Removed artificial limit
         
         articles = []
         seen_urls = set()
