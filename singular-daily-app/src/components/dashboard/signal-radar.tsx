@@ -135,12 +135,21 @@ export default function SignalRadar({
           );
         })}
 
+        {/* Gradient definitions */}
+        <defs>
+          <linearGradient id="cyanGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#00F0FF" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#007AFF" stopOpacity="0.1" />
+          </linearGradient>
+        </defs>
+
         {/* Data shape */}
         <motion.path
           d={dataPath}
-          fill="rgba(197, 179, 88, 0.2)"
-          stroke="#C5B358"
+          fill="url(#cyanGradient)"
+          stroke="currentColor"
           strokeWidth={2}
+          className="stroke-tech-blue dark:stroke-cyan"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
@@ -154,7 +163,7 @@ export default function SignalRadar({
             cx={point.x}
             cy={point.y}
             r={4}
-            fill="#C5B358"
+            className="fill-tech-blue dark:fill-cyan"
             stroke="white"
             strokeWidth={2}
             initial={{ opacity: 0, scale: 0 }}
@@ -200,7 +209,7 @@ export default function SignalRadar({
                   <span className="text-[10px] font-display font-medium text-foreground">
                     {topic.shortLabel}
                   </span>
-                  <span className="text-[9px] text-[#C5B358] font-mono">
+                  <span className="text-[9px] text-tech-blue dark:text-cyan font-mono">
                     {topic.weight}%
                   </span>
                 </div>

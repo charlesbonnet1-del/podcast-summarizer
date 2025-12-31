@@ -44,8 +44,8 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
     ? profile.first_name.slice(0, 2).toUpperCase()
     : user.email?.slice(0, 2).toUpperCase() ?? "U";
 
-  // Logo based on theme - default to charcoal for SSR
-  const logoSrc = resolvedTheme === "dark" ? "/logo-sable.svg" : "/logo-charcoal.svg";
+  // Logo based on theme - default to light for SSR
+  const logoSrc = resolvedTheme === "dark" ? "/logo/keernel-dark.png" : "/logo/keernel-light.png";
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
@@ -53,13 +53,13 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
         {/* Logo + Greeting */}
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="flex items-center gap-3">
-            {/* Keernel Logo - SVG based on theme */}
+            {/* Keernel Logo - PNG based on theme */}
             <Image 
               src={logoSrc}
               alt="Keernel"
-              width={32}
-              height={32}
-              className="w-8 h-8"
+              width={36}
+              height={36}
+              className="w-9 h-9"
             />
             <span className="title-keernel text-xl text-foreground">
               Keernel
@@ -106,7 +106,7 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
                 whileTap={{ scale: 0.98 }}
               >
                 <Avatar className="w-8 h-8">
-                  <AvatarFallback className="bg-brass text-charcoal text-sm font-medium font-mono">
+                  <AvatarFallback className="bg-tech-blue dark:bg-cyan text-white dark:text-ink text-sm font-medium font-mono">
                     {initials}
                   </AvatarFallback>
                 </Avatar>

@@ -76,18 +76,18 @@ const ALL_TOPICS = VERTICALS.flatMap(v => v.topics);
 // ============================================
 
 function getSignalLabel(weight: number) {
-  if (weight >= 80) return { label: "Focus", color: "text-[#C5B358]" };      // brass
-  if (weight >= 50) return { label: "Actif", color: "text-[#8B7355]" };      // sand
-  if (weight >= 20) return { label: "Passif", color: "text-[#6B5B4F]" };     // taupe
-  if (weight > 0) return { label: "Faible", color: "text-muted-foreground" };
+  if (weight >= 80) return { label: "Focus", color: "text-cyan dark:text-cyan" };      // cyan
+  if (weight >= 50) return { label: "Actif", color: "text-tech-blue dark:text-cyan/80" };  // blue/cyan
+  if (weight >= 20) return { label: "Passif", color: "text-muted-foreground" };     // muted
+  if (weight > 0) return { label: "Faible", color: "text-muted-foreground/70" };
   return { label: "Off", color: "text-muted-foreground/50" };
 }
 
 function getSliderColor(weight: number): string {
-  if (weight >= 80) return '#C5B358';  // brass - Focus
-  if (weight >= 50) return '#8B7355';  // sand - Actif  
-  if (weight >= 20) return '#6B5B4F';  // taupe - Passif
-  return '#9ca3af';                     // gray - Faible/Off
+  if (weight >= 80) return '#00F0FF';  // cyan - Focus
+  if (weight >= 50) return '#007AFF';  // blue - Actif  
+  if (weight >= 20) return '#4DA3FF';  // light blue - Passif
+  return '#6b7280';                     // gray - Faible/Off
 }
 
 // ============================================
@@ -226,7 +226,7 @@ export default function SignalMixer({ initialWeights = {} }: SignalMixerProps) {
                   [&::-webkit-slider-thumb]:rounded-full
                   [&::-webkit-slider-thumb]:bg-white
                   [&::-webkit-slider-thumb]:border-2
-                  [&::-webkit-slider-thumb]:border-[#C5B358]
+                  [&::-webkit-slider-thumb]:border-cyan
                   [&::-webkit-slider-thumb]:shadow-md
                   [&::-webkit-slider-thumb]:cursor-pointer
                   [&::-moz-range-thumb]:w-5
@@ -234,7 +234,7 @@ export default function SignalMixer({ initialWeights = {} }: SignalMixerProps) {
                   [&::-moz-range-thumb]:rounded-full
                   [&::-moz-range-thumb]:bg-white
                   [&::-moz-range-thumb]:border-2
-                  [&::-moz-range-thumb]:border-[#C5B358]
+                  [&::-moz-range-thumb]:border-cyan
                   [&::-moz-range-thumb]:shadow-md
                   [&::-moz-range-thumb]:cursor-pointer"
                 style={{
@@ -291,7 +291,7 @@ export default function SignalMixer({ initialWeights = {} }: SignalMixerProps) {
                               [&::-webkit-slider-thumb]:rounded-full
                               [&::-webkit-slider-thumb]:bg-white
                               [&::-webkit-slider-thumb]:border-2
-                              [&::-webkit-slider-thumb]:border-[#C5B358]
+                              [&::-webkit-slider-thumb]:border-cyan
                               [&::-webkit-slider-thumb]:shadow-sm
                               [&::-webkit-slider-thumb]:cursor-pointer
                               [&::-moz-range-thumb]:w-4
@@ -299,7 +299,7 @@ export default function SignalMixer({ initialWeights = {} }: SignalMixerProps) {
                               [&::-moz-range-thumb]:rounded-full
                               [&::-moz-range-thumb]:bg-white
                               [&::-moz-range-thumb]:border-2
-                              [&::-moz-range-thumb]:border-[#C5B358]
+                              [&::-moz-range-thumb]:border-cyan
                               [&::-moz-range-thumb]:shadow-sm
                               [&::-moz-range-thumb]:cursor-pointer"
                             style={{
@@ -322,11 +322,11 @@ export default function SignalMixer({ initialWeights = {} }: SignalMixerProps) {
       })}
 
       {/* Wildcard info */}
-      <div className="p-3 rounded-xl bg-[#C5B358]/5 border border-[#C5B358]/20">
+      <div className="p-3 rounded-xl bg-cyan/5 border border-cyan/20">
         <div className="flex items-start gap-2">
-          <Sparkles className="w-4 h-4 text-[#C5B358] flex-shrink-0 mt-0.5" />
+          <Sparkles className="w-4 h-4 text-cyan flex-shrink-0 mt-0.5" />
           <p className="text-xs text-muted-foreground">
-            <span className="text-[#C5B358] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle
+            <span className="text-cyan font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle
           </p>
         </div>
       </div>

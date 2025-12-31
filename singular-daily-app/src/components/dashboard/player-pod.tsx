@@ -71,7 +71,7 @@ const TOPIC_STYLES: Record<string, { icon: string; color: string }> = {
   persuasion: { icon: "🎯", color: "text-rose-500" },
   
   // System
-  intro: { icon: "▶️", color: "text-brass" },
+  intro: { icon: "▶️", color: "text-tech-blue dark:text-cyan" },
   ephemeride: { icon: "📅", color: "text-amber-600" },
   default: { icon: "📰", color: "text-gray-500" },
 };
@@ -264,7 +264,7 @@ export function PlayerPod({ episode }: PlayerPodProps) {
                       onClick={() => goToChapter(chapter)}
                       className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left ${
                         isActive 
-                          ? "bg-brass/20 border border-brass/30" 
+                          ? "bg-tech-blue/10 dark:bg-cyan/10 border border-tech-blue/30 dark:border-cyan/30" 
                           : "hover:bg-card"
                       }`}
                       initial={{ opacity: 0, x: -10 }}
@@ -276,7 +276,7 @@ export function PlayerPod({ episode }: PlayerPodProps) {
                       
                       {/* Chapter info */}
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${isActive ? "text-brass" : ""}`}>
+                        <p className={`text-sm font-medium truncate ${isActive ? "text-tech-blue dark:text-cyan" : ""}`}>
                           {chapter.title}
                         </p>
                         <p className="text-xs text-muted-foreground font-mono">
@@ -289,11 +289,11 @@ export function PlayerPod({ episode }: PlayerPodProps) {
                         <motion.div
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
-                          className="w-2 h-2 rounded-full bg-brass flex-shrink-0"
+                          className="w-2 h-2 rounded-full bg-tech-blue dark:bg-cyan flex-shrink-0"
                         />
                       )}
                       
-                      <ChevronRight className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-brass" : "text-muted-foreground"}`} />
+                      <ChevronRight className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-tech-blue dark:text-cyan" : "text-muted-foreground"}`} />
                     </motion.button>
                   );
                 })}
@@ -387,14 +387,14 @@ export function PlayerPod({ episode }: PlayerPodProps) {
               <SkipBack className="w-4 h-4" />
             </motion.button>
 
-            {/* Play Button - Charcoal in light, Cream in dark */}
+            {/* Play Button - Cyan accent */}
             <motion.button
               onClick={togglePlay}
-              className="player-btn-main relative flex items-center justify-center w-12 h-12 rounded-full flex-shrink-0 bg-charcoal dark:bg-cream"
+              className="player-btn-main relative flex items-center justify-center w-12 h-12 rounded-full flex-shrink-0 bg-tech-blue dark:bg-cyan shadow-glow-blue dark:shadow-glow-cyan"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <span className="text-cream dark:text-charcoal">
+              <span className="text-white dark:text-ink">
                 {isPlaying ? (
                   <Pause className="w-5 h-5" />
                 ) : (
@@ -417,7 +417,7 @@ export function PlayerPod({ episode }: PlayerPodProps) {
             {/* Center: Current Chapter + Progress */}
             <div className="flex-1 min-w-0">
               {/* Current chapter or episode title */}
-              <p className="font-display text-sm font-medium truncate text-[#C5B358]">
+              <p className="font-display text-sm font-medium truncate text-tech-blue dark:text-cyan">
                 {currentChapter?.type === "news" 
                   ? currentChapter.title 
                   : episode.title}
