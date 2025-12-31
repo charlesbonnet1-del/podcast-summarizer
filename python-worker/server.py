@@ -236,6 +236,7 @@ def test_script():
     - user_id: Required
     - format: Optional, "flash" (4min) or "digest" (15min)
     - topic: Optional, filter to specific topic
+    - skip_script: Optional, if true only show articles (no LLM call)
     """
     if not verify_auth():
         return jsonify({"error": "Unauthorized"}), 401
@@ -244,6 +245,7 @@ def test_script():
     user_id = data.get("user_id")
     format_type = data.get("format", "flash")
     topic_filter = data.get("topic")  # Optional: only test specific topic
+    skip_script = data.get("skip_script", False)  # Skip LLM, just show articles
     
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
@@ -256,13 +258,26 @@ def test_script():
             generate_dialogue_script,
             get_or_create_ephemeride
         )
-        from sourcing import get_content_for_podcast
+        from sourcing import get_content_for_podcast, fetch_all_sources
         
         # 1. Get config
         config = get_podcast_config(format_type)
         target_minutes = config.get("target_minutes", 4)
         
-        # 2. Get content (same as real generation)
+        # 2. Get RAW articles from all sources (before any filtering)
+        raw_articles = fetch_all_sources(user_id=user_id)
+        raw_articles_summary = []
+        for art in raw_articles[:50]:  # Limit to 50 for response size
+            raw_articles_summary.append({
+                "title": art.get("title", "")[:100],
+                "source": art.get("source_name", ""),
+                "topic": art.get("keyword", art.get("topic_slug", "")),
+                "url": art.get("url", "")[:100],
+                "published": art.get("published", ""),
+                "score": art.get("score", 0)
+            })
+        
+        # 3. Get SELECTED content (after scoring/filtering)
         items = get_content_for_podcast(
             user_id=user_id,
             target_minutes=target_minutes
@@ -270,26 +285,57 @@ def test_script():
         
         if not items:
             return jsonify({
-                "error": "No content available",
-                "suggestion": "Run /cron/cluster first or add content to queue"
-            }), 404
+                "success": False,
+                "error": "No content selected for podcast",
+                "raw_articles_count": len(raw_articles),
+                "raw_articles": raw_articles_summary,
+                "suggestion": "Check scoring or add more sources"
+            }), 200  # Return 200 so you can see the raw articles
         
         # Filter by topic if specified
         if topic_filter:
             items = [i for i in items if i.get("keyword") == topic_filter or i.get("topic_slug") == topic_filter]
             if not items:
-                return jsonify({"error": f"No content for topic '{topic_filter}'"}), 404
+                return jsonify({
+                    "error": f"No content for topic '{topic_filter}'",
+                    "available_topics": list(set(i.get("keyword", "") for i in items))
+                }), 404
         
-        # 3. Generate scripts for each topic cluster
-        scripts = []
-        
-        # Group by topic
+        # 4. Group by topic (show clustering)
         clusters = {}
         for item in items:
             topic_key = item.get("keyword", item.get("topic_slug", "general"))
             if topic_key not in clusters:
                 clusters[topic_key] = []
             clusters[topic_key].append(item)
+        
+        # Selected articles summary
+        selected_articles = []
+        for item in items:
+            selected_articles.append({
+                "title": item.get("title", "")[:100],
+                "source": item.get("source_name", ""),
+                "topic": item.get("keyword", ""),
+                "url": item.get("url", "")[:100],
+                "score": item.get("score", 0)
+            })
+        
+        # If skip_script, return just the articles
+        if skip_script:
+            return jsonify({
+                "success": True,
+                "mode": "articles_only",
+                "format": format_type,
+                "target_minutes": target_minutes,
+                "raw_articles_count": len(raw_articles),
+                "raw_articles": raw_articles_summary,
+                "selected_articles_count": len(items),
+                "selected_articles": selected_articles,
+                "topics": {topic: len(arts) for topic, arts in clusters.items()}
+            })
+        
+        # 5. Generate scripts for each topic cluster
+        scripts = []
         
         for topic, topic_items in clusters.items():
             # Get articles info
@@ -315,7 +361,7 @@ def test_script():
                 "script": script
             })
         
-        # 4. Also get ephemeride for reference
+        # 6. Also get ephemeride for reference
         ephemeride = get_or_create_ephemeride()
         ephemeride_script = ephemeride.get("script", "") if ephemeride else None
         
@@ -323,7 +369,10 @@ def test_script():
             "success": True,
             "format": format_type,
             "target_minutes": target_minutes,
-            "total_articles": len(items),
+            "raw_articles_count": len(raw_articles),
+            "raw_articles": raw_articles_summary[:20],  # First 20 for reference
+            "selected_articles_count": len(items),
+            "selected_articles": selected_articles,
             "topic_count": len(clusters),
             "ephemeride_script": ephemeride_script,
             "scripts": scripts
