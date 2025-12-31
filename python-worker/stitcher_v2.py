@@ -1978,7 +1978,7 @@ def get_random_ambient_track() -> Optional[str]:
         return None
 
 
-def mix_ambient_under_dialogue(dialogue_segments: list, intro_block_duration: int) -> Optional[AudioSegment]:
+def mix_ambient_under_dialogue(dialogue_segments: list, intro_block_duration: int):
     """
     Mix a random ambient track underneath the dialogue segments.
     
