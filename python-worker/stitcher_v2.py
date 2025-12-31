@@ -279,26 +279,56 @@ Focus sur : techniques rhétoriques, nudges, design persuasif, propagande.""",
 VALID_TOPICS = list(TOPIC_INTENTIONS.keys())
 
 def get_topic_intention(topic_slug: str) -> str:
-    """Get the editorial intention for a specific topic."""
+    """Get the editorial intention for a specific topic from database."""
     if not topic_slug:
         return ""
     
+    # Try database first
+    try:
+        result = supabase.table("topics") \
+            .select("editorial_intention") \
+            .eq("keyword", topic_slug.lower()) \
+            .single() \
+            .execute()
+        
+        if result.data and result.data.get("editorial_intention"):
+            intention = result.data["editorial_intention"]
+            log.debug(f"📝 Using DB editorial intention for {topic_slug}")
+            return f"\n{intention}\n"
+    except Exception as e:
+        log.debug(f"DB lookup failed for topic {topic_slug}: {e}")
+    
+    # Fallback to hardcoded (for backwards compatibility)
     intention = TOPIC_INTENTIONS.get(topic_slug.lower(), "")
     if intention:
         return f"\n{intention}\n"
     return ""
 
+
 def get_transition_text(topic: str, vertical: str = None) -> str:
-    """Get the transition phrase for a topic or vertical."""
-    # Try topic first
+    """Get the transition phrase for a topic from database or fallback."""
+    # Try database first
+    if topic:
+        try:
+            result = supabase.table("topics") \
+                .select("transition_phrase") \
+                .eq("keyword", topic.lower()) \
+                .single() \
+                .execute()
+            
+            if result.data and result.data.get("transition_phrase"):
+                log.debug(f"📝 Using DB transition for {topic}")
+                return result.data["transition_phrase"]
+        except Exception:
+            pass
+    
+    # Fallback to hardcoded
     if topic and topic.lower() in TRANSITION_PHRASES:
         return TRANSITION_PHRASES[topic.lower()]
     
-    # Then vertical
     if vertical and vertical.lower() in TRANSITION_PHRASES:
         return TRANSITION_PHRASES[vertical.lower()]
     
-    # Default
     return TRANSITION_PHRASES["default"]
 
 
@@ -722,16 +752,14 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
         with open(output_path, "wb") as f:
             f.write(audio_bytes)
         
-        # V14 FIX: Apply ONLY 1.1x speed in post-processing (not doubled)
+        # V14.5: No speed increase - natural pace
         try:
             from pydub import AudioSegment
             audio = AudioSegment.from_mp3(output_path)
-            # Speed up 1.1x only (not doubled)
-            faster_audio = audio.speedup(playback_speed=1.1)
-            # Increase volume by ~3.5dB
-            louder_audio = faster_audio + 3.5
+            # V14.5: Remove speedup, only increase volume
+            louder_audio = audio + 3.5
             louder_audio.export(output_path, format="mp3", bitrate="192k")
-            log.info(f"✅ Cartesia audio processed: speed=1.1x, volume=+3.5dB")
+            log.info(f"✅ Cartesia audio processed: speed=1.0x (natural), volume=+3.5dB")
         except Exception as e:
             log.warning(f"⚠️ Post-processing skipped: {e}")
         
@@ -756,12 +784,11 @@ def generate_tts_cartesia(text: str, voice_id: str, output_path: str) -> bool:
             with open(output_path, "wb") as f:
                 f.write(audio_bytes)
             
-            # Still apply post-processing
+            # V14.5: No speedup in fallback either
             try:
                 from pydub import AudioSegment
                 audio = AudioSegment.from_mp3(output_path)
-                faster_audio = audio.speedup(playback_speed=1.15)  # Compensate for no API speed
-                louder_audio = faster_audio + 3.5
+                louder_audio = audio + 3.5  # Only volume, no speed
                 louder_audio.export(output_path, format="mp3", bitrate="192k")
             except:
                 pass
@@ -1310,7 +1337,10 @@ CONTEXTE ENRICHI (sources additionnelles):
             attribution_instruction = f'"Selon {source_name}..."'
             source_label = f"Source: {source_name}"
         
-        prompt = DIALOGUE_SEGMENT_PROMPT.format(
+        # Get prompt from DB or use default
+        prompt_template = get_prompt_from_db("dialogue_segment", DIALOGUE_SEGMENT_PROMPT)
+        
+        prompt = prompt_template.format(
             word_count=word_count,
             style=style,
             title=title,
