@@ -131,11 +131,13 @@ VERTICALS_TOPICS = {
 }
 
 # Legacy topic mappings (GSheet may still use old names)
-# Maps old topic names to new ones
+# Maps old topic names to new ones - ALL LOWERCASE for comparison
 LEGACY_TOPIC_MAPPING = {
     "quantum": "deep_tech",
     "robotics": "ia",
     "longevity": "health",
+    "longevity bio hacking": "health",  # V14: Added
+    "biohacking": "health",
     "cinema": "attention",
     "gaming": "attention",
     "lifestyle": "persuasion",
@@ -985,6 +987,46 @@ def parse_cloudmailin_webhook(payload: dict) -> dict | None:
 # ============================================
 # UNIFIED SOURCING FUNCTION
 # ============================================
+
+def fetch_all_sources(user_id: str = None) -> list[dict]:
+    """
+    Fetch ALL raw articles from GSheet sources (for debugging).
+    Returns unfiltered list of articles with metadata.
+    """
+    all_articles = []
+    
+    try:
+        library = GSheetSourceLibrary()
+        
+        # Get all sources (FR + INT)
+        all_sources = library.get_all_sources()
+        log.info(f"🔍 Fetching from {len(all_sources)} sources...")
+        
+        # Sample sources (max 50 to avoid timeout)
+        import random
+        sampled_sources = random.sample(all_sources, min(50, len(all_sources)))
+        
+        for source in sampled_sources:
+            try:
+                articles = fetch_rss_feed(source["url"], max_items=3)
+                for article in articles:
+                    article["source_name"] = source["name"]
+                    article["keyword"] = source["topic"]
+                    article["topic_slug"] = source["topic"]
+                    article["score"] = source.get("score", 50)
+                    article["origin"] = source.get("origin", "FR")
+                    all_articles.append(article)
+            except Exception as e:
+                log.debug(f"Source {source['name']} failed: {e}")
+                continue
+        
+        log.info(f"✅ Fetched {len(all_articles)} raw articles from {len(sampled_sources)} sources")
+        
+    except Exception as e:
+        log.error(f"fetch_all_sources failed: {e}")
+    
+    return all_articles
+
 
 def fetch_content_for_user(
     user_id: str,
