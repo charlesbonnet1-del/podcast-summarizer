@@ -145,6 +145,13 @@ FORMAT_CONFIG = {
     }
 }
 
+
+def get_podcast_config(format_type: str = "flash") -> dict:
+    """Get configuration for podcast format."""
+    config = FORMAT_CONFIG.get(format_type, FORMAT_CONFIG["flash"]).copy()
+    config["target_minutes"] = config.get("duration_minutes", 4)
+    return config
+
 # ============================================
 # TRANSITIONS BETWEEN SEGMENTS (Cached)
 # ============================================

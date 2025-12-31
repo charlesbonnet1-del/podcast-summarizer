@@ -253,7 +253,7 @@ def test_script():
     log.info("🧪 Test pipeline", user_id=user_id, format=format_type)
     
     try:
-        from stitcher_v2 import get_podcast_config, generate_dialogue_script
+        from stitcher_v2 import get_podcast_config, generate_dialogue_segment_script
         from sourcing import fetch_all_sources, get_content_for_podcast
         
         config = get_podcast_config(format_type)
@@ -273,21 +273,22 @@ def test_script():
                 "source": art.get("source_name", ""),
                 "published": str(art.get("published", ""))[:16],
                 "score": art.get("score", 0),
-                "url": art.get("url", "")[:60]
+                "url": art.get("url", "")
             })
         
         # ========== STEP 2: SELECTED ARTICLES BY TOPIC ==========
         selected = get_content_for_podcast(user_id=user_id, target_minutes=target_minutes)
         
         selected_by_topic = {}
-        for art in selected:
+        for art in (selected or []):
             topic = art.get("keyword", art.get("topic_slug", "unknown"))
             if topic not in selected_by_topic:
                 selected_by_topic[topic] = []
             selected_by_topic[topic].append({
                 "title": art.get("title", "")[:80],
                 "source": art.get("source_name", ""),
-                "score": art.get("score", 0)
+                "score": art.get("score", 0),
+                "url": art.get("url", "")
             })
         
         # ========== BUILD RESPONSE BY TOPIC ==========
@@ -308,21 +309,18 @@ def test_script():
             }
             
             # Generate script if requested
-            if with_script and selected_list:
-                articles_for_llm = []
-                for item in (selected or []):
-                    if item.get("keyword") == topic:
-                        articles_for_llm.append({
-                            "title": item.get("title", ""),
-                            "summary": item.get("summary", item.get("content", ""))[:500],
-                            "source": item.get("source_name", ""),
-                            "url": item.get("url", "")
-                        })
+            if with_script and selected_list and selected:
+                # Find full article data for this topic
+                topic_articles = [a for a in selected if a.get("keyword") == topic]
                 
-                if articles_for_llm:
-                    script = generate_dialogue_script(
-                        articles=articles_for_llm[:3],
-                        format_config=config
+                if topic_articles:
+                    first_article = topic_articles[0]
+                    script = generate_dialogue_segment_script(
+                        title=first_article.get("title", ""),
+                        content=first_article.get("content", first_article.get("summary", ""))[:2000],
+                        source_name=first_article.get("source_name", ""),
+                        word_count=config.get("words_per_article", 150),
+                        style=config.get("style", "dynamique")
                     )
                     topic_data["script"] = script
             
