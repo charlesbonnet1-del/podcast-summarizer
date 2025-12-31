@@ -141,7 +141,7 @@ def get_gsheet_sources_for_topics(topic_ids: list[str], include_international: b
             log.info("Found GSheet sources (INT)", count=len(intl_sources))
         
         # Fetch from top sources (sorted by score)
-        for source in sources[:15]:  # Max 15 RSS feeds
+        for source in sources[:30]:  # V14: Increased from 15 to 30 RSS feeds
             feed_articles = fetch_rss_feed(source["url"], max_items=MAX_ARTICLES_PER_TOPIC)
             
             if not feed_articles:
@@ -171,7 +171,7 @@ def get_gsheet_sources_for_topics(topic_ids: list[str], include_international: b
             time.sleep(0.5)  # Rate limiting
             
             # Stop if we have enough
-            if len(articles) >= 20:
+            if len(articles) >= 50:  # V14: Increased from 20 to 50
                 break
         
         log.info("GSheet sourcing complete", articles=len(articles))
@@ -352,8 +352,8 @@ def run_fetcher(edition: str = "morning"):
             log.info("No topics for user, skipping", user_id=user_id[:8])
             continue
         
-        # Limit to 4 topics for free plan (enforced here too)
-        topic_ids = topic_ids[:4]
+        # V14: Increased from 4 to 8 topics
+        topic_ids = topic_ids[:8]
         
         articles = []
         seen_urls = set()
@@ -467,8 +467,8 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
             log.warning(f"No topics for user {user_id[:8]}")
             return 0
         
-        # Limit to 4 topics
-        topic_ids = topic_ids[:4]
+        # V14: Increased from 4 to 8 topics
+        topic_ids = topic_ids[:8]
         
         articles = []
         seen_urls = set()
@@ -493,8 +493,8 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
         
         log.info(f"📰 GSheet articles: {len(articles)}")
         
-        # Level 3: Bing News backup
-        target_articles = len(topic_ids) * 3
+        # Level 3: Bing News backup - only if GSheet gave very few articles
+        target_articles = len(topic_ids) * 5  # V14: Increased from 3 to 5 per topic
         if len(articles) < target_articles:
             remaining = target_articles - len(articles)
             bing_articles = fetch_bing_for_topics(topic_ids, include_intl, max_articles=remaining)
