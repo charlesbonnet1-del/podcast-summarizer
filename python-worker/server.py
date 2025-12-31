@@ -230,8 +230,8 @@ def test_script():
     TEST ENDPOINT: Debug the full pipeline.
     
     Shows for EACH TOPIC:
-    - Raw articles fetched from RSS
-    - Selected articles after scoring/filtering
+    - Raw articles fetched from RSS (sample)
+    - Articles in content_queue (pending)
     - Generated script (optional)
     
     Body params:
@@ -254,12 +254,12 @@ def test_script():
     
     try:
         from stitcher_v2 import get_podcast_config, generate_dialogue_segment_script
-        from sourcing import fetch_all_sources, get_content_for_podcast
+        from sourcing import fetch_all_sources
         
         config = get_podcast_config(format_type)
         target_minutes = config.get("target_minutes", 4)
         
-        # ========== STEP 1: RAW ARTICLES BY TOPIC ==========
+        # ========== STEP 1: RAW ARTICLES BY TOPIC (from RSS) ==========
         raw_articles = fetch_all_sources(user_id=user_id)
         
         # Group raw by topic
@@ -269,24 +269,30 @@ def test_script():
             if topic not in raw_by_topic:
                 raw_by_topic[topic] = []
             raw_by_topic[topic].append({
-                "title": art.get("title", "")[:80],
+                "title": art.get("title", "")[:100],
                 "source": art.get("source_name", ""),
                 "published": str(art.get("published", ""))[:16],
                 "score": art.get("score", 0),
                 "url": art.get("url", "")
             })
         
-        # ========== STEP 2: SELECTED ARTICLES BY TOPIC ==========
-        selected = get_content_for_podcast(user_id=user_id, target_minutes=target_minutes)
+        # ========== STEP 2: PENDING ARTICLES FROM CONTENT_QUEUE ==========
+        pending = supabase.table("content_queue") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .eq("status", "pending") \
+            .execute()
+        
+        selected = pending.data if pending.data else []
         
         selected_by_topic = {}
-        for art in (selected or []):
+        for art in selected:
             topic = art.get("keyword", art.get("topic_slug", "unknown"))
             if topic not in selected_by_topic:
                 selected_by_topic[topic] = []
             selected_by_topic[topic].append({
-                "title": art.get("title", "")[:80],
-                "source": art.get("source_name", ""),
+                "title": art.get("title", "")[:100],
+                "source": art.get("source_name", art.get("source", "")),
                 "score": art.get("score", 0),
                 "url": art.get("url", "")
             })
@@ -309,7 +315,7 @@ def test_script():
             }
             
             # Generate script if requested
-            if with_script and selected_list and selected:
+            if with_script and selected_list:
                 # Find full article data for this topic
                 topic_articles = [a for a in selected if a.get("keyword") == topic]
                 
@@ -317,8 +323,8 @@ def test_script():
                     first_article = topic_articles[0]
                     script = generate_dialogue_segment_script(
                         title=first_article.get("title", ""),
-                        content=first_article.get("content", first_article.get("summary", ""))[:2000],
-                        source_name=first_article.get("source_name", ""),
+                        content=first_article.get("processed_content", first_article.get("content", ""))[:2000],
+                        source_name=first_article.get("source_name", first_article.get("source", "")),
                         word_count=config.get("words_per_article", 150),
                         style=config.get("style", "dynamique")
                     )
@@ -331,7 +337,7 @@ def test_script():
             "format": format_type,
             "target_minutes": target_minutes,
             "total_raw": len(raw_articles),
-            "total_selected": len(selected) if selected else 0,
+            "total_in_queue": len(selected),
             "topics": topics_detail
         })
         
