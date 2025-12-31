@@ -11,10 +11,11 @@ export async function GET() {
   }
 
   try {
+    // V14.5: Read from users.topic_weights (not separate table)
     const { data, error } = await supabase
-      .from("user_signal_weights")
-      .select("weights")
-      .eq("user_id", user.id)
+      .from("users")
+      .select("topic_weights")
+      .eq("id", user.id)
       .single();
 
     if (error && error.code !== "PGRST116") {
@@ -23,7 +24,7 @@ export async function GET() {
 
     // Return weights or empty object if not found
     return NextResponse.json({ 
-      weights: data?.weights || {} 
+      weights: data?.topic_weights || {} 
     });
   } catch (error) {
     console.error("Error fetching signal weights:", error);
@@ -56,18 +57,31 @@ export async function POST(request: Request) {
       }
     }
 
-    // Upsert the weights
+    // V14.5: Save to users.topic_weights (not separate table)
     const { error } = await supabase
-      .from("user_signal_weights")
-      .upsert({
-        user_id: user.id,
-        weights,
+      .from("users")
+      .update({
+        topic_weights: weights,
         updated_at: new Date().toISOString(),
-      }, {
-        onConflict: "user_id"
-      });
+      })
+      .eq("id", user.id);
 
     if (error) throw error;
+
+    // Also sync user_interests to ensure all topics are tracked
+    const topicIds = Object.keys(weights);
+    for (const topicId of topicIds) {
+      await supabase
+        .from("user_interests")
+        .upsert({
+          user_id: user.id,
+          keyword: topicId,
+          display_name: topicId, // Will be overwritten if exists
+        }, {
+          onConflict: "user_id,keyword",
+          ignoreDuplicates: true
+        });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
