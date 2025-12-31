@@ -85,7 +85,7 @@ export default function Home() {
                     alt="Keernel"
                     width={96}
                     height={96}
-                    className="w-24 h-24 mx-auto mb-4 opacity-50"
+                    className="h-16 w-auto mx-auto mb-4 opacity-50 object-contain"
                   />
                   <p className="text-muted-foreground font-mono">Dashboard Preview</p>
                 </div>
@@ -131,7 +131,7 @@ export default function Home() {
               alt="Keernel"
               width={36}
               height={36}
-              className="w-9 h-9"
+              className="h-8 w-auto object-contain"
             />
             <span className="font-medium title-keernel text-xl">Keernel</span>
           </div>

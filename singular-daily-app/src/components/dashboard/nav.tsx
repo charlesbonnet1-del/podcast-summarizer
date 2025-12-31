@@ -59,7 +59,7 @@ export function DashboardNav({ user, profile }: DashboardNavProps) {
               alt="Keernel"
               width={36}
               height={36}
-              className="w-9 h-9"
+              className="h-8 w-auto object-contain"
             />
             <span className="title-keernel text-xl text-foreground">
               Keernel

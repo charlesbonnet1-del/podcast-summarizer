@@ -1666,7 +1666,7 @@ export function KernelDashboard({
           <img 
             src={resolvedTheme === "dark" ? "/logo/keernel-dark.png" : "/logo/keernel-light.png"}
             alt="Keernel"
-            className="w-24 h-24"
+            className="h-20 w-auto object-contain"
           />
         </motion.div>
 
