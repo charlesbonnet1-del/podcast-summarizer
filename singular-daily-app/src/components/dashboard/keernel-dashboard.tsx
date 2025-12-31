@@ -76,9 +76,9 @@ interface KernelDashboardProps {
 
 // Elegant color palette for sources - alternating warm neutrals
 const SOURCE_COLORS = [
-  { bg: "bg-[#F5F0E8]", text: "text-[#3D3D3D]", domain: "text-muted-foreground", iconBg: "#E8DFD0" },      // Beige / Cream
+  { bg: "bg-[#F5F5F7]", text: "text-[#3D3D3D]", domain: "text-muted-foreground", iconBg: "#E5E5E7" },      // Beige / Cream
   { bg: "bg-[#FAFAFA]", text: "text-[#2D2D2D]", domain: "text-[#7A7A7A]", iconBg: "#F0F0F0" },      // White / Light gray
-  { bg: "bg-[#EDE8E0]", text: "text-[#4A4A4A]", domain: "text-tech-blue", iconBg: "#DDD5C8" },      // Sand / Taupe
+  { bg: "bg-[#E5E5E7]", text: "text-[#4A4A4A]", domain: "text-tech-blue", iconBg: "#D4D4D8" },      // Sand / Taupe
   { bg: "bg-[#F8F6F3]", text: "text-[#3D3D3D]", domain: "text-[#9A8B7A]", iconBg: "#E5E0D8" },      // Off-white / Cream
   { bg: "bg-[#2D2D2D]", text: "text-[#F5F5F5]", domain: "text-[#A0A0A0]", iconBg: "#404040" },      // Charcoal
   { bg: "bg-[#1A1A1A]", text: "text-[#FFFFFF]", domain: "text-[#888888]", iconBg: "#333333" },      // Noir / Black
@@ -130,7 +130,7 @@ function FloatingOrbs() {
       <motion.div
         className="absolute w-[500px] h-[500px] rounded-full opacity-30"
         style={{
-          background: "radial-gradient(circle, rgba(197, 179, 88, 0.4) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(0, 240, 255, 0.3) 0%, transparent 70%)",
           filter: "blur(60px)",
           top: "-10%",
           right: "-5%",
@@ -146,7 +146,7 @@ function FloatingOrbs() {
       <motion.div
         className="absolute w-[400px] h-[400px] rounded-full opacity-25"
         style={{
-          background: "radial-gradient(circle, rgba(197, 179, 88, 0.3) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(0, 240, 255, 0.25) 0%, transparent 70%)",
           filter: "blur(50px)",
           bottom: "10%",
           left: "-5%",
@@ -229,7 +229,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
     <div className="relative">
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(36_50%_92%)] text-[hsl(0_0%_10%)] hover:bg-[hsl(36_45%_88%)] transition-colors text-sm font-display font-medium"
+        className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border text-foreground hover:bg-muted transition-colors text-sm font-display font-medium"
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
       >
@@ -298,7 +298,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
                                 {item.date}
                               </div>
                               {isOld && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EDE8E0] dark:bg-[#333] text-muted-foreground dark:text-[#999]">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E5E5E7] dark:bg-[#333] text-muted-foreground dark:text-[#999]">
                                   Archive
                                 </span>
                               )}
@@ -337,7 +337,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
                                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
                                   isDigestOpen 
                                     ? "bg-[#2D2D2D] text-white" 
-                                    : "bg-[#F5F0E8] dark:bg-[#333] text-[#3D3D3D] dark:text-[#DDD] hover:bg-[#EDE8E0] dark:hover:bg-[#444]"
+                                    : "bg-[#F5F5F7] dark:bg-[#333] text-[#3D3D3D] dark:text-[#DDD] hover:bg-[#E5E5E7] dark:hover:bg-[#444]"
                                 }`}
                               >
                                 {loadingDigest === item.id ? (
@@ -684,7 +684,7 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
             {/* Data shape */}
             <motion.path
               d={dataPath}
-              fill="rgba(197, 179, 88, 0.15)"
+              fill="rgba(0, 240, 255, 0.15)"
               stroke="#00F0FF"
               strokeWidth={2}
               initial={{ opacity: 0, scale: 0.8 }}
@@ -910,7 +910,7 @@ function SignalMixerModal({
         <>
           {/* Backdrop that covers EVERYTHING including fixed headers */}
           <motion.div
-            className="fixed inset-0 bg-[#F7EEDD] dark:bg-[#1A1A1A]"
+            className="fixed inset-0 bg-[hsl(var(--background))] dark:bg-[#1A1A1A]"
             style={{ zIndex: 99998 }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -926,7 +926,7 @@ function SignalMixerModal({
             exit={{ opacity: 0 }}
           >
             {/* Header - Fixed */}
-            <div className="shrink-0 px-4 pt-6 pb-2 bg-[#F7EEDD] dark:bg-[#1A1A1A]">
+            <div className="shrink-0 px-4 pt-6 pb-2 bg-[hsl(var(--background))] dark:bg-[#1A1A1A]">
               <div className="max-w-lg mx-auto flex items-start justify-between">
                 <div>
                   <h2 className="font-display text-2xl font-bold">Signal Mixer</h2>
@@ -936,7 +936,7 @@ function SignalMixerModal({
                 </div>
                 <button
                   onClick={onClose}
-                  className="w-10 h-10 rounded-full bg-[#E5D9C3] dark:bg-[#333] flex items-center justify-center hover:bg-[#DDD0BC] dark:hover:bg-[#444] transition-colors"
+                  className="w-10 h-10 rounded-full bg-[#E5E5E7] dark:bg-[#333] flex items-center justify-center hover:bg-[#DDD0BC] dark:hover:bg-[#444] transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -955,7 +955,7 @@ function SignalMixerModal({
                 return (
                   <motion.div
                     key={vertical.id}
-                    className="rounded-xl bg-[#F0E6D3] dark:bg-[#252525] border border-[#E5D9C3] dark:border-[#333] overflow-hidden"
+                    className="rounded-xl bg-[#F0E6D3] dark:bg-[#252525] border border-[#E5E5E7] dark:border-[#333] overflow-hidden"
                     layout
                   >
                     {/* Vertical Header with Slider */}
@@ -986,7 +986,7 @@ function SignalMixerModal({
                         step="10"
                         value={verticalWeight}
                         onChange={(e) => updateVerticalWeight(vertical.id, parseInt(e.target.value))}
-                        className="w-full h-2 rounded-full appearance-none cursor-pointer bg-[#E5D9C3] dark:bg-[#333]
+                        className="w-full h-2 rounded-full appearance-none cursor-pointer bg-[#E5E5E7] dark:bg-[#333]
                           [&::-webkit-slider-thumb]:appearance-none
                           [&::-webkit-slider-thumb]:w-5
                           [&::-webkit-slider-thumb]:h-5
@@ -1000,8 +1000,8 @@ function SignalMixerModal({
                           background: `linear-gradient(to right, 
                             ${verticalWeight >= 80 ? '#00F0FF' : verticalWeight >= 50 ? '#007AFF' : verticalWeight >= 20 ? '#4DA3FF' : '#9ca3af'} 0%, 
                             ${verticalWeight >= 80 ? '#00F0FF' : verticalWeight >= 50 ? '#007AFF' : verticalWeight >= 20 ? '#4DA3FF' : '#9ca3af'} ${verticalWeight}%, 
-                            #E5D9C3 ${verticalWeight}%, 
-                            #E5D9C3 100%)`
+                            #E5E5E7 ${verticalWeight}%, 
+                            #E5E5E7 100%)`
                         }}
                       />
                     </div>
@@ -1014,7 +1014,7 @@ function SignalMixerModal({
                           animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2 }}
-                          className="border-t border-[#E5D9C3] dark:border-[#333]"
+                          className="border-t border-[#E5E5E7] dark:border-[#333]"
                         >
                           <div className="p-3 space-y-2 bg-[#EBE1CF] dark:bg-[#222]">
                             {vertical.topics.map((topic) => {
@@ -1037,7 +1037,7 @@ function SignalMixerModal({
                                     step="10"
                                     value={topicWeight}
                                     onChange={(e) => updateTopicWeight(topic.id, parseInt(e.target.value))}
-                                    className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-[#E5D9C3] dark:bg-[#333]
+                                    className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-[#E5E5E7] dark:bg-[#333]
                                       [&::-webkit-slider-thumb]:appearance-none
                                       [&::-webkit-slider-thumb]:w-4
                                       [&::-webkit-slider-thumb]:h-4
@@ -1051,8 +1051,8 @@ function SignalMixerModal({
                                       background: `linear-gradient(to right, 
                                         ${topicWeight >= 80 ? '#00F0FF' : topicWeight >= 50 ? '#007AFF' : topicWeight >= 20 ? '#4DA3FF' : '#9ca3af'} 0%, 
                                         ${topicWeight >= 80 ? '#00F0FF' : topicWeight >= 50 ? '#007AFF' : topicWeight >= 20 ? '#4DA3FF' : '#9ca3af'} ${topicWeight}%, 
-                                        #E5D9C3 ${topicWeight}%, 
-                                        #E5D9C3 100%)`
+                                        #E5E5E7 ${topicWeight}%, 
+                                        #E5E5E7 100%)`
                                     }}
                                   />
                                   
@@ -1080,7 +1080,7 @@ function SignalMixerModal({
           </div>
 
           {/* Footer - Fixed Save Button */}
-          <div className="shrink-0 px-4 py-3 bg-[#F7EEDD] dark:bg-[#1A1A1A] border-t border-[#E5D9C3] dark:border-[#333]">
+          <div className="shrink-0 px-4 py-3 bg-[hsl(var(--background))] dark:bg-[#1A1A1A] border-t border-[#E5E5E7] dark:border-[#333]">
             <div className="max-w-lg mx-auto">
               <motion.button
                 onClick={saveWeights}
@@ -1233,7 +1233,7 @@ function TopicSelectorModal({
         >
           {/* Blurred background matching theme */}
           <motion.div
-            className="absolute inset-0 bg-[#F7EEDD]/90 dark:bg-[#1A1A1A]/90 backdrop-blur-xl"
+            className="absolute inset-0 bg-[hsl(var(--background))]/90 dark:bg-[#1A1A1A]/90 backdrop-blur-xl"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1520,7 +1520,7 @@ function PlayerPod({ episode }: { episode: Episode }) {
 
             <motion.button
               onClick={togglePlay}
-              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[hsl(36_40%_95%)]"
+              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[hsl(var(--card))]"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -1664,7 +1664,7 @@ export function KernelDashboard({
           transition={{ duration: 0.5 }}
         >
           <img 
-            src={resolvedTheme === "dark" ? "/logo-sable.svg" : "/logo-charcoal.svg"}
+            src={resolvedTheme === "dark" ? "/logo/keernel-dark.png" : "/logo/keernel-light.png"}
             alt="Keernel"
             className="w-24 h-24"
           />
