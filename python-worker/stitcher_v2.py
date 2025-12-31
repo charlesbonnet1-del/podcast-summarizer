@@ -207,7 +207,7 @@ Focus sur : nouvelles capabilities, ruptures de paradigme, implications concrèt
 
     "cyber": """⚡ ANGLE ÉDITORIAL (CYBERSECURITY):
 Quelles sont les nouvelles surfaces d'attaque et les défenses émergentes ?
-Analyse les VULNÉRABILITÉS SYSTÉMIQUES et les réponses technologiques.
+Analyse les VULNÉRABILITÉS SYSTÉMIQUES et les réponses technologiques et informe sur les attaques d'ampleur relevées dans l'actualité.
 Focus sur : vecteurs d'attaque, zero-days, attribution, résilience infrastructure.""",
 
     "deep_tech": """⚡ ANGLE ÉDITORIAL (QUANTUM, FUSION, MATÉRIAUX):
@@ -217,28 +217,28 @@ Focus sur : franchissement de seuils, démonstrations expérimentales, timeline 
 
     # V2 SCIENCE
     "health": """⚡ ANGLE ÉDITORIAL (HEALTH & LONGEVITY):
-Quelles avancées permettent de REPOUSSER LES LIMITES BIOLOGIQUES ou d'optimiser le potentiel humain ?
+Quelles sont les nouveautés dans le domaine de la santé et du biohacking qui permettront peut-être de REPOUSSER LES LIMITES BIOLOGIQUES ou d'optimiser le potentiel humain ?
 Focus sur : recherche anti-âge, interventions validées, biomarqueurs, médecine de précision.""",
 
     "space": """⚡ ANGLE ÉDITORIAL (SPACE):
 Comment l'espace devient-il une EXTENSION DE NOTRE ÉCONOMIE et de notre champ d'exploration ?
-Focus sur l'INFRASTRUCTURE et la LOGISTIQUE ORBITALE.
-Analyse : lanceurs, constellations, économie spatiale, exploration.""",
+Focus sur l'INFRASTRUCTURE, la LOGISTIQUE ORBITALE et LES PROJETS D'EXPLORATION.
+Analyse : lanceurs, constellations, économie spatiale, exploration, Mars, entreprises spécialisées dans le spatial.""",
 
     "energy": """⚡ ANGLE ÉDITORIAL (ENERGY):
-Quelles sont les RUPTURES dans notre capacité à produire, stocker ou optimiser l'énergie ?
-Focus sur l'EFFICIENCE et la SCALABILITÉ.
+Quelles sont les évolutions dans notre capacité à produire, stocker ou optimiser l'énergie ?
+Focus sur l'EFFICIENCE, la SCALABILITÉ et les NOUVEAUTES dans le domaine de l'énergie.
 Analyse : nouvelles technologies, économie de l'énergie, transition énergétique.""",
 
     # V3 ECONOMICS
     "crypto": """⚡ ANGLE ÉDITORIAL (CRYPTO):
 Comment la confiance et la valeur se déplacent-elles sur les réseaux ?
-Analyse les INFRASTRUCTURES et les nouveaux MODÈLES DE PROPRIÉTÉ.
-Focus sur : évolutions protocolaires, adoption institutionnelle, nouvelles primitives économiques.""",
+Analyse les INFRASTRUCTURES et les nouveaux MODÈLES DE PROPRIÉTÉ et de CERTIFICATION permis par les blockchains.
+Focus sur : évolutions protocolaires, adoption institutionnelle, nouvelles primitives économiques, adoption du Bitcoin.""",
 
     "macro": """⚡ ANGLE ÉDITORIAL (MACRO):
 Quels sont les courants de fond (politiques, monétaires, intellectuels) qui déplacent les PLAQUES TECTONIQUES de l'économie mondiale ?
-Focus sur : tendances structurelles, inflexions de politique, reconfigurations géoéconomiques.""",
+Focus sur : tendances structurelles, inflexions de politique, reconfigurations géoéconomiques, conflits.""",
 
     "deals": """⚡ ANGLE ÉDITORIAL (DEALS - M&A, VC, IPO, MARCHÉS):
 Quels MOUVEMENTS DE CAPITAL signalent les stratégies de long terme des acteurs ?
@@ -263,7 +263,7 @@ Focus sur : supply chains, métaux critiques, eau, agriculture, géopolitique de
     "info": """⚡ ANGLE ÉDITORIAL (GUERRE DE L'INFORMATION):
 Comment l'information est-elle utilisée comme une ARME ou un OUTIL DE PUISSANCE ?
 Analyse les MÉTHODES DE DIFFUSION et de CONTRÔLE.
-Focus sur : désinformation, influence operations, contrôle narratif, fact-checking.""",
+Focus sur : désinformation, influence operations, contrôle narratif, fact-checking, propagande.""",
 
     "attention": """⚡ ANGLE ÉDITORIAL (MARCHÉS DE L'ATTENTION):
 Comment la CAPTATION DE L'ATTENTION évolue-t-elle avec les plateformes ?
@@ -397,6 +397,7 @@ DIALOGUE_CLUSTER_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {
 ⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
 ⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
 ⚠️ STYLE DENSE: Chaque phrase apporte de l'information
+⚠️ NE JAMAIS CITER L'URL: le nom de la source est le nom du média, ou du podcasteur/youtubeur, si tu ne le trouves pas, ne le cite pas : mais ne cite jamais l'URL.
 
 ## FORMAT
 [B]
@@ -521,7 +522,7 @@ Tu dois CROISER et COMPARER les informations des différentes sources.
 - [A] LA SCEPTIQUE (voix féminine) = Voix incisive. Elle challenge les incohérences entre sources, questionne le ROI, la faisabilité.
 
 ## RÈGLES ABSOLUES SUR LE STYLE
-⚠️ LES HÔTES NE S'APPELLENT JAMAIS PAR LEUR NOM. Pas de "Bob", "Alice", ou tout autre prénom.
+
 ⚠️ INTERDIT les tics de langage et formules creuses :
    - PAS DE: "Tu vois", "Écoute", "Attends", "En fait", "Justement"
    - PAS DE: "C'est une perspective intéressante", "Bonne question", "Effectivement", "Absolument"
@@ -551,7 +552,7 @@ La sceptique challenge ou souligne les contradictions.
 9. ⚠️ [B] TERMINE TOUJOURS LE DIALOGUE avec une synthèse des différentes sources
 10. La DERNIÈRE réplique est TOUJOURS [B] qui conclut - JAMAIS une question ou objection de [A]
 11. ⚠️ SOURCING STRICT: Tu n'inventes AUCUNE information. Tout ce que tu écris DOIT être présent dans les sources fournies.
-12. INTERDIT: prénoms, didascalies, tics de langage, formules creuses
+12. INTERDIT: didascalies, tics de langage, formules creuses
 {previous_segment_rule}
 
 ## STRUCTURE DU DIALOGUE
