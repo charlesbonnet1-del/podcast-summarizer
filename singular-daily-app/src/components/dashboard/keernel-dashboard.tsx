@@ -76,9 +76,9 @@ interface KernelDashboardProps {
 
 // Elegant color palette for sources - alternating warm neutrals
 const SOURCE_COLORS = [
-  { bg: "bg-[#F5F0E8]", text: "text-[#3D3D3D]", domain: "text-[#6B5B4F]", iconBg: "#E8DFD0" },      // Beige / Cream
+  { bg: "bg-[#F5F0E8]", text: "text-[#3D3D3D]", domain: "text-muted-foreground", iconBg: "#E8DFD0" },      // Beige / Cream
   { bg: "bg-[#FAFAFA]", text: "text-[#2D2D2D]", domain: "text-[#7A7A7A]", iconBg: "#F0F0F0" },      // White / Light gray
-  { bg: "bg-[#EDE8E0]", text: "text-[#4A4A4A]", domain: "text-[#8B7355]", iconBg: "#DDD5C8" },      // Sand / Taupe
+  { bg: "bg-[#EDE8E0]", text: "text-[#4A4A4A]", domain: "text-tech-blue", iconBg: "#DDD5C8" },      // Sand / Taupe
   { bg: "bg-[#F8F6F3]", text: "text-[#3D3D3D]", domain: "text-[#9A8B7A]", iconBg: "#E5E0D8" },      // Off-white / Cream
   { bg: "bg-[#2D2D2D]", text: "text-[#F5F5F5]", domain: "text-[#A0A0A0]", iconBg: "#404040" },      // Charcoal
   { bg: "bg-[#1A1A1A]", text: "text-[#FFFFFF]", domain: "text-[#888888]", iconBg: "#333333" },      // Noir / Black
@@ -93,12 +93,12 @@ function getSourceMeta(url: string): { type: "video" | "podcast" | "article"; co
   
   if (domain.includes("youtube.com") || domain.includes("youtu.be") || 
       domain.includes("vimeo.com") || domain.includes("twitch.tv")) {
-    return { type: "video", color: "#C5B358", bgClass: "bg-brass/5 dark:bg-brass/10" };
+    return { type: "video", color: "#00F0FF", bgClass: "bg-primary/5 dark:bg-primary/10" };
   }
   
   if (domain.includes("spotify.com") || domain.includes("podcasts.apple.com") ||
       domain.includes("podcasts.google.com") || domain.includes("soundcloud.com")) {
-    return { type: "podcast", color: "#C5B358", bgClass: "bg-brass/5 dark:bg-brass/10" };
+    return { type: "podcast", color: "#00F0FF", bgClass: "bg-primary/5 dark:bg-primary/10" };
   }
   
   return { type: "article", color: "#A855F7", bgClass: "bg-violet-500/5 dark:bg-violet-500/10" };
@@ -263,7 +263,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
             >
               <div className="px-4 py-3 border-b border-border bg-secondary/30">
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-brass" />
+                  <Calendar className="w-4 h-4 text-primary" />
                   <span className="font-display font-medium">Vos épisodes</span>
                 </div>
               </div>
@@ -271,7 +271,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
               <div className="max-h-[60vh] overflow-y-auto">
                 {loading ? (
                   <div className="p-4 text-center text-muted-foreground">
-                    <div className="animate-spin w-5 h-5 border-2 border-brass border-t-transparent rounded-full mx-auto" />
+                    <div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full mx-auto" />
                   </div>
                 ) : history.length === 0 ? (
                   <div className="p-4 text-center text-muted-foreground text-sm">
@@ -298,7 +298,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
                                 {item.date}
                               </div>
                               {isOld && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EDE8E0] dark:bg-[#333] text-[#6B5B4F] dark:text-[#999]">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EDE8E0] dark:bg-[#333] text-muted-foreground dark:text-[#999]">
                                   Archive
                                 </span>
                               )}
@@ -324,7 +324,7 @@ function HistoryMenu({ onSelectEpisode }: { onSelectEpisode?: (episode: HistoryI
                                     onSelectEpisode(item);
                                     setIsOpen(false);
                                   }}
-                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-brass/10 text-brass text-xs hover:bg-brass/20 transition-colors"
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-xs hover:bg-primary/20 transition-colors"
                                 >
                                   <Play className="w-3 h-3" />
                                   Écouter
@@ -685,7 +685,7 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
             <motion.path
               d={dataPath}
               fill="rgba(197, 179, 88, 0.15)"
-              stroke="#C5B358"
+              stroke="#00F0FF"
               strokeWidth={2}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -700,7 +700,7 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
                 cx={point.x}
                 cy={point.y}
                 r={4}
-                fill="#C5B358"
+                fill="#00F0FF"
                 stroke="white"
                 strokeWidth={2}
                 initial={{ opacity: 0, scale: 0 }}
@@ -730,7 +730,7 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
                   <span className="text-[10px] font-display font-medium text-foreground whitespace-nowrap">
                     {vertical.label}
                   </span>
-                  <span className="text-[9px] text-[#C5B358] font-mono">
+                  <span className="text-[9px] text-[#00F0FF] font-mono">
                     {vertical.weight}%
                   </span>
                 </div>
@@ -741,7 +741,7 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
 
         {/* Hover: + button in center */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="w-10 h-10 rounded-full bg-[#C5B358] flex items-center justify-center shadow-lg">
+          <div className="w-10 h-10 rounded-full bg-[#00F0FF] flex items-center justify-center shadow-lg">
             <Plus className="w-5 h-5 text-white" />
           </div>
         </div>
@@ -815,9 +815,9 @@ const VERTICALS = [
 const ALL_TOPICS = VERTICALS.flatMap(v => v.topics.map(t => ({ ...t, category: v.name })));
 
 function getSignalLabel(weight: number) {
-  if (weight >= 80) return { label: "Focus", color: "text-[#C5B358]" };      // brass
-  if (weight >= 50) return { label: "Actif", color: "text-[#8B7355]" };      // sand
-  if (weight >= 20) return { label: "Passif", color: "text-[#6B5B4F]" };     // taupe
+  if (weight >= 80) return { label: "Focus", color: "text-[#00F0FF]" };      // brass
+  if (weight >= 50) return { label: "Actif", color: "text-tech-blue" };      // sand
+  if (weight >= 20) return { label: "Passif", color: "text-muted-foreground" };     // taupe
   if (weight > 0) return { label: "Faible", color: "text-muted-foreground" };
   return { label: "Off", color: "text-muted-foreground/50" };
 }
@@ -993,13 +993,13 @@ function SignalMixerModal({
                           [&::-webkit-slider-thumb]:rounded-full
                           [&::-webkit-slider-thumb]:bg-white
                           [&::-webkit-slider-thumb]:border-2
-                          [&::-webkit-slider-thumb]:border-[#C5B358]
+                          [&::-webkit-slider-thumb]:border-[#00F0FF]
                           [&::-webkit-slider-thumb]:shadow-md
                           [&::-webkit-slider-thumb]:cursor-pointer"
                         style={{
                           background: `linear-gradient(to right, 
-                            ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#8B7355' : verticalWeight >= 20 ? '#6B5B4F' : '#9ca3af'} 0%, 
-                            ${verticalWeight >= 80 ? '#C5B358' : verticalWeight >= 50 ? '#8B7355' : verticalWeight >= 20 ? '#6B5B4F' : '#9ca3af'} ${verticalWeight}%, 
+                            ${verticalWeight >= 80 ? '#00F0FF' : verticalWeight >= 50 ? '#007AFF' : verticalWeight >= 20 ? '#4DA3FF' : '#9ca3af'} 0%, 
+                            ${verticalWeight >= 80 ? '#00F0FF' : verticalWeight >= 50 ? '#007AFF' : verticalWeight >= 20 ? '#4DA3FF' : '#9ca3af'} ${verticalWeight}%, 
                             #E5D9C3 ${verticalWeight}%, 
                             #E5D9C3 100%)`
                         }}
@@ -1044,13 +1044,13 @@ function SignalMixerModal({
                                       [&::-webkit-slider-thumb]:rounded-full
                                       [&::-webkit-slider-thumb]:bg-white
                                       [&::-webkit-slider-thumb]:border-2
-                                      [&::-webkit-slider-thumb]:border-[#C5B358]
+                                      [&::-webkit-slider-thumb]:border-[#00F0FF]
                                       [&::-webkit-slider-thumb]:shadow-sm
                                       [&::-webkit-slider-thumb]:cursor-pointer"
                                     style={{
                                       background: `linear-gradient(to right, 
-                                        ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#8B7355' : topicWeight >= 20 ? '#6B5B4F' : '#9ca3af'} 0%, 
-                                        ${topicWeight >= 80 ? '#C5B358' : topicWeight >= 50 ? '#8B7355' : topicWeight >= 20 ? '#6B5B4F' : '#9ca3af'} ${topicWeight}%, 
+                                        ${topicWeight >= 80 ? '#00F0FF' : topicWeight >= 50 ? '#007AFF' : topicWeight >= 20 ? '#4DA3FF' : '#9ca3af'} 0%, 
+                                        ${topicWeight >= 80 ? '#00F0FF' : topicWeight >= 50 ? '#007AFF' : topicWeight >= 20 ? '#4DA3FF' : '#9ca3af'} ${topicWeight}%, 
                                         #E5D9C3 ${topicWeight}%, 
                                         #E5D9C3 100%)`
                                     }}
@@ -1071,9 +1071,9 @@ function SignalMixerModal({
               })}
 
               {/* Wildcard info */}
-              <div className="p-3 rounded-xl bg-[#C5B358]/10 border border-[#C5B358]/20">
+              <div className="p-3 rounded-xl bg-[#00F0FF]/10 border border-[#00F0FF]/20">
                 <p className="text-xs text-center text-muted-foreground">
-                  <span className="text-[#C5B358] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle
+                  <span className="text-[#00F0FF] font-medium">Wildcard</span> : Un sujet à 0% peut surgir pour casser la bulle
                 </p>
               </div>
             </div>
@@ -1301,7 +1301,7 @@ function TopicSelectorModal({
                     style={{ top: pos.top, left: pos.left }}
                     className={`absolute max-w-[200px] px-4 py-3 rounded-2xl backdrop-blur-sm border transition-all ${
                       isSelected
-                        ? "bg-[#C5B358] border-[#C5B358] text-white shadow-lg shadow-[#C5B358]/30"
+                        ? "bg-[#00F0FF] border-[#00F0FF] text-white shadow-lg shadow-[#00F0FF]/30"
                         : isDisabled
                           ? "bg-card/30 border-border/30 text-muted-foreground/50 cursor-not-allowed"
                           : "bg-card/60 border-border/50 text-foreground hover:bg-card/80 hover:border-border hover:shadow-md"
@@ -1342,7 +1342,7 @@ function TopicSelectorModal({
                     disabled={saving || isDisabled}
                     className={`px-3 py-2.5 rounded-xl backdrop-blur-sm border transition-all text-left ${
                       isSelected
-                        ? "bg-[#C5B358] border-[#C5B358] text-white shadow-md shadow-[#C5B358]/20"
+                        ? "bg-[#00F0FF] border-[#00F0FF] text-white shadow-md shadow-[#00F0FF]/20"
                         : isDisabled
                           ? "bg-card/30 border-border/30 text-muted-foreground/50"
                           : "bg-card/60 border-border/50 text-foreground active:bg-card/80"
@@ -1534,12 +1534,12 @@ function PlayerPod({ episode }: { episode: Episode }) {
             </motion.button>
 
             <div className="flex-1 min-w-0">
-              <p className="font-serif text-sm font-medium truncate text-[#C5B358]">{episode.title}</p>
+              <p className="font-serif text-sm font-medium truncate text-[#00F0FF]">{episode.title}</p>
               <div className="mt-1 flex items-center gap-2">
                 <div className="flex-1 h-1 rounded-full bg-secondary/50 overflow-hidden">
-                  <motion.div className="h-full rounded-full bg-[#C5B358]" style={{ width: `${progress}%` }} />
+                  <motion.div className="h-full rounded-full bg-[#00F0FF]" style={{ width: `${progress}%` }} />
                 </div>
-                <span className="text-[10px] font-mono text-[#C5B358]/70 flex-shrink-0">
+                <span className="text-[10px] font-mono text-[#00F0FF]/70 flex-shrink-0">
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
               </div>
@@ -1555,7 +1555,7 @@ function PlayerPod({ episode }: { episode: Episode }) {
 
             <motion.button
               onClick={() => setShowSources(!showSources)}
-              className={`p-2 rounded-full flex-shrink-0 ${showSources ? "bg-brass/20 text-brass" : "hover:bg-secondary text-muted-foreground"}`}
+              className={`p-2 rounded-full flex-shrink-0 ${showSources ? "bg-primary/20 text-primary" : "hover:bg-secondary text-muted-foreground"}`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -1609,7 +1609,7 @@ function GenerateButton({ pendingCount, hasTopics }: { pendingCount: number; has
         <span className="flex items-center justify-center gap-2">
           Generate Keernel
           {pendingCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-brass/20 text-xs">
+            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-xs">
               {pendingCount} segments
             </span>
           )}

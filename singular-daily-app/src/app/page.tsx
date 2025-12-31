@@ -8,7 +8,7 @@ import { Zap, Bot, Rss } from "lucide-react";
 
 export default function Home() {
   const { resolvedTheme } = useTheme();
-  const logoSrc = resolvedTheme === "dark" ? "/logo-sable.svg" : "/logo-charcoal.svg";
+  const logoSrc = resolvedTheme === "dark" ? "/logo/keernel-dark.png" : "/logo/keernel-light.png";
 
   return (
     <div className="min-h-screen bg-background">
