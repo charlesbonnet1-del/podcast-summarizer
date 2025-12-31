@@ -131,7 +131,7 @@ FORMAT_CONFIG = {
         "duration_minutes": 4,
         "total_words": 1000,           # Target ~4-5 min with segments
         "max_articles": 7,             # Max articles to select
-        "min_articles": 5,             # MINIMUM articles required
+        "min_articles": 1,             # V14.5: No minimum - use whatever is available
         "words_per_article": 150,      # ~35-40s per segment
         "style": "ultra-concis et percutant"
     },
@@ -139,7 +139,7 @@ FORMAT_CONFIG = {
         "duration_minutes": 15,
         "total_words": 2800,
         "max_articles": 12,
-        "min_articles": 8,
+        "min_articles": 1,             # V14.5: No minimum
         "words_per_article": 240,
         "style": "approfondi et analytique"
     }
@@ -2613,9 +2613,13 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
     return formatted
 
 
-def select_smart_content(user_id: str, max_articles: int, min_articles: int = 5) -> list[dict]:
+def select_smart_content(user_id: str, max_articles: int, min_articles: int = 1) -> list[dict]:
     """
     Smart content selection with thematic clustering.
+    
+    V14.5 CHANGES:
+    - min_articles removed (default 1) - generate podcast even with few articles
+    - Uses signal mix weights for topic selection
     
     V12 CHANGES:
     - Clustering is LESS aggressive (only groups same EVENT, not same domain)
