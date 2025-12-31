@@ -475,12 +475,47 @@ def get_prompt_from_db(prompt_name: str, default: str) -> str:
 # ============================================
 # DEPRECATED PROMPTS - REMOVED IN V14.5
 # ============================================
-# DIALOGUE_SEGMENT_PROMPT - Removed: Use dialogue_cluster instead (all content goes through Perplexity synthesis)
-# 
-# Only DIALOGUE_CLUSTER_PROMPT remains for dialogue generation
+# Only DIALOGUE_CLUSTER_PROMPT remains for multi-source dialogue generation
+# DIALOGUE_SEGMENT_PROMPT kept for single-article fallback with correct variables
 
-# Fallback for code that still references removed prompts
-DIALOGUE_SEGMENT_PROMPT = DIALOGUE_CLUSTER_PROMPT  # Redirect to cluster prompt
+# Single article prompt - uses different variables than cluster
+DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
+{topic_intention}
+
+## ARTICLE À TRANSFORMER
+**Titre**: {title}
+**Source**: {source_label}
+**Contenu**:
+{content}
+
+## LES HÔTES
+- [B] L'ANALYSTE (voix masculine) = Présente les faits clés avec données
+- [A] LA SCEPTIQUE (voix féminine) = Challenge et met en perspective
+
+## RÈGLES ABSOLUES
+⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
+⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
+⚠️ STYLE DENSE: Chaque phrase apporte de l'information
+⚠️ CITE LA SOURCE: {attribution_instruction}
+
+## FORMAT
+[B]
+(expose les faits avec données)
+
+[A]
+(challenge ou met en perspective)
+
+## STRUCTURE OBLIGATOIRE
+1. [B] ouvre avec les faits clés en citant la source
+2. [A] challenge ou demande une précision
+3. [B] répond avec des données complémentaires
+4. [A] apporte une nuance finale
+5. [B] CONCLUT avec une synthèse
+
+Minimum 6 répliques. {previous_segment_rule}
+{previous_segment_context}
+
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}):"""
 
 # Multi-source prompt - kept because it uses different variables than cluster
 DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
