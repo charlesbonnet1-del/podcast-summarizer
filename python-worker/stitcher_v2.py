@@ -476,13 +476,47 @@ def get_prompt_from_db(prompt_name: str, default: str) -> str:
 # DEPRECATED PROMPTS - REMOVED IN V14.5
 # ============================================
 # DIALOGUE_SEGMENT_PROMPT - Removed: Use dialogue_cluster instead (all content goes through Perplexity synthesis)
-# DIALOGUE_MULTI_SOURCE_PROMPT - Removed: Use dialogue_cluster instead (clustering handles multi-source)
 # 
 # Only DIALOGUE_CLUSTER_PROMPT remains for dialogue generation
 
 # Fallback for code that still references removed prompts
 DIALOGUE_SEGMENT_PROMPT = DIALOGUE_CLUSTER_PROMPT  # Redirect to cluster prompt
-DIALOGUE_MULTI_SOURCE_PROMPT = DIALOGUE_CLUSTER_PROMPT  # Redirect to cluster prompt
+
+# Multi-source prompt - kept because it uses different variables than cluster
+DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
+{topic_intention}
+
+## SOURCES ({source_count} articles sur ce sujet)
+{sources_content}
+
+## LES HÔTES
+- [B] L'ANALYSTE (voix masculine) = Synthétise les informations des différentes sources
+- [A] LA SCEPTIQUE (voix féminine) = Challenge et met en perspective
+
+## RÈGLES ABSOLUES
+⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
+⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
+⚠️ STYLE DENSE: Chaque phrase apporte de l'information
+⚠️ CITE LES SOURCES: "Selon [source]...", "D'après [source]..."
+
+## FORMAT
+[B]
+(synthétise les sources avec données)
+
+[A]
+(challenge ou met en perspective)
+
+## STRUCTURE OBLIGATOIRE
+1. [B] ouvre en synthétisant les faits clés des sources
+2. [A] challenge ou demande une précision
+3. [B] répond avec des données complémentaires
+4. [A] apporte une nuance finale
+5. [B] CONCLUT avec une synthèse
+
+Minimum 6 répliques. {previous_segment_rule}
+{previous_segment_context}
+
+## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}):"""
 
 # Rule to add when there's a previous segment (still used)
 PREVIOUS_SEGMENT_RULE = """⚠️ NON-RÉPÉTITION: Un segment récent sur ce sujet existe. NE RÉPÈTE PAS les informations déjà couvertes. Apporte des NOUVELLES informations ou un nouvel angle."""
