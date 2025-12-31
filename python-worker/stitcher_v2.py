@@ -409,6 +409,32 @@ Minimum 6 répliques. Cite les sources naturellement.
 
 ## GÉNÈRE LE DIALOGUE ({word_count} mots):"""
 
+
+def get_prompt_from_db(prompt_name: str, default: str) -> str:
+    """
+    Fetch prompt from database if available, otherwise use default.
+    
+    Create a table 'prompts' in Supabase:
+    CREATE TABLE prompts (
+        name TEXT PRIMARY KEY,
+        content TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW()
+    );
+    
+    INSERT INTO prompts (name, content) VALUES ('dialogue_cluster', '...');
+    INSERT INTO prompts (name, content) VALUES ('dialogue_segment', '...');
+    """
+    try:
+        result = supabase.table("prompts").select("content").eq("name", prompt_name).single().execute()
+        if result.data and result.data.get("content"):
+            log.info(f"📝 Using custom prompt from DB: {prompt_name}")
+            return result.data["content"]
+    except Exception as e:
+        # Table doesn't exist or no custom prompt - use default
+        pass
+    return default
+
+
 DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
 {topic_intention}
 ## LES HÔTES (Dialectique fonctionnelle, pas d'émotions simulées)
@@ -1159,7 +1185,10 @@ def generate_cluster_dialogue_script(
         # Get editorial intention for this topic
         topic_intention = get_topic_intention(topic_slug) if topic_slug else ""
         
-        prompt = DIALOGUE_CLUSTER_PROMPT.format(
+        # Get prompt (from DB if available, otherwise default)
+        prompt_template = get_prompt_from_db("dialogue_cluster", DIALOGUE_CLUSTER_PROMPT)
+        
+        prompt = prompt_template.format(
             word_count=word_count,
             style=style,
             theme=theme,
