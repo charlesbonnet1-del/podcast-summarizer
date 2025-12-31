@@ -2978,13 +2978,20 @@ def assemble_lego_podcast(
     
     # V13 FIX: Group items by TOPIC (keyword) for consolidation
     # This ensures ONE segment per topic, not one per article
+    # V14.5 FIX: Store topic separately, use title for display
     clusters = {}
+    cluster_topics = {}  # Map cluster_key -> topic keyword
     for item in items:
-        # Always group by topic (keyword), regardless of format
+        # Group by topic (keyword) for consolidation
         topic_key = item.get("keyword", item.get("topic_slug", "general"))
+        
+        # Use article title as cluster key for display (not keyword)
+        # Fall back to keyword only if no title
+        cluster_display_key = item.get("title") or item.get("_cluster_theme") or topic_key
         
         if topic_key not in clusters:
             clusters[topic_key] = []
+            cluster_topics[topic_key] = topic_key
         clusters[topic_key].append(item)
     
     log.info(f"📊 Processing {len(clusters)} topics (consolidated from {len(items)} articles)")
@@ -3030,12 +3037,17 @@ def assemble_lego_podcast(
         first_cluster_key = list(clusters.keys())[0]
         first_cluster_items = clusters[first_cluster_key]
         
-        log.info(f"🎵 Pre-generating first dialogue for intro block: {first_cluster_key}")
+        # V14.5: Use actual article title for display, not keyword
+        first_display_title = first_cluster_items[0].get("title") or first_cluster_items[0].get("_cluster_theme") or first_cluster_key
+        
+        log.info(f"🎵 Pre-generating first dialogue for intro block: {first_display_title[:50]}")
         
         if len(first_cluster_items) > 1:
+            # V14.5: Use first article's title as theme, not keyword
+            first_article_title = first_cluster_items[0].get("title") or first_cluster_items[0].get("_cluster_theme") or first_cluster_key
             first_segment_data = get_or_create_multi_source_segment(
                 articles=first_cluster_items,
-                cluster_theme=first_cluster_key,
+                cluster_theme=first_article_title,
                 target_date=target_date,
                 edition=edition,
                 format_config=config,
@@ -3132,8 +3144,11 @@ def assemble_lego_podcast(
     cluster_idx = 0
     previous_topic = None
     
-    for cluster_theme, cluster_items in clusters.items():
+    for cluster_topic, cluster_items in clusters.items():
         cluster_idx += 1
+        
+        # V14.5: Use actual article title for display, not keyword
+        cluster_display_title = cluster_items[0].get("title") or cluster_items[0].get("_cluster_theme") or cluster_topic
         
         # Get topic for transition
         current_topic = cluster_items[0].get("keyword", "general")
@@ -3157,11 +3172,11 @@ def assemble_lego_podcast(
         
         if len(cluster_items) > 1:
             # Multi-source topic - create enriched segment
-            log.info(f"🔥 Processing MULTI-SOURCE cluster {cluster_idx}: {cluster_theme[:50]}... ({len(cluster_items)} articles)")
+            log.info(f"🔥 Processing MULTI-SOURCE cluster {cluster_idx}: {cluster_display_title[:50]}... ({len(cluster_items)} articles)")
             
             segment = get_or_create_multi_source_segment(
                 articles=cluster_items,
-                cluster_theme=cluster_theme,
+                cluster_theme=cluster_display_title,
                 target_date=target_date,
                 edition=edition,
                 format_config=config,
@@ -3174,13 +3189,13 @@ def assemble_lego_podcast(
                     "audio_path": segment.get("audio_path"),
                     "audio_url": segment.get("audio_url"),
                     "duration": segment.get("duration", 90),
-                    "title": f"[MULTI] {cluster_theme}",
+                    "title": cluster_display_title,
                     "url": cluster_items[0]["url"]
                 })
                 
                 # Add chapter
                 chapters.append({
-                    "title": cluster_theme[:60],  # Truncate long titles
+                    "title": cluster_display_title[:60],  # Truncate long titles
                     "start_time": chapter_start,
                     "type": "news",
                     "topic": current_topic,
@@ -3193,10 +3208,10 @@ def assemble_lego_podcast(
                 # Add all sources
                 for article in cluster_items:
                     sources_data.append({
-                        "title": article.get("title"),
+                        "title": article.get("title") or cluster_display_title,
                         "url": article.get("url"),
                         "domain": urlparse(article["url"]).netloc.replace("www.", ""),
-                        "cluster": cluster_theme
+                        "cluster": cluster_display_title
                     })
                 
                 # Collect digests for all articles in cluster
