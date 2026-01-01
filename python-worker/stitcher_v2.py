@@ -1515,8 +1515,14 @@ def get_cached_segment(content_hash: str, target_date: date, edition: str) -> Op
 
 def cache_segment(content_hash: str, topic_slug: str, target_date: date, edition: str,
                   source_url: str, source_title: str, script_text: str,
-                  audio_url: str, audio_duration: int) -> bool:
-    """Save segment to cache."""
+                  audio_url: str, audio_duration: int,
+                  relevance_score: float = 0.5, timeliness_score: float = 0.5,
+                  article_count: int = 1) -> bool:
+    """
+    Save segment to cache.
+    
+    V17: Added relevance_score, timeliness_score, article_count for breaking news detection.
+    """
     try:
         domain = urlparse(source_url).netloc.replace("www.", "") if source_url else ""
         
@@ -1531,7 +1537,11 @@ def cache_segment(content_hash: str, topic_slug: str, target_date: date, edition
             "script_text": script_text,
             "audio_url": audio_url,
             "audio_duration": audio_duration,
-            "use_count": 1
+            "use_count": 1,
+            # V17: Additional scoring fields
+            "relevance_score": relevance_score,
+            "timeliness_score": timeliness_score,
+            "article_count": article_count
         }).execute()
         return True
     except Exception as e:
@@ -2575,20 +2585,32 @@ def calculate_final_score(item: dict, user_weights: dict, now: datetime) -> floa
 
 def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
     """
-    INVENTORY-FIRST Selection Algorithm (14+1)
+    INVENTORY-FIRST Selection Algorithm V17
     
-    The podcast is a curated selection from stock, not a perishable news feed.
+    Respects user topic preferences with intelligent fallback.
     
     Algorithm:
     1. Get segments from cache (7 days eligible)
     2. Exclude segments already served to this user (user_history)
-    3. Calculate Final_Score = (Relevance * User_Weight) * (1 / (1 + Age_days))
-    4. Select top 14 by Final_Score
-    5. Inject 1 "Wildcard" (best raw score from a 0% weight topic) at position 5-12
+    3. Classify topics by priority tier based on user weights
+    4. Select from HIGH priority first, then MEDIUM, then LOW
+    5. Topics at 0% are EXCLUDED except for Breaking News (exceptional events)
+    
+    Priority Tiers:
+    - HIGH:    70-100% weight → Served first
+    - MEDIUM:  30-69% weight  → Fill gaps
+    - LOW:     1-29% weight   → Last resort
+    - EXCLUDED: 0% weight     → Never (except breaking news)
+    
+    Breaking News Exception:
+    - relevance_score >= 0.95
+    - article_count >= 5 (multi-source)
+    - timeliness_score >= 0.8
+    → Inject max 1 at end of podcast
     
     Returns: List of selected segments ready for podcast assembly
     """
-    log.info(f"🎯 Running INVENTORY-FIRST selection for user {user_id[:8]}...")
+    log.info(f"🎯 Running INVENTORY-FIRST V17 selection for user {user_id[:8]}...")
     
     now = datetime.now()
     from datetime import timedelta
@@ -2598,8 +2620,16 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
     user_weights = get_user_topic_weights(user_id)
     log.info(f"📊 User weights: {user_weights}")
     
-    # Find topics with 0% weight (for wildcard)
-    zero_weight_topics = [t for t, w in user_weights.items() if w == 0]
+    # Classify topics by priority tier
+    high_priority_topics = [t for t, w in user_weights.items() if w >= 70]
+    medium_priority_topics = [t for t, w in user_weights.items() if 30 <= w < 70]
+    low_priority_topics = [t for t, w in user_weights.items() if 1 <= w < 30]
+    excluded_topics = [t for t, w in user_weights.items() if w == 0]
+    
+    log.info(f"   🔴 HIGH (70-100%): {high_priority_topics}")
+    log.info(f"   🟡 MEDIUM (30-69%): {medium_priority_topics}")
+    log.info(f"   🟢 LOW (1-29%): {low_priority_topics}")
+    log.info(f"   ⛔ EXCLUDED (0%): {excluded_topics}")
     
     # 2. Get already-served segment hashes
     served_hashes = get_user_history_hashes(user_id)
@@ -2608,7 +2638,7 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
     # 3. Get eligible segments from cache
     try:
         result = supabase.table("audio_segments") \
-            .select("id, content_hash, topic_slug, source_title, source_url, audio_url, audio_duration, script_text, relevance_score, created_at") \
+            .select("id, content_hash, topic_slug, source_title, source_url, audio_url, audio_duration, script_text, relevance_score, timeliness_score, article_count, created_at") \
             .gte("created_at", cache_cutoff) \
             .order("created_at", desc=True) \
             .limit(200) \
@@ -2636,54 +2666,108 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
     
     if len(eligible) < max_segments // 2:
         log.warning(f"⚠️ Only {len(eligible)} eligible segments, may need fresh content")
-        # Could trigger fetcher here if needed
     
     # 5. Calculate Final_Score for each segment
     for seg in eligible:
         seg["_final_score"] = calculate_final_score(seg, user_weights, now)
-        seg["keyword"] = seg.get("topic_slug", "general")  # Normalize field name
+        seg["keyword"] = seg.get("topic_slug", "general")
     
-    # 6. Separate main candidates and wildcard candidates
-    main_candidates = []
-    wildcard_candidates = []
+    # 6. Separate segments by priority tier
+    high_candidates = []
+    medium_candidates = []
+    low_candidates = []
+    excluded_candidates = []  # For breaking news check
     
     for seg in eligible:
         topic = seg.get("topic_slug", "general")
-        if topic in zero_weight_topics:
-            wildcard_candidates.append(seg)
+        if topic in excluded_topics:
+            excluded_candidates.append(seg)
+        elif topic in high_priority_topics:
+            high_candidates.append(seg)
+        elif topic in medium_priority_topics:
+            medium_candidates.append(seg)
+        elif topic in low_priority_topics:
+            low_candidates.append(seg)
         else:
-            main_candidates.append(seg)
+            # Topic not in user weights - treat as medium priority
+            medium_candidates.append(seg)
     
-    # 7. Sort main candidates by Final_Score (descending)
-    main_candidates.sort(key=lambda x: x["_final_score"], reverse=True)
+    log.info(f"📊 Candidates: HIGH={len(high_candidates)}, MEDIUM={len(medium_candidates)}, LOW={len(low_candidates)}, EXCLUDED={len(excluded_candidates)}")
     
-    # 8. Select top 14
-    selected = main_candidates[:max_segments]
-    log.info(f"📋 Selected {len(selected)} main segments")
+    # 7. Sort each tier by Final_Score (descending)
+    high_candidates.sort(key=lambda x: x["_final_score"], reverse=True)
+    medium_candidates.sort(key=lambda x: x["_final_score"], reverse=True)
+    low_candidates.sort(key=lambda x: x["_final_score"], reverse=True)
     
-    # 9. Inject Wildcard if available (position 5-12)
-    if wildcard_candidates and len(selected) >= 5:
-        # Sort wildcards by raw relevance (ignore user weight)
-        wildcard_candidates.sort(key=lambda x: x.get("relevance_score", 0.5), reverse=True)
-        wildcard = wildcard_candidates[0]
+    # 8. Select segments respecting priority tiers
+    selected = []
+    
+    # First: Take all HIGH priority (up to max)
+    for seg in high_candidates:
+        if len(selected) < max_segments:
+            selected.append(seg)
+            log.info(f"   🔴 HIGH: {seg.get('source_title', '')[:40]}... (score: {seg['_final_score']:.3f})")
+    
+    # Second: Fill with MEDIUM priority
+    if len(selected) < max_segments:
+        for seg in medium_candidates:
+            if len(selected) < max_segments:
+                selected.append(seg)
+                log.info(f"   🟡 MEDIUM: {seg.get('source_title', '')[:40]}... (score: {seg['_final_score']:.3f})")
+    
+    # Third: Fill with LOW priority
+    if len(selected) < max_segments:
+        for seg in low_candidates:
+            if len(selected) < max_segments:
+                selected.append(seg)
+                log.info(f"   🟢 LOW: {seg.get('source_title', '')[:40]}... (score: {seg['_final_score']:.3f})")
+    
+    log.info(f"📋 Selected {len(selected)} segments from user-preferred topics")
+    
+    # 9. Breaking News Exception - Check excluded topics for major events
+    # Criteria: relevance >= 0.95 AND article_count >= 5 AND timeliness >= 0.8
+    BREAKING_NEWS_RELEVANCE = 0.95
+    BREAKING_NEWS_ARTICLE_COUNT = 5
+    BREAKING_NEWS_TIMELINESS = 0.8
+    
+    breaking_news = None
+    for seg in excluded_candidates:
+        relevance = seg.get("relevance_score", 0)
+        article_count = seg.get("article_count", 1)
+        timeliness = seg.get("timeliness_score", 0.5)
         
-        # Insert at random position between 5 and min(12, len(selected))
-        import random
-        insert_pos = random.randint(5, min(12, len(selected)))
-        selected.insert(insert_pos, wildcard)
+        is_breaking = (
+            relevance >= BREAKING_NEWS_RELEVANCE and
+            article_count >= BREAKING_NEWS_ARTICLE_COUNT and
+            timeliness >= BREAKING_NEWS_TIMELINESS
+        )
         
-        log.info(f"🃏 WILDCARD injected at position {insert_pos}: {wildcard.get('source_title', '')[:40]}... (topic: {wildcard.get('topic_slug')})")
+        if is_breaking:
+            if breaking_news is None or relevance > breaking_news.get("relevance_score", 0):
+                breaking_news = seg
+    
+    # Inject breaking news at end of podcast (position 13-15)
+    if breaking_news and len(selected) >= 5:
+        # Insert at end (last 3 positions)
+        insert_pos = min(len(selected), max_segments - 1)
+        selected.insert(insert_pos, breaking_news)
         
-        # Trim to max if needed
-        selected = selected[:max_segments + 1]  # 14 + 1 wildcard
+        log.info(f"🚨 BREAKING NEWS injecté position {insert_pos + 1}: {breaking_news.get('source_title', '')[:40]}...")
+        log.info(f"   Topic: {breaking_news.get('topic_slug')} (excluded par user)")
+        log.info(f"   Relevance: {breaking_news.get('relevance_score', 0):.2f}, Articles: {breaking_news.get('article_count', 1)}, Timeliness: {breaking_news.get('timeliness_score', 0):.2f}")
+        
+        # Trim to max + 1 for breaking news
+        selected = selected[:max_segments + 1]
     
     # 10. Log final selection
-    log.info(f"✅ INVENTORY-FIRST: {len(selected)} segments selected")
+    log.info(f"✅ INVENTORY-FIRST V17: {len(selected)} segments selected")
     for i, seg in enumerate(selected):
         score = seg.get("_final_score", 0)
         topic = seg.get("topic_slug", "?")
         title = seg.get("source_title", "")[:35]
-        log.info(f"   {i+1}. [{topic}] {title}... (score: {score:.3f})")
+        is_breaking = seg == breaking_news
+        marker = "🚨" if is_breaking else f"{i+1}."
+        log.info(f"   {marker} [{topic}] {title}... (score: {score:.3f})")
     
     # Convert to format expected by assembler
     formatted = []
@@ -2697,7 +2781,8 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
             "audio_duration": seg.get("audio_duration"),
             "script_text": seg.get("script_text"),
             "_from_cache": True,
-            "_final_score": seg.get("_final_score", 0)
+            "_final_score": seg.get("_final_score", 0),
+            "_is_breaking_news": seg == breaking_news
         })
     
     return formatted
@@ -2706,6 +2791,10 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
 def select_smart_content(user_id: str, max_articles: int, min_articles: int = 1) -> list[dict]:
     """
     Smart content selection with thematic clustering.
+    
+    V17 CHANGES:
+    - Filters out topics with 0% weight (respects user preferences)
+    - Topics at 0% are EXCLUDED from selection
     
     V14.5 CHANGES:
     - min_articles removed (default 1) - generate podcast even with few articles
@@ -2721,6 +2810,11 @@ def select_smart_content(user_id: str, max_articles: int, min_articles: int = 1)
     - Returns clusters instead of individual articles
     """
     try:
+        # V17: Get user weights to filter excluded topics
+        user_weights = get_user_topic_weights(user_id)
+        excluded_topics = [t for t, w in user_weights.items() if w == 0]
+        log.info(f"⛔ Excluded topics (0% weight): {excluded_topics}")
+        
         result = supabase.table("content_queue") \
             .select("url, title, keyword, source, source_name, vertical_id") \
             .eq("user_id", user_id) \
@@ -2734,7 +2828,15 @@ def select_smart_content(user_id: str, max_articles: int, min_articles: int = 1)
             return []
         
         items = result.data
-        log.info(f"📋 Queue has {len(items)} PENDING items")
+        log.info(f"📋 Queue has {len(items)} PENDING items (before filtering)")
+        
+        # V17: Filter out excluded topics
+        items = [item for item in items if item.get("keyword", "general") not in excluded_topics]
+        log.info(f"📋 After filtering excluded topics: {len(items)} items")
+        
+        if not items:
+            log.warning("❌ No items after filtering excluded topics!")
+            return []
         
         # Separate priority vs bing
         priority_items = []
@@ -2832,8 +2934,16 @@ def select_smart_content(user_id: str, max_articles: int, min_articles: int = 1)
 
 
 def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
-    """Select content prioritizing GSheet sources."""
+    """
+    Select content prioritizing GSheet sources.
+    
+    V17: Filters out topics with 0% weight.
+    """
     try:
+        # V17: Get user weights to filter excluded topics
+        user_weights = get_user_topic_weights(user_id)
+        excluded_topics = [t for t, w in user_weights.items() if w == 0]
+        
         result = supabase.table("content_queue") \
             .select("url, title, keyword, source, source_name, vertical_id") \
             .eq("user_id", user_id) \
@@ -2848,8 +2958,15 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
         
         items = result.data
         
+        # V17: Filter out excluded topics
+        items = [item for item in items if item.get("keyword", "general") not in excluded_topics]
+        
+        if not items:
+            log.warning("❌ No items after filtering excluded topics!")
+            return []
+        
         unique_sources = set(i.get("source", "NONE") for i in items)
-        log.info(f"📋 Queue has {len(items)} items, sources: {unique_sources}")
+        log.info(f"📋 Queue has {len(items)} items (after excluding {len(excluded_topics)} topics), sources: {unique_sources}")
         
         priority_items = []
         bing_items = []
