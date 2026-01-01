@@ -117,9 +117,11 @@ TOPIC_QUERIES = {
 # GSHEET SOURCING (Level 2)
 # ============================================
 
-def get_gsheet_sources_for_topics(topic_ids: list[str], include_international: bool = False) -> list[dict]:
+def get_gsheet_sources_for_topics(topic_ids: list[str]) -> list[dict]:
     """
-    Get articles from GSheet RSS library (Level 2 sourcing).
+    Get articles from GSheet RSS library (Level 1 sourcing).
+    
+    V17: Fetches ALL sources (FR + INT) - no more international toggle.
     Returns list of articles fetched from trusted RSS sources.
     """
     try:
@@ -127,25 +129,22 @@ def get_gsheet_sources_for_topics(topic_ids: list[str], include_international: b
         
         library = GSheetSourceLibrary()
         if not library.sheet:
-            log.warning("GSheet not available, skipping Level 2 sourcing")
+            log.warning("GSheet not available, skipping Level 1 sourcing")
             return []
         
         articles = []
         seen_urls = set()
         
-        # Get FR sources
-        sources = library.get_sources_for_topics(topic_ids, origin="FR")
-        log.info("Found GSheet sources (FR)", count=len(sources))
-        
-        # Add international sources if enabled
-        if include_international:
-            intl_sources = library.get_sources_for_topics(topic_ids, origin="INT")
-            sources.extend(intl_sources)
-            log.info("Found GSheet sources (INT)", count=len(intl_sources))
+        # V17: Get ALL sources (FR + INT combined)
+        sources_fr = library.get_sources_for_topics(topic_ids, origin="FR")
+        sources_int = library.get_sources_for_topics(topic_ids, origin="INT")
+        sources = sources_fr + sources_int
+        log.info("Found GSheet sources", count_fr=len(sources_fr), count_int=len(sources_int), total=len(sources))
         
         # Fetch from top sources (sorted by score)
         # V17: Increased max_items per feed to 5 (was 2) - no topic limit
-        for source in sources[:30]:  # V14: Increased from 15 to 30 RSS feeds
+        # V17: No limit on number of RSS feeds - process all sources
+        for source in sources:
             feed_articles = fetch_rss_feed(source["url"], max_items=5)
             
             if not feed_articles:
@@ -256,11 +255,12 @@ def fetch_bing_for_query(query: str, market: str, max_items: int = 3) -> list[di
     return parse_bing_rss(xml, max_items, market)
 
 
-def fetch_bing_for_topics(topic_ids: list[str], include_international: bool = False, 
-                          max_articles: int = 10) -> list[dict]:
+def fetch_bing_for_topics(topic_ids: list[str], max_articles: int = 10) -> list[dict]:
     """
-    Fetch articles from Bing News (Level 3 - Backup).
+    Fetch articles from Bing News (Level 2 - Backup).
     Used only when GSheet sources don't provide enough content.
+    
+    V17: Always fetches FR + US markets (no international toggle).
     """
     articles = []
     seen_urls = set()
@@ -277,14 +277,13 @@ def fetch_bing_for_topics(topic_ids: list[str], include_international: bool = Fa
         
         time.sleep(REQUEST_DELAY)
         
-        # International
-        if include_international:
-            for article in fetch_bing_for_query(query, "US", 1):
-                if article["url"] not in seen_urls:
-                    seen_urls.add(article["url"])
-                    article["topic"] = topic_id
-                    articles.append(article)
-            time.sleep(REQUEST_DELAY)
+        # V17: Always include US market (was conditional on include_international)
+        for article in fetch_bing_for_query(query, "US", 1):
+            if article["url"] not in seen_urls:
+                seen_urls.add(article["url"])
+                article["topic"] = topic_id
+                articles.append(article)
+        time.sleep(REQUEST_DELAY)
         
         if len(articles) >= max_articles:
             break
@@ -311,7 +310,7 @@ def run_fetcher(edition: str = "morning"):
     # Get all users with their settings
     try:
         users_result = supabase.table("users") \
-            .select("id, first_name, include_international, selected_verticals") \
+            .select("id, first_name, selected_verticals") \
             .execute()
         users = users_result.data or []
     except Exception as e:
@@ -345,9 +344,9 @@ def run_fetcher(edition: str = "morning"):
     
     for user in users:
         user_id = user["id"]
-        include_intl = user.get("include_international", False)
+        # V17: Removed include_international - always fetch all sources
         
-        log.info("Processing user", user_id=user_id[:8], intl=include_intl)
+        log.info("Processing user", user_id=user_id[:8])
         
         # Get user's topics (keywords from user_interests)
         user_topics = interests_by_user.get(user_id, [])
@@ -364,19 +363,20 @@ def run_fetcher(edition: str = "morning"):
         seen_urls = set()
         
         # ============================================
-        # LEVEL 2: GSheet RSS Library
+        # LEVEL 1: GSheet RSS Library (FR + INT)
         # ============================================
-        gsheet_articles = get_gsheet_sources_for_topics(topic_ids, include_intl)
+        # V17: Always fetches all sources (no international toggle)
+        gsheet_articles = get_gsheet_sources_for_topics(topic_ids)
         
         for article in gsheet_articles:
             if article["url"] not in seen_urls:
                 seen_urls.add(article["url"])
                 articles.append(article)
         
-        log.info("Level 2 (GSheet) articles", count=len(articles), user=user_id[:8])
+        log.info("Level 1 (GSheet) articles", count=len(articles), user=user_id[:8])
         
         # ============================================
-        # LEVEL 3: Bing News (Backup)
+        # LEVEL 2: Bing News (Backup)
         # ============================================
         # Only fetch from Bing if we don't have enough articles
         target_articles = len(topic_ids) * 3  # ~3 articles per topic
@@ -387,9 +387,9 @@ def run_fetcher(edition: str = "morning"):
                     need=remaining, 
                     user=user_id[:8])
             
+            # V17: Always fetches FR + US (no international toggle)
             bing_articles = fetch_bing_for_topics(
                 topic_ids, 
-                include_intl, 
                 max_articles=remaining
             )
             
@@ -448,7 +448,7 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
     try:
         # Get user settings
         user_result = supabase.table("users") \
-            .select("id, first_name, include_international, selected_verticals") \
+            .select("id, first_name, selected_verticals") \
             .eq("id", user_id) \
             .single() \
             .execute()
@@ -458,7 +458,7 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
             return 0
         
         user = user_result.data
-        include_intl = user.get("include_international", False)
+        # V17: Removed include_international - always fetch all sources
         
         # Get user's topics
         interests_result = supabase.table("user_interests") \
@@ -488,8 +488,9 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
         for item in (existing.data or []):
             seen_urls.add(item["url"])
         
-        # Level 2: GSheet RSS
-        gsheet_articles = get_gsheet_sources_for_topics(topic_ids, include_intl)
+        # Level 1: GSheet RSS (FR + INT)
+        # V17: Always fetches all sources
+        gsheet_articles = get_gsheet_sources_for_topics(topic_ids)
         
         for article in gsheet_articles:
             if article["url"] not in seen_urls:
@@ -498,11 +499,12 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
         
         log.info(f"📰 GSheet articles: {len(articles)}")
         
-        # Level 3: Bing News backup - only if GSheet gave very few articles
+        # Level 2: Bing News backup - only if GSheet gave very few articles
         target_articles = len(topic_ids) * 5  # V14: Increased from 3 to 5 per topic
         if len(articles) < target_articles:
             remaining = target_articles - len(articles)
-            bing_articles = fetch_bing_for_topics(topic_ids, include_intl, max_articles=remaining)
+            # V17: Always fetches FR + US
+            bing_articles = fetch_bing_for_topics(topic_ids, max_articles=remaining)
             
             for article in bing_articles:
                 if article["url"] not in seen_urls:

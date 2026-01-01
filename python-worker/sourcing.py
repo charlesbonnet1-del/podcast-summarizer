@@ -1032,13 +1032,13 @@ def fetch_all_sources(user_id: str = None) -> list[dict]:
 def fetch_content_for_user(
     user_id: str,
     topic_ids: list[str],
-    target_duration_min: int = 20,
-    include_international: bool = False
+    target_duration_min: int = 20
 ) -> dict:
     """
     Unified sourcing function with 2-level hierarchy.
     
     V17: Removed manual URLs (level1) - will be separate podcast category.
+    V17: Always fetches all sources (FR + INT) - no international toggle.
     
     Returns:
         {
@@ -1056,15 +1056,16 @@ def fetch_content_for_user(
     # Estimate content needs (150 words/min, ~3 articles per 5 min)
     target_articles = max(3, target_duration_min // 5)
     
-    # Level 1: GSheet RSS Library
+    # Level 1: GSheet RSS Library (FR + INT)
+    # V17: Always fetch all sources
     if target_articles > 0 and topic_ids:
         library = GSheetSourceLibrary()
-        sources = library.get_sources_for_topics(topic_ids, origin="FR")
+        sources_fr = library.get_sources_for_topics(topic_ids, origin="FR")
+        sources_int = library.get_sources_for_topics(topic_ids, origin="INT")
+        sources = sources_fr + sources_int
         
-        if include_international:
-            sources += library.get_sources_for_topics(topic_ids, origin="INT")
-        
-        for source in sources[:10]:  # Max 10 RSS feeds
+        # V17: No limit on number of RSS feeds - process all sources
+        for source in sources:
             articles = fetch_rss_feed(source["url"], max_items=2)
             
             if not articles:
