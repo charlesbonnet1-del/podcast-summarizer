@@ -14,7 +14,6 @@ V13 CHANGES:
 - Inventory-first architecture
 """
 import os
-import gc  # V16: Garbage collection for memory management
 import hashlib
 import tempfile
 from datetime import datetime, date, timezone, timedelta
@@ -131,16 +130,16 @@ FORMAT_CONFIG = {
     "flash": {
         "duration_minutes": 4,
         "total_words": 1000,           # Target ~4-5 min with segments
-        "max_articles": 7,             # Max articles to select
-        "min_articles": 1,             # V14.5: No minimum - use whatever is available
+        "max_segments": 4,             # V17: 3-4 segments (each segment can have multiple articles)
+        "min_segments": 3,
         "words_per_article": 150,      # ~35-40s per segment
         "style": "ultra-concis et percutant"
     },
     "digest": {
         "duration_minutes": 15,
         "total_words": 2800,
-        "max_articles": 12,
-        "min_articles": 1,             # V14.5: No minimum
+        "max_segments": 8,             # V17: 6-8 segments
+        "min_segments": 6,
         "words_per_article": 240,
         "style": "approfondi et analytique"
     }
@@ -476,47 +475,12 @@ def get_prompt_from_db(prompt_name: str, default: str) -> str:
 # ============================================
 # DEPRECATED PROMPTS - REMOVED IN V14.5
 # ============================================
-# Only DIALOGUE_CLUSTER_PROMPT remains for multi-source dialogue generation
-# DIALOGUE_SEGMENT_PROMPT kept for single-article fallback with correct variables
+# DIALOGUE_SEGMENT_PROMPT - Removed: Use dialogue_cluster instead (all content goes through Perplexity synthesis)
+# 
+# Only DIALOGUE_CLUSTER_PROMPT remains for dialogue generation
 
-# Single article prompt - uses different variables than cluster
-DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
-{topic_intention}
-
-## ARTICLE À TRANSFORMER
-**Titre**: {title}
-**Source**: {source_label}
-**Contenu**:
-{content}
-
-## LES HÔTES
-- [B] L'ANALYSTE (voix masculine) = Présente les faits clés avec données
-- [A] LA SCEPTIQUE (voix féminine) = Challenge et met en perspective
-
-## RÈGLES ABSOLUES
-⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
-⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
-⚠️ STYLE DENSE: Chaque phrase apporte de l'information
-⚠️ CITE LA SOURCE: {attribution_instruction}
-
-## FORMAT
-[B]
-(expose les faits avec données)
-
-[A]
-(challenge ou met en perspective)
-
-## STRUCTURE OBLIGATOIRE
-1. [B] ouvre avec les faits clés en citant la source
-2. [A] challenge ou demande une précision
-3. [B] répond avec des données complémentaires
-4. [A] apporte une nuance finale
-5. [B] CONCLUT avec une synthèse
-
-Minimum 6 répliques. {previous_segment_rule}
-{previous_segment_context}
-
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}):"""
+# Fallback for code that still references removed prompts
+DIALOGUE_SEGMENT_PROMPT = DIALOGUE_CLUSTER_PROMPT  # Redirect to cluster prompt
 
 # Multi-source prompt - kept because it uses different variables than cluster
 DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
@@ -971,15 +935,10 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
             except:
                 pass
         
-        # V16: Clean up memory after audio generation
-        del combined
-        gc.collect()
-        
         return output_path
         
     except Exception as e:
         log.error(f"❌ Combine failed: {e}")
-        gc.collect()
         return None
 
 
@@ -1008,18 +967,15 @@ def enrich_content_with_perplexity(
     title: str,
     content: str,
     source_name: str
-) -> tuple[Optional[str], list[dict]]:
+) -> Optional[str]:
     """
     Enrich article content using Perplexity's web search.
     Only used for Digest format (15 min) to add depth.
-    
-    Returns:
-        (enriched_context, citations) - enriched text and list of citation dicts
-        Citations format: [{"title": "...", "url": "...", "source": "..."}]
+    Returns enriched context or None if unavailable.
     """
     if not perplexity_client:
         log.debug("Perplexity not available, skipping enrichment")
-        return None, []
+        return None
     
     try:
         prompt = ENRICHMENT_PROMPT.format(
@@ -1035,46 +991,12 @@ def enrich_content_with_perplexity(
         )
         
         enriched = response.choices[0].message.content.strip()
-        
-        # V15: Extract citations from Perplexity response
-        citations = []
-        
-        # Check if response has citations attribute (Perplexity API returns these)
-        if hasattr(response, 'citations') and response.citations:
-            for cite in response.citations:
-                if isinstance(cite, str):
-                    # Citation is just a URL
-                    citations.append({
-                        "title": cite.split("/")[-1][:50] if "/" in cite else cite[:50],
-                        "url": cite,
-                        "source": "perplexity"
-                    })
-                elif isinstance(cite, dict):
-                    citations.append({
-                        "title": cite.get("title", cite.get("url", "Source"))[:100],
-                        "url": cite.get("url", ""),
-                        "source": "perplexity"
-                    })
-        
-        # Also try to extract from choices[0] if citations are there
-        choice = response.choices[0]
-        if hasattr(choice, 'message'):
-            msg = choice.message
-            if hasattr(msg, 'citations') and msg.citations:
-                for cite in msg.citations:
-                    if isinstance(cite, str) and cite not in [c["url"] for c in citations]:
-                        citations.append({
-                            "title": cite.split("/")[-1][:50] if "/" in cite else cite[:50],
-                            "url": cite,
-                            "source": "perplexity"
-                        })
-        
-        log.info(f"✅ Perplexity enrichment: +{len(enriched.split())} words, {len(citations)} citations")
-        return enriched, citations
+        log.info(f"✅ Perplexity enrichment: +{len(enriched.split())} words context")
+        return enriched
         
     except Exception as e:
         log.warning(f"⚠️ Perplexity enrichment failed: {e}")
-        return None, []
+        return None
 
 
 def inject_premium_sources_to_deals(user_id: str) -> int:
@@ -1288,7 +1210,7 @@ def generate_dialogue_segment_script(
     user_id: str = None,
     source_type: str = None,
     metadata: dict = None
-) -> tuple[Optional[str], list[dict]]:
+) -> Optional[str]:
     """
     Generate DIALOGUE script for a segment.
     
@@ -1298,21 +1220,16 @@ def generate_dialogue_segment_script(
         user_id: User ID for context (optional)
         source_type: Type of source ("youtube_video", "article", etc.)
         metadata: Additional metadata (attribution_prefix for YouTube)
-    
-    Returns:
-        (script_text, perplexity_citations) - script and list of citation dicts
     """
     if not groq_client:
         log.error("Groq client not available")
-        return None, []
-    
-    perplexity_citations = []  # V15: Track Perplexity citations
+        return None
     
     try:
         # Enrich content with Perplexity for Digest mode
         enriched_context = None
         if use_enrichment:
-            enriched_context, perplexity_citations = enrich_content_with_perplexity(title, content, source_name)
+            enriched_context = enrich_content_with_perplexity(title, content, source_name)
         
         # Build content for prompt
         if enriched_context:
@@ -1434,7 +1351,7 @@ def ensure_bob_conclusion(script: str) -> str:
         script = script.rstrip() + f"\n\n[B]\n{conclusion}"
         log.info("✅ Added Bob conclusion to dialogue")
     
-    return script, perplexity_citations
+    return script
 
 
 # ============================================
@@ -1515,14 +1432,8 @@ def get_cached_segment(content_hash: str, target_date: date, edition: str) -> Op
 
 def cache_segment(content_hash: str, topic_slug: str, target_date: date, edition: str,
                   source_url: str, source_title: str, script_text: str,
-                  audio_url: str, audio_duration: int,
-                  relevance_score: float = 0.5, timeliness_score: float = 0.5,
-                  article_count: int = 1) -> bool:
-    """
-    Save segment to cache.
-    
-    V17: Added relevance_score, timeliness_score, article_count for breaking news detection.
-    """
+                  audio_url: str, audio_duration: int) -> bool:
+    """Save segment to cache."""
     try:
         domain = urlparse(source_url).netloc.replace("www.", "") if source_url else ""
         
@@ -1537,11 +1448,7 @@ def cache_segment(content_hash: str, topic_slug: str, target_date: date, edition
             "script_text": script_text,
             "audio_url": audio_url,
             "audio_duration": audio_duration,
-            "use_count": 1,
-            # V17: Additional scoring fields
-            "relevance_score": relevance_score,
-            "timeliness_score": timeliness_score,
-            "article_count": article_count
+            "use_count": 1
         }).execute()
         return True
     except Exception as e:
@@ -1639,8 +1546,7 @@ def get_or_create_segment(
     
     # 4. Generate DIALOGUE script (with Perplexity enrichment for Digest)
     # V12: Pass topic_slug to check for previous segment
-    # V15: Also capture Perplexity citations
-    script, perplexity_citations = generate_dialogue_segment_script(
+    script = generate_dialogue_segment_script(
         title=title,
         content=content,
         source_name=source_name,
@@ -1653,10 +1559,6 @@ def get_or_create_segment(
     
     if not script:
         return None
-    
-    # Log Perplexity citations if any
-    if perplexity_citations:
-        log.info(f"📚 Perplexity added {len(perplexity_citations)} citations")
     
     # 4. Generate DIALOGUE audio
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1699,8 +1601,7 @@ def get_or_create_segment(
         "url": url,
         "source_name": source_name,
         "cached": False,
-        "digest": digest,  # Include extracted digest
-        "perplexity_citations": perplexity_citations  # V15: Include Perplexity sources
+        "digest": digest  # Include extracted digest
     }
 
 
@@ -1895,7 +1796,7 @@ def create_intro_block(voice_intro_audio, ephemeride_audio, first_dialogue_audio
     - Music continues underneath until it naturally ends, then fades out
     
     Returns:
-        (combined_audio, total_duration_seconds, music_end_time_seconds)
+        (combined_audio, total_duration_seconds)
     """
     from pydub import AudioSegment
     
@@ -1926,11 +1827,10 @@ def create_intro_block(voice_intro_audio, ephemeride_audio, first_dialogue_audio
             combined += ephemeride_audio
         if first_dialogue_audio:
             combined += first_dialogue_audio
-        return combined, len(combined) // 1000, 0  # No music, so music_end = 0
+        return combined, len(combined) // 1000
     
     music = AudioSegment.from_mp3(intro_music_path)
     music_length = len(music)
-    music_end_time_seconds = music_length // 1000
     log.info(f"🎵 Music file length: {music_length/1000:.1f}s")
     
     # The block length is the MAX of: music length OR voice content end
@@ -2000,9 +1900,9 @@ def create_intro_block(voice_intro_audio, ephemeride_audio, first_dialogue_audio
     combined = combined.fade_in(200)
     
     total_duration = len(combined) // 1000
-    log.info(f"✅ Intro block ready: {total_duration}s (music ends at {music_end_time_seconds}s)")
+    log.info(f"✅ Intro block ready: {total_duration}s (music underneath until it ends)")
     
-    return combined, total_duration, music_end_time_seconds
+    return combined, total_duration
 
 
 def mix_intro_with_music(voice_audio, intro_music_path: str, ephemeride_audio=None) -> tuple:
@@ -2583,7 +2483,7 @@ def calculate_final_score(item: dict, user_weights: dict, now: datetime) -> floa
     return final_score
 
 
-def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
+def select_inventory_first(user_id: str, max_segments: int = 8) -> list[dict]:
     """
     INVENTORY-FIRST Selection Algorithm V17
     
@@ -2631,7 +2531,7 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
     log.info(f"   🟢 LOW (1-29%): {low_priority_topics}")
     log.info(f"   ⛔ EXCLUDED (0%): {excluded_topics}")
     
-    # 2. Get already-served segment hashes
+    # 2. Get already-served segment hashes (KEEP - no re-serve)
     served_hashes = get_user_history_hashes(user_id)
     log.info(f"📚 User has {len(served_hashes)} segments in history")
     
@@ -2702,7 +2602,7 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
     # 8. Select segments respecting priority tiers
     selected = []
     
-    # First: Take all HIGH priority (up to max)
+    # First: Take from HIGH priority (up to max)
     for seg in high_candidates:
         if len(selected) < max_segments:
             selected.append(seg)
@@ -2746,18 +2646,13 @@ def select_inventory_first(user_id: str, max_segments: int = 14) -> list[dict]:
             if breaking_news is None or relevance > breaking_news.get("relevance_score", 0):
                 breaking_news = seg
     
-    # Inject breaking news at end of podcast (position 13-15)
-    if breaking_news and len(selected) >= 5:
-        # Insert at end (last 3 positions)
-        insert_pos = min(len(selected), max_segments - 1)
-        selected.insert(insert_pos, breaking_news)
+    # Inject breaking news at end of podcast
+    if breaking_news and len(selected) >= 2:
+        selected.append(breaking_news)
         
-        log.info(f"🚨 BREAKING NEWS injecté position {insert_pos + 1}: {breaking_news.get('source_title', '')[:40]}...")
+        log.info(f"🚨 BREAKING NEWS injecté: {breaking_news.get('source_title', '')[:40]}...")
         log.info(f"   Topic: {breaking_news.get('topic_slug')} (excluded par user)")
         log.info(f"   Relevance: {breaking_news.get('relevance_score', 0):.2f}, Articles: {breaking_news.get('article_count', 1)}, Timeliness: {breaking_news.get('timeliness_score', 0):.2f}")
-        
-        # Trim to max + 1 for breaking news
-        selected = selected[:max_segments + 1]
     
     # 10. Log final selection
     log.info(f"✅ INVENTORY-FIRST V17: {len(selected)} segments selected")
@@ -2794,7 +2689,6 @@ def select_smart_content(user_id: str, max_articles: int, min_articles: int = 1)
     
     V17 CHANGES:
     - Filters out topics with 0% weight (respects user preferences)
-    - Topics at 0% are EXCLUDED from selection
     
     V14.5 CHANGES:
     - min_articles removed (default 1) - generate podcast even with few articles
@@ -3099,15 +2993,16 @@ def assemble_lego_podcast(
     
     config = FORMAT_CONFIG.get(format_type, FORMAT_CONFIG["digest"])
     target_minutes = config["duration_minutes"]
-    max_articles = config["max_articles"]
-    min_articles = config.get("min_articles", 5)
+    # V17: Use segments instead of articles
+    max_segments = config.get("max_segments", 8)
+    min_segments = config.get("min_segments", 6)
     
     log.info("=" * 60)
-    log.info(f"🎙️ ASSEMBLING PODCAST (Alice & Bob)")
+    log.info(f"🎙️ ASSEMBLING PODCAST V17 (Alice & Bob)")
     log.info(f"   Format: {format_type}")
     log.info(f"   Target: {target_minutes} minutes")
-    log.info(f"   Max articles: {max_articles}")
-    log.info(f"   Min articles: {min_articles}")
+    log.info(f"   Segments: {min_segments}-{max_segments} (+ potential breaking news)")
+    log.info(f"   Selection: Priority tiers (HIGH → MEDIUM → LOW)")
     log.info("=" * 60)
     
     # V12 DIAGNOSTIC: Count pending content before selection
@@ -3133,8 +3028,8 @@ def assemble_lego_podcast(
         log.info(f"   By source: {source_counts}")
         log.info(f"   By topic: {topic_counts}")
         
-        if pending_count < min_articles:
-            log.warning(f"⚠️ CRITICAL: Only {pending_count} pending articles, need at least {min_articles}!")
+        if pending_count < min_segments:
+            log.warning(f"⚠️ CRITICAL: Only {pending_count} pending articles, need at least {min_segments}!")
     except Exception as e:
         log.warning(f"⚠️ Could not run queue diagnostic: {e}")
     
@@ -3156,27 +3051,26 @@ def assemble_lego_podcast(
     except Exception as e:
         log.debug(f"Premium injection skipped: {e}")
     
-    # V14: Try CLUSTER-BASED selection first (pre-computed daily clusters)
-    # Falls back to inventory-first, then smart_content
-    min_clusters = config.get("min_articles", 5)
+    # V17: Selection cascade based on priority tiers
+    # 1. Try cluster-based selection
+    # 2. Try inventory-first (priority tiers)
+    # 3. Fallback to smart_content
     
-    items = select_from_clusters(user_id, max_articles)
+    items = select_from_clusters(user_id, max_segments)
     
-    if len(items) < min_clusters:
+    if len(items) < min_segments:
         log.info(f"📦 Only {len(items)} from clusters, trying inventory cache...")
-        # Try inventory-first (from segment cache with scoring)
-        items = select_inventory_first(user_id, max_articles)
+        items = select_inventory_first(user_id, max_segments)
     
-    # If still not enough, use content_queue with topic grouping
-    if len(items) < min_clusters:
+    if len(items) < min_segments:
         log.warning(f"⚠️ Only {len(items)} from inventory, using content_queue")
-        items = select_smart_content(user_id, max_articles, min_articles=min_clusters)
+        items = select_smart_content(user_id, max_segments, min_articles=min_segments)
     
     if not items:
         log.warning("❌ No content to process")
         return None
     
-    log.info(f"📦 Selected {len(items)} articles for processing")
+    log.info(f"📦 Selected {len(items)} segments for processing")
     
     target_date = date.today()
     edition = "morning" if datetime.now().hour < 14 else "evening"
@@ -3265,17 +3159,12 @@ def assemble_lego_podcast(
                 user_id=user_id
             )
         else:
-            item = first_cluster_items[0]
             first_segment_data = get_or_create_segment(
-                url=item["url"],
-                title=item.get("title", ""),
-                topic_slug=item.get("keyword", "general"),
+                article=first_cluster_items[0],
                 target_date=target_date,
                 edition=edition,
                 format_config=config,
-                use_enrichment=True,
-                user_id=user_id,
-                source_name=item.get("source_name")
+                user_id=user_id
             )
         
         if first_segment_data and first_segment_data.get("audio_path"):
@@ -3286,9 +3175,8 @@ def assemble_lego_podcast(
                 log.warning(f"⚠️ Could not load first dialogue: {e}")
     
     # 4. Create intro block (music underneath everything until music ends)
-    music_end_time = 0  # Track when intro music ends for ambient start
     if os.path.exists(INTRO_MUSIC_PATH):
-        intro_block_audio, intro_block_duration, music_end_time = create_intro_block(
+        intro_block_audio, intro_block_duration = create_intro_block(
             voice_intro_audio=intro_voice_audio,
             ephemeride_audio=ephemeride_audio,
             first_dialogue_audio=first_dialogue_audio,
@@ -3303,8 +3191,7 @@ def assemble_lego_podcast(
         segments.append({
             "type": "intro_block",
             "audio_path": intro_block_path,
-            "duration": intro_block_duration,
-            "music_end_time": music_end_time  # V15: Track when music ends
+            "duration": intro_block_duration
         })
         
         # Add chapters
@@ -3486,16 +3373,6 @@ def assemble_lego_podcast(
                     "domain": segment.get("source_name", urlparse(item["url"]).netloc)
                 })
                 
-                # V15: Add Perplexity citations as additional sources
-                for cite in segment.get("perplexity_citations", []):
-                    if cite.get("url") and cite["url"] not in [s["url"] for s in sources_data]:
-                        sources_data.append({
-                            "title": cite.get("title", "Source additionnelle"),
-                            "url": cite["url"],
-                            "domain": "perplexity",
-                            "type": "enrichment"
-                        })
-                
                 # Collect digest for this article
                 if segment.get("digest"):
                     digests_data.append({
@@ -3505,15 +3382,8 @@ def assemble_lego_podcast(
                     })
                 
                 log.info(f"📊 Segment {cluster_idx}: {segment.get('duration', 0)}s | Total: {total_duration}s / {target_seconds}s")
-                
-                # V16: Free memory after each segment
-                gc.collect()
             else:
                 log.warning(f"⚠️ Failed to create segment for: {item.get('title', 'No title')[:40]}")
-    
-    # V16: Force garbage collection before stitching
-    gc.collect()
-    log.info("🧹 Memory cleaned before stitching")
     
     if not sources_data:
         log.error("❌ No segments generated!")
@@ -3646,7 +3516,6 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
     V14.5: 
     - Intro block contains music + voice + ephemeride + first dialogue
     - Ambient track plays underneath remaining dialogue segments
-    - V15: Ambient starts 2s after intro MUSIC ends, not after intro block
     """
     try:
         from pydub import AudioSegment
@@ -3654,11 +3523,9 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         
         AMBIENT_VOLUME_DB = -25  # Very quiet background
         AMBIENT_FADE_OUT = 3000  # 3s fade out
-        AMBIENT_START_DELAY = 2000  # 2s after intro music ends
+        AMBIENT_START_DELAY = 2000  # 2s after intro block
         
         intro_block_audio = None
-        intro_block_duration = 0
-        music_end_time = 0  # V15: Track when intro music ends
         dialogue_audios = []
         
         for seg in segments:
@@ -3686,8 +3553,6 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
                 
                 if seg_type == "intro_block":
                     intro_block_audio = audio
-                    intro_block_duration = seg.get("duration", len(audio) // 1000)
-                    music_end_time = seg.get("music_end_time", intro_block_duration)  # V15
                 else:
                     dialogue_audios.append(audio)
                     
@@ -3700,11 +3565,7 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
             return None
         
         combined = intro_block_audio
-        log.info(f"🎵 Intro block: {len(intro_block_audio)//1000}s, music ends at {music_end_time}s")
-        
-        # V15: Calculate where ambient should start (2s after intro music ends)
-        ambient_start_ms = (music_end_time * 1000) + AMBIENT_START_DELAY
-        log.info(f"🎵 Ambient will start at {ambient_start_ms//1000}s (2s after music ends at {music_end_time}s)")
+        log.info(f"🎵 Intro block: {len(intro_block_audio)//1000}s")
         
         # Concatenate dialogue segments
         if not dialogue_audios:
@@ -3720,65 +3581,46 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
             
             log.info(f"🎤 Dialogue segments: {len(dialogue_combined)//1000}s")
             
-            # Get ambient track
+            # Get ambient track and mix under dialogue
             ambient_path = get_random_ambient_track()
             
             if ambient_path:
                 try:
                     ambient = AudioSegment.from_mp3(ambient_path)
-                    log.info(f"🎵 Ambient track duration: {len(ambient)//1000}s")
+                    log.info(f"🎵 Ambient track: {len(ambient)//1000}s")
                     
                     # Process ambient: lower volume
                     ambient_processed = ambient + AMBIENT_VOLUME_DB
                     
-                    # V15: Calculate total audio length that needs ambient
-                    # Ambient covers: from music_end+2s to end of podcast
-                    intro_block_length = len(intro_block_audio)
-                    remaining_dialogue_length = len(dialogue_combined)
-                    
-                    # Total duration that needs ambient = 
-                    # (intro_block after ambient_start) + (gap) + (remaining dialogue)
-                    audio_after_ambient_start = intro_block_length - ambient_start_ms
-                    total_ambient_needed = audio_after_ambient_start + 300 + remaining_dialogue_length  # 300ms gap
-                    
-                    log.info(f"🎵 Ambient needs to cover: {total_ambient_needed//1000}s")
-                    
-                    # Trim or extend ambient
-                    if len(ambient_processed) > total_ambient_needed:
-                        ambient_processed = ambient_processed[:total_ambient_needed]
+                    # Trim or pad ambient to match dialogue
+                    if len(ambient_processed) > len(dialogue_combined):
+                        ambient_processed = ambient_processed[:len(dialogue_combined)]
                     
                     # Add fade out
                     if len(ambient_processed) > AMBIENT_FADE_OUT:
                         ambient_processed = ambient_processed.fade_out(AMBIENT_FADE_OUT)
                     
-                    # Pad if shorter
-                    if len(ambient_processed) < total_ambient_needed:
+                    # Pad if shorter than dialogue
+                    if len(ambient_processed) < len(dialogue_combined):
                         ambient_processed += AudioSegment.silent(
-                            duration=total_ambient_needed - len(ambient_processed)
+                            duration=len(dialogue_combined) - len(ambient_processed)
                         )
                     
-                    # V15: Build final audio with ambient starting at right position
-                    # Part 1: Intro block up to ambient start (no ambient)
-                    part1 = intro_block_audio[:ambient_start_ms]
+                    # Mix ambient under dialogue
+                    dialogue_with_ambient = ambient_processed.overlay(dialogue_combined)
+                    log.info(f"✅ Mixed ambient under dialogue")
                     
-                    # Part 2: Intro block after ambient start + gap + dialogue (with ambient underneath)
-                    part2_voice = intro_block_audio[ambient_start_ms:]
-                    part2_voice += AudioSegment.silent(duration=300)  # Gap between intro block and dialogue
-                    part2_voice += dialogue_combined
-                    
-                    # Mix ambient under part2
-                    part2_with_ambient = ambient_processed.overlay(part2_voice)
-                    
-                    combined = part1 + part2_with_ambient
-                    log.info(f"✅ Mixed ambient starting at {ambient_start_ms//1000}s (2s after intro music)")
+                    # Add 2s silence then dialogue with ambient
+                    combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
+                    combined += dialogue_with_ambient
                     
                 except Exception as e:
                     log.warning(f"⚠️ Failed to mix ambient: {e}, using dialogue without ambient")
-                    combined += AudioSegment.silent(duration=300)
+                    combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
                     combined += dialogue_combined
             else:
-                # No ambient available, just add dialogue after small gap
-                combined += AudioSegment.silent(duration=300)
+                # No ambient available, just add dialogue
+                combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
                 combined += dialogue_combined
         
         if len(combined) == 0:
@@ -3807,18 +3649,10 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         except:
             pass
         
-        # V16: Force garbage collection after stitching
-        del combined
-        del dialogue_audios
-        del intro_block_audio
-        gc.collect()
-        log.info("🧹 Memory cleaned after stitching")
-        
         return final_url
         
     except Exception as e:
         log.error(f"Stitching failed: {e}")
-        gc.collect()  # Clean up even on failure
         return None
 
 
