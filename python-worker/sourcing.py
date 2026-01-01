@@ -373,9 +373,14 @@ class GSheetSourceLibrary:
 # RSS FETCHER
 # ============================================
 
-def fetch_rss_feed(url: str, max_items: int = 5) -> list[dict]:
+def fetch_rss_feed(url: str, max_items: int = 5, max_age_days: int = 7) -> list[dict]:
     """
     Fetch and parse RSS feed.
+    
+    Args:
+        url: RSS feed URL
+        max_items: Maximum number of items to return
+        max_age_days: Maximum age of articles in days (default 7)
     
     Returns list of articles with title, url, published_at, description.
     """
@@ -399,12 +404,21 @@ def fetch_rss_feed(url: str, max_items: int = 5) -> list[dict]:
             # Try Atom format
             items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
         
-        for item in items[:max_items]:
+        for item in items:
+            if len(articles) >= max_items:
+                break
+                
             # RSS 2.0
             title = item.find("title")
             link = item.find("link")
             description = item.find("description")
             pub_date = item.find("pubDate")
+            
+            # Atom date fallback
+            if pub_date is None:
+                pub_date = item.find("{http://www.w3.org/2005/Atom}updated")
+            if pub_date is None:
+                pub_date = item.find("{http://www.w3.org/2005/Atom}published")
             
             # Atom fallback
             if link is None:
@@ -416,13 +430,43 @@ def fetch_rss_feed(url: str, max_items: int = 5) -> list[dict]:
             else:
                 link_url = link.text
             
-            if title is not None and link_url:
-                articles.append({
-                    "title": title.text or "Untitled",
-                    "url": link_url,
-                    "description": (description.text or "")[:500] if description is not None else "",
-                    "published_at": pub_date.text if pub_date is not None else None
-                })
+            if title is None or not link_url:
+                continue
+            
+            # V15: Filter by date - skip articles older than max_age_days
+            if pub_date is not None and pub_date.text:
+                try:
+                    from email.utils import parsedate_to_datetime
+                    article_date = parsedate_to_datetime(pub_date.text)
+                    age_days = (datetime.now(timezone.utc) - article_date).days
+                    if age_days > max_age_days:
+                        log.debug(f"Skipping old RSS article", 
+                                  title=title.text[:40] if title.text else "?", 
+                                  age_days=age_days,
+                                  source=url[:30])
+                        continue
+                except Exception as e:
+                    # Try ISO format date
+                    try:
+                        from dateutil import parser as date_parser
+                        article_date = date_parser.parse(pub_date.text)
+                        if article_date.tzinfo is None:
+                            article_date = article_date.replace(tzinfo=timezone.utc)
+                        age_days = (datetime.now(timezone.utc) - article_date).days
+                        if age_days > max_age_days:
+                            log.debug(f"Skipping old RSS article (ISO)", 
+                                      title=title.text[:40] if title.text else "?", 
+                                      age_days=age_days)
+                            continue
+                    except Exception:
+                        pass  # If date parsing fails, include the article
+            
+            articles.append({
+                "title": title.text or "Untitled",
+                "url": link_url,
+                "description": (description.text or "")[:500] if description is not None else "",
+                "published_at": pub_date.text if pub_date is not None else None
+            })
         
         return articles
         
