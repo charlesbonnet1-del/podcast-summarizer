@@ -1,10 +1,11 @@
 """
 Keernel Sourcing Module
 
-Multi-level content sourcing:
-- Level 1: Manual URLs from user (highest priority)
-- Level 2: GSheet RSS library + Newsletter webhooks
-- Level 3: Bing News (fallback)
+2-level content sourcing:
+- Level 1: GSheet RSS library + Newsletter webhooks
+- Level 2: Bing News (fallback)
+
+V17: Removed manual URLs - will be separate podcast category later.
 
 Also provides verified historical facts from Wikimedia API.
 """
@@ -373,14 +374,9 @@ class GSheetSourceLibrary:
 # RSS FETCHER
 # ============================================
 
-def fetch_rss_feed(url: str, max_items: int = 5, max_age_days: int = 7) -> list[dict]:
+def fetch_rss_feed(url: str, max_items: int = 5) -> list[dict]:
     """
     Fetch and parse RSS feed.
-    
-    Args:
-        url: RSS feed URL
-        max_items: Maximum number of items to return
-        max_age_days: Maximum age of articles in days (default 7)
     
     Returns list of articles with title, url, published_at, description.
     """
@@ -404,21 +400,12 @@ def fetch_rss_feed(url: str, max_items: int = 5, max_age_days: int = 7) -> list[
             # Try Atom format
             items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
         
-        for item in items:
-            if len(articles) >= max_items:
-                break
-                
+        for item in items[:max_items]:
             # RSS 2.0
             title = item.find("title")
             link = item.find("link")
             description = item.find("description")
             pub_date = item.find("pubDate")
-            
-            # Atom date fallback
-            if pub_date is None:
-                pub_date = item.find("{http://www.w3.org/2005/Atom}updated")
-            if pub_date is None:
-                pub_date = item.find("{http://www.w3.org/2005/Atom}published")
             
             # Atom fallback
             if link is None:
@@ -430,43 +417,13 @@ def fetch_rss_feed(url: str, max_items: int = 5, max_age_days: int = 7) -> list[
             else:
                 link_url = link.text
             
-            if title is None or not link_url:
-                continue
-            
-            # V15: Filter by date - skip articles older than max_age_days
-            if pub_date is not None and pub_date.text:
-                try:
-                    from email.utils import parsedate_to_datetime
-                    article_date = parsedate_to_datetime(pub_date.text)
-                    age_days = (datetime.now(timezone.utc) - article_date).days
-                    if age_days > max_age_days:
-                        log.debug(f"Skipping old RSS article", 
-                                  title=title.text[:40] if title.text else "?", 
-                                  age_days=age_days,
-                                  source=url[:30])
-                        continue
-                except Exception as e:
-                    # Try ISO format date
-                    try:
-                        from dateutil import parser as date_parser
-                        article_date = date_parser.parse(pub_date.text)
-                        if article_date.tzinfo is None:
-                            article_date = article_date.replace(tzinfo=timezone.utc)
-                        age_days = (datetime.now(timezone.utc) - article_date).days
-                        if age_days > max_age_days:
-                            log.debug(f"Skipping old RSS article (ISO)", 
-                                      title=title.text[:40] if title.text else "?", 
-                                      age_days=age_days)
-                            continue
-                    except Exception:
-                        pass  # If date parsing fails, include the article
-            
-            articles.append({
-                "title": title.text or "Untitled",
-                "url": link_url,
-                "description": (description.text or "")[:500] if description is not None else "",
-                "published_at": pub_date.text if pub_date is not None else None
-            })
+            if title is not None and link_url:
+                articles.append({
+                    "title": title.text or "Untitled",
+                    "url": link_url,
+                    "description": (description.text or "")[:500] if description is not None else "",
+                    "published_at": pub_date.text if pub_date is not None else None
+                })
         
         return articles
         
@@ -934,16 +891,12 @@ Exemple : "2 - Iconique et universel"
 # ============================================
 
 BING_MARKETS = {
-    # Add freshness=Day to only get articles from the last 24 hours
-    "FR": "https://www.bing.com/news/search?q={query}&format=rss&mkt=fr-FR&qft=interval%3d%227%22",
-    "US": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-US&qft=interval%3d%227%22",
+    "FR": "https://www.bing.com/news/search?q={query}&format=rss&mkt=fr-FR",
+    "US": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-US",
 }
 
 def fetch_bing_news(query: str, market: str = "FR", max_items: int = 3) -> list[dict]:
-    """Fetch news from Bing News RSS (fallback source).
-    
-    Note: Uses qft=interval%3d"7" to filter to last 7 days.
-    """
+    """Fetch news from Bing News RSS (fallback source)."""
     url_template = BING_MARKETS.get(market, BING_MARKETS["FR"])
     url = url_template.format(query=quote_plus(query))
     
@@ -958,21 +911,8 @@ def fetch_bing_news(query: str, market: str = "FR", max_items: int = 3) -> list[
         for item in root.findall(".//item")[:max_items]:
             title = item.find("title")
             link = item.find("link")
-            pub_date = item.find("pubDate")
             
             if title is not None and link is not None:
-                # Check publication date if available
-                if pub_date is not None and pub_date.text:
-                    try:
-                        from email.utils import parsedate_to_datetime
-                        article_date = parsedate_to_datetime(pub_date.text)
-                        age_days = (datetime.now(timezone.utc) - article_date).days
-                        if age_days > 7:
-                            log.debug("Skipping old Bing article", title=title.text[:50], age_days=age_days)
-                            continue
-                    except Exception:
-                        pass  # If date parsing fails, include the article
-                
                 # Extract real URL from Bing redirect
                 real_url = link.text
                 if "bing.com" in real_url:
@@ -1092,37 +1032,31 @@ def fetch_all_sources(user_id: str = None) -> list[dict]:
 def fetch_content_for_user(
     user_id: str,
     topic_ids: list[str],
-    manual_urls: list[str] = None,
     target_duration_min: int = 20,
     include_international: bool = False
 ) -> dict:
     """
-    Unified sourcing function with 3-level hierarchy.
+    Unified sourcing function with 2-level hierarchy.
+    
+    V17: Removed manual URLs (level1) - will be separate podcast category.
     
     Returns:
         {
-            "level1_manual": [...],  # Deep dives from user URLs
-            "level2_library": [...],  # From GSheet RSS library
-            "level3_backup": [...],   # From Bing News
+            "level1_library": [...],  # From GSheet RSS library
+            "level2_backup": [...],   # From Bing News
             "ephemeride": {...}       # Historical fact
         }
     """
     result = {
-        "level1_manual": [],
-        "level2_library": [],
-        "level3_backup": [],
+        "level1_library": [],
+        "level2_backup": [],
         "ephemeride": None
     }
     
     # Estimate content needs (150 words/min, ~3 articles per 5 min)
     target_articles = max(3, target_duration_min // 5)
     
-    # Level 1: Manual URLs (already in content_queue, just pass through)
-    if manual_urls:
-        result["level1_manual"] = [{"url": url, "priority": "high"} for url in manual_urls]
-        target_articles -= len(manual_urls)
-    
-    # Level 2: GSheet RSS Library
+    # Level 1: GSheet RSS Library
     if target_articles > 0 and topic_ids:
         library = GSheetSourceLibrary()
         sources = library.get_sources_for_topics(topic_ids, origin="FR")
@@ -1142,15 +1076,15 @@ def fetch_content_for_user(
                 article["source_name"] = source["name"]
                 article["score"] = source["score"]
                 article["vertical"] = source["vertical"]
-                result["level2_library"].append(article)
+                result["level1_library"].append(article)
             
-            if len(result["level2_library"]) >= target_articles:
+            if len(result["level1_library"]) >= target_articles:
                 break
             
             time.sleep(0.5)  # Rate limiting
     
-    # Level 3: Bing News (fallback)
-    remaining = target_articles - len(result["level2_library"])
+    # Level 2: Bing News (fallback)
+    remaining = target_articles - len(result["level1_library"])
     if remaining > 0 and topic_ids:
         # Map topic IDs to search queries
         topic_queries = {
@@ -1178,18 +1112,17 @@ def fetch_content_for_user(
             for article in articles:
                 article["source_name"] = "Bing News"
                 article["score"] = 30  # Lower score for backup
-                result["level3_backup"].append(article)
+                result["level2_backup"].append(article)
             
-            if len(result["level3_backup"]) >= remaining:
+            if len(result["level2_backup"]) >= remaining:
                 break
     
     # Ephemeride (historical fact)
     result["ephemeride"] = get_best_ephemeride_fact()
     
     log.info("Sourcing complete", 
-             level1=len(result["level1_manual"]),
-             level2=len(result["level2_library"]),
-             level3=len(result["level3_backup"]),
+             level1=len(result["level1_library"]),
+             level2=len(result["level2_backup"]),
              has_ephemeride=result["ephemeride"] is not None)
     
     return result

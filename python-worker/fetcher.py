@@ -1,10 +1,11 @@
 """
 Keernel Fetcher - Multi-Level News Sourcing
 
-3-Level Hierarchy:
-1. Manual URLs (from content_queue) - Highest priority
-2. GSheet RSS Library + Newsletters - Curated sources
-3. Bing News - Backup/fallback
+2-Level Hierarchy:
+1. GSheet RSS Library + Newsletters - Curated sources
+2. Bing News - Backup/fallback
+
+V17: Removed manual URLs (Level 1) - will be a separate podcast category later.
 
 The system prioritizes trusted sources from the GSheet library,
 falling back to Bing News only when necessary.
@@ -295,10 +296,11 @@ def fetch_bing_for_topics(topic_ids: list[str], include_international: bool = Fa
 
 def run_fetcher(edition: str = "morning"):
     """
-    Main fetcher with 3-level sourcing hierarchy:
-    1. Manual URLs (already in queue) - Skip, handled separately
-    2. GSheet RSS Library - Trusted curated sources
-    3. Bing News - Backup when Level 2 insufficient
+    Main fetcher with 2-level sourcing hierarchy:
+    1. GSheet RSS Library - Trusted curated sources
+    2. Bing News - Backup when Level 1 insufficient
+    
+    V17: Removed manual URLs - will be separate podcast category.
     """
     log.info("Starting Keernel fetcher", edition=edition)
     start = datetime.now()
