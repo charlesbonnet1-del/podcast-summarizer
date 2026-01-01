@@ -117,47 +117,177 @@ function getFaviconUrl(url: string): string {
 // FLOATING ORBS
 // ============================================
 
-function FloatingOrbs() {
+// ============================================
+// AURORA BACKGROUND - Premium animated gradient
+// ============================================
+
+function AuroraBackground() {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
-  if (!mounted || resolvedTheme === "dark") return null;
+  if (!mounted) return null;
+
+  const isDark = resolvedTheme === "dark";
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      <motion.div
-        className="absolute w-[500px] h-[500px] rounded-full opacity-30"
+      {/* Base gradient mesh */}
+      <div 
+        className="absolute inset-0"
         style={{
-          background: "radial-gradient(circle, rgba(0, 240, 255, 0.3) 0%, transparent 70%)",
-          filter: "blur(60px)",
-          top: "-10%",
-          right: "-5%",
+          background: isDark 
+            ? 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 240, 255, 0.15), transparent)'
+            : 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 122, 255, 0.08), transparent)'
+        }}
+      />
+      
+      {/* Animated aurora blobs */}
+      <motion.div
+        className="absolute w-[800px] h-[800px] rounded-full"
+        style={{
+          background: isDark 
+            ? 'radial-gradient(circle, rgba(0, 240, 255, 0.2) 0%, rgba(0, 150, 255, 0.1) 40%, transparent 70%)'
+            : 'radial-gradient(circle, rgba(0, 122, 255, 0.12) 0%, rgba(0, 200, 255, 0.06) 40%, transparent 70%)',
+          filter: 'blur(80px)',
+          top: '-20%',
+          right: '-10%',
         }}
         animate={{
-          x: [0, 30, -20, 0],
-          y: [0, -20, 30, 0],
-          scale: [1, 1.05, 0.98, 1],
+          x: [0, 50, -30, 0],
+          y: [0, -30, 50, 0],
+          scale: [1, 1.1, 0.95, 1],
+          rotate: [0, 10, -5, 0],
         }}
-        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
       />
       
       <motion.div
-        className="absolute w-[400px] h-[400px] rounded-full opacity-25"
+        className="absolute w-[600px] h-[600px] rounded-full"
         style={{
-          background: "radial-gradient(circle, rgba(0, 240, 255, 0.25) 0%, transparent 70%)",
-          filter: "blur(50px)",
-          bottom: "10%",
-          left: "-5%",
+          background: isDark 
+            ? 'radial-gradient(circle, rgba(120, 0, 255, 0.15) 0%, rgba(0, 240, 255, 0.08) 40%, transparent 70%)'
+            : 'radial-gradient(circle, rgba(100, 0, 255, 0.08) 0%, rgba(0, 200, 255, 0.04) 40%, transparent 70%)',
+          filter: 'blur(60px)',
+          bottom: '0%',
+          left: '-10%',
         }}
         animate={{
-          x: [0, -30, 20, 0],
-          y: [0, 20, -30, 0],
-          scale: [1, 0.95, 1.08, 1],
+          x: [0, -40, 30, 0],
+          y: [0, 40, -20, 0],
+          scale: [1, 0.9, 1.15, 1],
+          rotate: [0, -15, 10, 0],
         }}
-        transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
       />
+
+      <motion.div
+        className="absolute w-[500px] h-[500px] rounded-full"
+        style={{
+          background: isDark 
+            ? 'radial-gradient(circle, rgba(0, 255, 200, 0.12) 0%, transparent 60%)'
+            : 'radial-gradient(circle, rgba(0, 200, 150, 0.06) 0%, transparent 60%)',
+          filter: 'blur(70px)',
+          top: '40%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+        }}
+        animate={{
+          scale: [1, 1.2, 0.9, 1],
+          opacity: [0.5, 0.8, 0.4, 0.5],
+        }}
+        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      {/* Noise texture overlay for grain effect */}
+      <div 
+        className="absolute inset-0 opacity-[0.015]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+        }}
+      />
+    </div>
+  );
+}
+
+// ============================================
+// PULSING LOGO - Animated concentric circles
+// ============================================
+
+function PulsingLogo() {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  
+  return (
+    <div className="relative w-24 h-24 flex items-center justify-center">
+      {/* Glow behind logo */}
+      <motion.div
+        className="absolute inset-0 rounded-full"
+        style={{
+          background: isDark 
+            ? 'radial-gradient(circle, rgba(0, 240, 255, 0.3) 0%, transparent 70%)'
+            : 'radial-gradient(circle, rgba(0, 122, 255, 0.2) 0%, transparent 70%)',
+          filter: 'blur(20px)',
+        }}
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.5, 0.8, 0.5],
+        }}
+        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+      />
+      
+      {/* SVG Animated Logo */}
+      <svg viewBox="0 0 100 100" className="w-20 h-20 relative z-10">
+        <defs>
+          <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={isDark ? "#00F0FF" : "#007AFF"} />
+            <stop offset="100%" stopColor={isDark ? "#00D4AA" : "#00C6FF"} />
+          </linearGradient>
+        </defs>
+        
+        {/* Concentric circles with staggered pulse */}
+        {[40, 32, 24, 16].map((r, i) => (
+          <motion.circle
+            key={r}
+            cx="50"
+            cy="50"
+            r={r}
+            fill="none"
+            stroke="url(#logoGradient)"
+            strokeWidth={i === 3 ? 0 : 2}
+            initial={{ scale: 1, opacity: 0.8 }}
+            animate={{ 
+              scale: [1, 1.05, 1],
+              opacity: [0.6 + i * 0.1, 0.9, 0.6 + i * 0.1],
+            }}
+            transition={{ 
+              duration: 2,
+              delay: i * 0.2,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            style={{ transformOrigin: '50px 50px' }}
+          />
+        ))}
+        
+        {/* Center filled circle */}
+        <motion.circle
+          cx="50"
+          cy="50"
+          r="12"
+          fill="url(#logoGradient)"
+          animate={{ 
+            scale: [1, 1.1, 1],
+          }}
+          transition={{ 
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          style={{ transformOrigin: '50px 50px' }}
+        />
+      </svg>
     </div>
   );
 }
@@ -535,6 +665,7 @@ function AvatarMenu({ user }: { user: { firstName: string; email: string; avatar
 function MagicBar() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async () => {
@@ -564,25 +695,64 @@ function MagicBar() {
 
   return (
     <motion.div 
-      className="magic-bar w-full max-w-xl mx-auto flex items-center gap-3 px-4 py-3"
+      className="w-full max-w-xl mx-auto relative"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <input
-        type="url"
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        placeholder="Paste a link to add to your podcast..."
-        className="flex-1 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/50"
-        onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+      {/* Animated gradient border */}
+      <motion.div
+        className="absolute -inset-[1px] rounded-2xl opacity-0"
+        style={{
+          background: 'linear-gradient(90deg, #00F0FF, #007AFF, #00F0FF)',
+          backgroundSize: '200% 100%',
+        }}
+        animate={isFocused ? {
+          opacity: 1,
+          backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+        } : { opacity: 0 }}
+        transition={{ 
+          backgroundPosition: { duration: 3, repeat: Infinity, ease: "linear" },
+          opacity: { duration: 0.3 }
+        }}
       />
-      <button
-        onClick={handleSubmit}
-        disabled={loading || !url.trim()}
-        className="p-2 rounded-full hover:bg-secondary disabled:opacity-50 transition-colors"
-      >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
-      </button>
+      
+      {/* Glow effect on focus */}
+      <motion.div
+        className="absolute -inset-2 rounded-3xl pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at center, rgba(0, 240, 255, 0.15) 0%, transparent 70%)',
+          filter: 'blur(20px)',
+        }}
+        animate={{ opacity: isFocused ? 1 : 0 }}
+        transition={{ duration: 0.3 }}
+      />
+      
+      {/* Input container */}
+      <div className="relative flex items-center gap-3 px-5 py-4 rounded-2xl bg-card/80 backdrop-blur-xl border border-border/50">
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          placeholder="Paste a link to add to your podcast..."
+          className="flex-1 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/50"
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+        />
+        <motion.button
+          onClick={handleSubmit}
+          disabled={loading || !url.trim()}
+          className="p-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 disabled:opacity-50 transition-all"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          ) : (
+            <Link2 className="w-4 h-4 text-primary" />
+          )}
+        </motion.button>
+      </div>
     </motion.div>
   );
 }
@@ -593,6 +763,8 @@ function MagicBar() {
 
 function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
   const [showMixer, setShowMixer] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   // Calculate average weight per vertical (V13 - 16 Topics)
   const VERTICALS = [
@@ -610,10 +782,10 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
   });
 
   // Radar chart calculations
-  const size = 180;
+  const size = 200;
   const centerX = size / 2;
   const centerY = size / 2;
-  const maxRadius = (size / 2) - 35;
+  const maxRadius = (size / 2) - 40;
 
   const getPoint = (index: number, value: number) => {
     const angle = (Math.PI * 2 * index) / 5 - Math.PI / 2;
@@ -627,7 +799,7 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
   const dataPoints = verticalWeights.map((v, i) => getPoint(i, v.weight));
   const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
 
-  const labelRadius = maxRadius + 25;
+  const labelRadius = maxRadius + 30;
   const labelPositions = verticalWeights.map((_, i) => {
     const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2;
     return {
@@ -641,12 +813,42 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
       <motion.button
         onClick={() => setShowMixer(true)}
         className="relative group mx-auto"
-        whileHover={{ scale: 1.02 }}
+        whileHover={{ scale: 1.03 }}
         whileTap={{ scale: 0.98 }}
       >
+        {/* Outer glow on hover */}
+        <motion.div
+          className="absolute -inset-8 rounded-full pointer-events-none"
+          style={{
+            background: `radial-gradient(circle, ${isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0, 122, 255, 0.08)'} 0%, transparent 70%)`,
+            filter: 'blur(20px)',
+          }}
+          initial={{ opacity: 0 }}
+          whileHover={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        />
+
         <div className="relative" style={{ width: size, height: size }}>
           <svg width={size} height={size} className="overflow-visible">
-            {/* Grid rings */}
+            <defs>
+              {/* Gradient for filled area */}
+              <linearGradient id="radarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor={isDark ? "#00F0FF" : "#007AFF"} stopOpacity="0.3" />
+                <stop offset="50%" stopColor={isDark ? "#00D4AA" : "#00C6FF"} stopOpacity="0.15" />
+                <stop offset="100%" stopColor={isDark ? "#7B00FF" : "#0066FF"} stopOpacity="0.2" />
+              </linearGradient>
+              
+              {/* Glow filter */}
+              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                <feMerge>
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+
+            {/* Grid rings - dotted style */}
             {[20, 40, 60, 80, 100].map((ring) => {
               const points = Array.from({ length: 5 }, (_, i) => {
                 const p = getPoint(i, ring);
@@ -658,13 +860,14 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
                   points={points}
                   fill="none"
                   stroke="currentColor"
-                  strokeOpacity={0.08}
+                  strokeOpacity={0.06}
                   strokeWidth={1}
+                  strokeDasharray="2 4"
                 />
               );
             })}
 
-            {/* Axis lines */}
+            {/* Axis lines - very subtle */}
             {verticalWeights.map((_, i) => {
               const endPoint = getPoint(i, 100);
               return (
@@ -675,42 +878,66 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
                   x2={endPoint.x}
                   y2={endPoint.y}
                   stroke="currentColor"
-                  strokeOpacity={0.08}
+                  strokeOpacity={0.05}
                   strokeWidth={1}
                 />
               );
             })}
 
-            {/* Data shape */}
+            {/* Animated data shape with gradient fill */}
             <motion.path
               d={dataPath}
-              fill="rgba(0, 240, 255, 0.15)"
-              stroke="#00F0FF"
-              strokeWidth={2}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-              style={{ transformOrigin: `${centerX}px ${centerY}px` }}
+              fill="url(#radarGradient)"
+              stroke={isDark ? "#00F0FF" : "#007AFF"}
+              strokeWidth={2.5}
+              filter="url(#glow)"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 1, ease: "easeOut" }}
             />
 
-            {/* Data points */}
+            {/* Animated data points with pulsing glow */}
             {dataPoints.map((point, i) => (
-              <motion.circle
-                key={i}
-                cx={point.x}
-                cy={point.y}
-                r={4}
-                fill="#00F0FF"
-                stroke="white"
-                strokeWidth={2}
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1 * i, duration: 0.3 }}
-              />
+              <g key={i}>
+                {/* Glow behind point */}
+                <motion.circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={8}
+                  fill={isDark ? "#00F0FF" : "#007AFF"}
+                  opacity={0.3}
+                  initial={{ scale: 0 }}
+                  animate={{ 
+                    scale: [1, 1.5, 1],
+                    opacity: [0.3, 0.1, 0.3],
+                  }}
+                  transition={{ 
+                    delay: 0.5 + i * 0.1,
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                />
+                {/* Main point */}
+                <motion.circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={5}
+                  fill={isDark ? "#00F0FF" : "#007AFF"}
+                  stroke="white"
+                  strokeWidth={2}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.3 + i * 0.1, duration: 0.4, type: "spring" }}
+                />
+              </g>
             ))}
+
+            {/* Center decoration */}
+            <circle cx={centerX} cy={centerY} r={3} fill="currentColor" opacity={0.1} />
           </svg>
 
-          {/* Labels */}
+          {/* Labels with enhanced styling */}
           {verticalWeights.map((vertical, i) => {
             const pos = labelPositions[i];
             return (
@@ -722,15 +949,18 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
                   top: pos.y,
                   transform: 'translate(-50%, -50%)'
                 }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 + i * 0.1 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 + i * 0.1 }}
               >
                 <div className="flex flex-col items-center">
-                  <span className="text-[10px] font-display font-medium text-foreground whitespace-nowrap">
+                  <span className="text-[11px] font-display font-semibold text-foreground whitespace-nowrap">
                     {vertical.label}
                   </span>
-                  <span className="text-[9px] text-[#00F0FF] font-mono">
+                  <span 
+                    className="text-[10px] font-mono font-medium"
+                    style={{ color: isDark ? '#00F0FF' : '#007AFF' }}
+                  >
                     {vertical.weight}%
                   </span>
                 </div>
@@ -739,12 +969,25 @@ function SignalRadarWidget({ weights }: { weights: Record<string, number> }) {
           })}
         </div>
 
-        {/* Hover: + button in center */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="w-10 h-10 rounded-full bg-[#00F0FF] flex items-center justify-center shadow-lg">
-            <Plus className="w-5 h-5 text-white" />
-          </div>
-        </div>
+        {/* Hover overlay with + button */}
+        <motion.div 
+          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300"
+        >
+          <motion.div 
+            className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+            style={{
+              background: isDark 
+                ? 'linear-gradient(135deg, #00F0FF 0%, #00D4AA 100%)'
+                : 'linear-gradient(135deg, #007AFF 0%, #00C6FF 100%)',
+              boxShadow: isDark 
+                ? '0 0 30px rgba(0, 240, 255, 0.4)'
+                : '0 0 30px rgba(0, 122, 255, 0.3)',
+            }}
+            whileHover={{ scale: 1.1 }}
+          >
+            <Plus className="w-6 h-6 text-white" />
+          </motion.div>
+        </motion.div>
       </motion.button>
 
       {/* Signal Mixer Modal */}
@@ -1398,6 +1641,8 @@ function PlayerPod({ episode }: { episode: Episode }) {
   const [duration, setDuration] = useState(episode.audio_duration || 0);
   const [showSources, setShowSources] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   const sources = episode.sources_data || [];
   const SPEED_OPTIONS = [1, 1.25, 1.5, 2];
@@ -1455,16 +1700,16 @@ function PlayerPod({ episode }: { episode: Episode }) {
       <AnimatePresence>
         {showSources && (
           <motion.div
-            className="fixed bottom-28 left-1/2 z-40 w-[90%] max-w-[560px]"
+            className="fixed bottom-32 left-1/2 z-40 w-[90%] max-w-[560px]"
             style={{ x: "-50%" }}
             initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
           >
-            <div className="sources-panel p-4 max-h-[50vh] overflow-y-auto scrollbar-hide">
+            <div className="rounded-3xl bg-card/90 backdrop-blur-2xl border border-border/30 p-4 max-h-[50vh] overflow-y-auto scrollbar-hide shadow-2xl">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-serif text-lg font-medium">Sources</h3>
-                <button onClick={() => setShowSources(false)} className="p-2 rounded-full hover:bg-secondary">
+                <h3 className="font-display text-lg font-semibold">Sources</h3>
+                <button onClick={() => setShowSources(false)} className="p-2 rounded-full hover:bg-secondary transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -1512,50 +1757,127 @@ function PlayerPod({ episode }: { episode: Episode }) {
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
       >
-        <div className="player-pod w-[90vw] max-w-[620px] px-4 py-3">
-          <div className="flex items-center gap-3">
-            <motion.button onClick={() => skip(-15)} className="p-2 text-muted-foreground hover:text-foreground transition-colors" whileTap={{ scale: 0.9 }}>
+        {/* Glow effect under player */}
+        <div 
+          className="absolute -inset-4 rounded-[32px] pointer-events-none"
+          style={{
+            background: isDark 
+              ? 'radial-gradient(ellipse at center bottom, rgba(0, 240, 255, 0.15) 0%, transparent 70%)'
+              : 'radial-gradient(ellipse at center bottom, rgba(0, 122, 255, 0.1) 0%, transparent 70%)',
+            filter: 'blur(20px)',
+          }}
+        />
+
+        <div className="relative w-[90vw] max-w-[620px] px-5 py-4 rounded-2xl bg-card/80 backdrop-blur-2xl border border-border/30 shadow-2xl">
+          <div className="flex items-center gap-4">
+            {/* Skip back */}
+            <motion.button 
+              onClick={() => skip(-15)} 
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors" 
+              whileTap={{ scale: 0.9 }}
+            >
               <SkipBack className="w-4 h-4" />
             </motion.button>
 
+            {/* Play button - Premium cyan with glow */}
             <motion.button
               onClick={togglePlay}
-              className="relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[hsl(var(--card))]"
-              whileHover={{ scale: 1.05 }}
+              className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{
+                background: isDark 
+                  ? 'linear-gradient(135deg, #00F0FF 0%, #00D4AA 100%)'
+                  : 'linear-gradient(135deg, #007AFF 0%, #00C6FF 100%)',
+                boxShadow: isDark 
+                  ? '0 0 20px rgba(0, 240, 255, 0.4)'
+                  : '0 0 20px rgba(0, 122, 255, 0.3)',
+              }}
+              whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.95 }}
             >
-              <span className="text-[hsl(0_0%_10%)]">
-                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+              {/* Pulse animation when playing */}
+              {isPlaying && (
+                <motion.div
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    background: isDark 
+                      ? 'linear-gradient(135deg, #00F0FF 0%, #00D4AA 100%)'
+                      : 'linear-gradient(135deg, #007AFF 0%, #00C6FF 100%)',
+                  }}
+                  animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0, 0.5] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
+              <span className="relative text-white">
+                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
               </span>
             </motion.button>
 
-            <motion.button onClick={() => skip(15)} className="p-2 text-muted-foreground hover:text-foreground transition-colors" whileTap={{ scale: 0.9 }}>
+            {/* Skip forward */}
+            <motion.button 
+              onClick={() => skip(15)} 
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors" 
+              whileTap={{ scale: 0.9 }}
+            >
               <SkipForward className="w-4 h-4" />
             </motion.button>
 
+            {/* Title and progress */}
             <div className="flex-1 min-w-0">
-              <p className="font-serif text-sm font-medium truncate text-[#00F0FF]">{episode.title}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <div className="flex-1 h-1 rounded-full bg-secondary/50 overflow-hidden">
-                  <motion.div className="h-full rounded-full bg-[#00F0FF]" style={{ width: `${progress}%` }} />
+              <p 
+                className="font-display text-sm font-semibold truncate"
+                style={{ color: isDark ? '#00F0FF' : '#007AFF' }}
+              >
+                {episode.title}
+              </p>
+              <div className="mt-2 flex items-center gap-3">
+                {/* Progress bar with shimmer */}
+                <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden relative">
+                  <motion.div 
+                    className="h-full rounded-full relative overflow-hidden"
+                    style={{ 
+                      width: `${progress}%`,
+                      background: isDark 
+                        ? 'linear-gradient(90deg, #00F0FF 0%, #00D4AA 100%)'
+                        : 'linear-gradient(90deg, #007AFF 0%, #00C6FF 100%)',
+                    }}
+                  >
+                    {/* Shimmer effect */}
+                    <motion.div
+                      className="absolute inset-0"
+                      style={{
+                        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                      }}
+                      animate={{ x: ['-100%', '100%'] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    />
+                  </motion.div>
                 </div>
-                <span className="text-[10px] font-mono text-[#00F0FF]/70 flex-shrink-0">
+                <span 
+                  className="text-[10px] font-mono flex-shrink-0"
+                  style={{ color: isDark ? 'rgba(0, 240, 255, 0.7)' : 'rgba(0, 122, 255, 0.7)' }}
+                >
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
               </div>
             </div>
 
+            {/* Playback rate */}
             <motion.button
               onClick={cyclePlaybackRate}
-              className="px-2 py-1 rounded-md text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
               whileTap={{ scale: 0.95 }}
             >
               {playbackRate}x
             </motion.button>
 
+            {/* Sources button */}
             <motion.button
               onClick={() => setShowSources(!showSources)}
-              className={`p-2 rounded-full flex-shrink-0 ${showSources ? "bg-primary/20 text-primary" : "hover:bg-secondary text-muted-foreground"}`}
+              className={`p-2.5 rounded-xl flex-shrink-0 transition-all ${
+                showSources 
+                  ? "bg-primary/20 text-primary" 
+                  : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+              }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -1574,7 +1896,10 @@ function PlayerPod({ episode }: { episode: Episode }) {
 
 function GenerateButton({ pendingCount, hasTopics }: { pendingCount: number; hasTopics: boolean }) {
   const [loading, setLoading] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -1590,31 +1915,81 @@ function GenerateButton({ pendingCount, hasTopics }: { pendingCount: number; has
     }
   };
 
-  // V13: pendingCount is now inventoryCount (cached segments available)
-  // Always allow generation - backend will handle sourcing
   return (
     <motion.button
       onClick={handleGenerate}
       disabled={loading}
-      className="w-full max-w-xs mx-auto block btn-generate px-6 py-3 text-sm"
-      whileHover={{ scale: 1.02 }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="relative w-full max-w-xs mx-auto block overflow-hidden rounded-2xl text-sm font-display font-semibold"
+      whileHover={{ scale: 1.02, y: -2 }}
       whileTap={{ scale: 0.98 }}
     >
-      {loading ? (
-        <span className="flex items-center justify-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Generating...
-        </span>
-      ) : (
-        <span className="flex items-center justify-center gap-2">
-          Generate Keernel
-          {pendingCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-xs">
-              {pendingCount} segments
-            </span>
-          )}
-        </span>
-      )}
+      {/* Background gradient */}
+      <motion.div
+        className="absolute inset-0"
+        style={{
+          background: isDark
+            ? 'linear-gradient(135deg, #111 0%, #1a1a1a 50%, #111 100%)'
+            : 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%)',
+        }}
+      />
+
+      {/* Animated shimmer effect */}
+      <motion.div
+        className="absolute inset-0 opacity-0"
+        style={{
+          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)',
+        }}
+        animate={isHovered ? {
+          opacity: 1,
+          x: ['-100%', '100%'],
+        } : { opacity: 0, x: '-100%' }}
+        transition={{
+          x: { duration: 0.8, ease: "easeInOut" },
+          opacity: { duration: 0.2 }
+        }}
+      />
+
+      {/* Border glow on hover */}
+      <motion.div
+        className="absolute inset-0 rounded-2xl"
+        style={{
+          boxShadow: isDark 
+            ? '0 0 0 1px rgba(0, 240, 255, 0.3), 0 0 30px rgba(0, 240, 255, 0.2)'
+            : '0 0 0 1px rgba(0, 122, 255, 0.3), 0 0 30px rgba(0, 122, 255, 0.15)',
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: isHovered ? 1 : 0 }}
+        transition={{ duration: 0.3 }}
+      />
+
+      {/* Content */}
+      <div className="relative px-8 py-4 text-white">
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Generating...
+          </span>
+        ) : (
+          <span className="flex items-center justify-center gap-3">
+            <span>Generate Keernel</span>
+            {pendingCount > 0 && (
+              <span 
+                className="px-2.5 py-1 rounded-full text-xs font-mono"
+                style={{
+                  background: isDark 
+                    ? 'rgba(0, 240, 255, 0.2)' 
+                    : 'rgba(255, 255, 255, 0.15)',
+                  color: isDark ? '#00F0FF' : 'white',
+                }}
+              >
+                {pendingCount} segments
+              </span>
+            )}
+          </span>
+        )}
+      </div>
     </motion.button>
   );
 }
@@ -1634,6 +2009,7 @@ export function KernelDashboard({
   const hasTopics = topics.length > 0 || Object.keys(signalWeights).length > 0;
   const { resolvedTheme } = useTheme();
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(episode);
+  const isDark = resolvedTheme === "dark";
 
   const handleSelectHistoryEpisode = (historyItem: HistoryItem) => {
     setCurrentEpisode({
@@ -1647,8 +2023,10 @@ export function KernelDashboard({
   };
 
   return (
-    <div className="min-h-screen relative">
-      <FloatingOrbs />
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Aurora animated background */}
+      <AuroraBackground />
+      
       <AvatarMenu user={user} />
 
       {/* History Menu - Top Left */}
@@ -1657,35 +2035,54 @@ export function KernelDashboard({
       </div>
 
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-20">
+        {/* Animated Pulsing Logo */}
         <motion.div
-          className="mb-6"
+          className="mb-8"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.6 }}
         >
-          <img 
-            src={resolvedTheme === "dark" ? "/logo/keernel-dark.png" : "/logo/keernel-light.png"}
-            alt="Keernel"
-            className="h-20 w-auto object-contain"
-          />
+          <PulsingLogo />
         </motion.div>
 
+        {/* Title with gradient name */}
         <motion.div
-          className="text-center mb-10"
+          className="text-center mb-12"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <h1 className="title-keernel text-4xl md:text-5xl mb-2">
-            Bonjour{user.firstName ? `, ${user.firstName}` : ""}
+          <h1 className="title-keernel text-4xl md:text-5xl mb-3">
+            <span>Bonjour</span>
+            {user.firstName && (
+              <>
+                <span>, </span>
+                <span 
+                  className="bg-clip-text text-transparent"
+                  style={{
+                    backgroundImage: isDark 
+                      ? 'linear-gradient(135deg, #00F0FF 0%, #00D4AA 50%, #7B00FF 100%)'
+                      : 'linear-gradient(135deg, #007AFF 0%, #00C6FF 50%, #0066FF 100%)',
+                  }}
+                >
+                  {user.firstName}
+                </span>
+              </>
+            )}
           </h1>
-          <p className="text-muted-foreground text-sm tracking-wide font-mono">
+          <motion.p 
+            className="text-muted-foreground text-sm tracking-wide font-mono"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+          >
             Votre podcast quotidien vous attend
-          </p>
+          </motion.p>
         </motion.div>
 
+        {/* Magic Bar with animated border */}
         <motion.div
-          className="w-full mb-6"
+          className="w-full mb-10"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
@@ -1693,15 +2090,17 @@ export function KernelDashboard({
           <MagicBar />
         </motion.div>
 
+        {/* Premium Radar Chart */}
         <motion.div
-          className="w-full mb-10 flex justify-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
+          className="w-full mb-12 flex justify-center"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
         >
           <SignalRadarWidget weights={signalWeights} />
         </motion.div>
 
+        {/* Generate Button with shimmer */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
