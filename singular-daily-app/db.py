@@ -213,22 +213,28 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
     """Add a news item to the content queue from automatic fetching.
     Checks for duplicates before inserting.
     
-    V17: Supports global queue with user_id="global" → uses fixed UUID
+    V17: Supports global queue with user_id="global" → uses first real user
     
     Args:
         user_id: User ID or "global" for global queue
         source: Source type (gsheet_rss, bing_news, manual, etc.)
         source_name: Display name of the media (e.g., "Le Monde", "TechCrunch") - optional
     """
-    # V17: Fixed UUID for global queue (since user_id column is NOT NULL)
-    GLOBAL_USER_ID = "00000000-0000-0000-0000-000000000000"
-    
     try:
-        # V17: Handle global queue
+        # V17: Handle global queue - get first real user from DB
         if user_id is None or user_id == "global":
-            user_id = GLOBAL_USER_ID
+            try:
+                first_user = supabase.table("users").select("id").limit(1).execute()
+                if first_user.data:
+                    user_id = first_user.data[0]["id"]
+                else:
+                    print("Error: No users in database for global queue")
+                    return None
+            except Exception as e:
+                print(f"Error getting user for global queue: {e}")
+                return None
         
-        # Check if URL already exists for this user (any status)
+        # Check if URL already exists (any status)
         existing = supabase.table("content_queue") \
             .select("id") \
             .eq("url", url) \
