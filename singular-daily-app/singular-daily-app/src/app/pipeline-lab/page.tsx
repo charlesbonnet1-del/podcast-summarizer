@@ -177,7 +177,11 @@ export default function PipelineLabPage() {
         setError(data.error);
       } else {
         setFetchResult(data);
-        setExpandedSections(prev => new Set([...prev, "fetch"]));
+        setExpandedSections(prev => {
+          const next = new Set(prev);
+          next.add("fetch");
+          return next;
+        });
       }
     } catch (err) {
       setError("Fetch failed");
@@ -216,7 +220,11 @@ export default function PipelineLabPage() {
         setError(data.error);
       } else {
         setClusterResult(data);
-        setExpandedSections(prev => new Set([...prev, "cluster"]));
+        setExpandedSections(prev => {
+          const next = new Set(prev);
+          next.add("cluster");
+          return next;
+        });
       }
     } catch (err) {
       setError("Clustering failed");
@@ -256,7 +264,11 @@ export default function PipelineLabPage() {
         setError(data.error);
       } else {
         setSelectResult(data);
-        setExpandedSections(prev => new Set([...prev, "select"]));
+        setExpandedSections(prev => {
+          const next = new Set(prev);
+          next.add("select");
+          return next;
+        });
       }
     } catch (err) {
       setError("Selection failed");
@@ -296,7 +308,11 @@ export default function PipelineLabPage() {
         setFetchResult(data.fetch);
         setClusterResult(data.cluster);
         setSelectResult(data.select);
-        setExpandedSections(new Set(["fetch", "cluster", "select"]));
+        const newSections = new Set<string>();
+        newSections.add("fetch");
+        newSections.add("cluster");
+        newSections.add("select");
+        setExpandedSections(newSections);
       }
     } catch (err) {
       setError("Pipeline failed");
