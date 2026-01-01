@@ -304,11 +304,14 @@ def get_all_gsheet_topics() -> list[str]:
     try:
         from sourcing import GSheetSourceLibrary
         library = GSheetSourceLibrary()
-        if not library.sources:
+        
+        # Use get_all_sources() method
+        all_sources = library.get_all_sources()
+        if not all_sources:
             return []
         
         topics = set()
-        for source in library.sources:
+        for source in all_sources:
             topic = source.get("topic", "").strip().lower()
             if topic:
                 topics.add(topic)
