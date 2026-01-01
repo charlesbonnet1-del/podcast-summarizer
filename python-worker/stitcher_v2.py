@@ -3148,12 +3148,17 @@ def assemble_lego_podcast(
                 user_id=user_id
             )
         else:
+            item = first_cluster_items[0]
             first_segment_data = get_or_create_segment(
-                article=first_cluster_items[0],
+                url=item["url"],
+                title=item.get("title", ""),
+                topic_slug=item.get("keyword", "general"),
                 target_date=target_date,
                 edition=edition,
                 format_config=config,
-                user_id=user_id
+                use_enrichment=True,
+                user_id=user_id,
+                source_name=item.get("source_name")
             )
         
         if first_segment_data and first_segment_data.get("audio_path"):
