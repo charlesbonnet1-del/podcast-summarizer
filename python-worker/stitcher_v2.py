@@ -2748,20 +2748,20 @@ def select_smart_content(user_id: str, max_articles: int, min_articles: int = 1)
         excluded_topics = [t for t, w in user_weights.items() if w == 0]
         log.info(f"⛔ Excluded topics (0% weight): {excluded_topics}")
         
+        # V17: Global queue - no user_id filter
         result = supabase.table("content_queue") \
             .select("url, title, keyword, source, source_name, vertical_id") \
-            .eq("user_id", user_id) \
             .eq("status", "pending") \
             .order("created_at") \
             .limit(100) \
             .execute()
         
         if not result.data:
-            log.warning("❌ No pending content in queue!")
+            log.warning("❌ No pending content in global queue!")
             return []
         
         items = result.data
-        log.info(f"📋 Queue has {len(items)} PENDING items (before filtering)")
+        log.info(f"📋 Global queue has {len(items)} PENDING items (before filtering)")
         
         # V17: Filter out excluded topics
         items = [item for item in items if item.get("keyword", "general") not in excluded_topics]
@@ -2877,16 +2877,16 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
         user_weights = get_user_topic_weights(user_id)
         excluded_topics = [t for t, w in user_weights.items() if w == 0]
         
+        # V17: Global queue - no user_id filter
         result = supabase.table("content_queue") \
             .select("url, title, keyword, source, source_name, vertical_id") \
-            .eq("user_id", user_id) \
             .eq("status", "pending") \
             .order("created_at") \
             .limit(100) \
             .execute()
         
         if not result.data:
-            log.warning("❌ No pending content in queue!")
+            log.warning("❌ No pending content in global queue!")
             return []
         
         items = result.data
@@ -2899,7 +2899,7 @@ def select_diverse_content(user_id: str, max_articles: int) -> list[dict]:
             return []
         
         unique_sources = set(i.get("source", "NONE") for i in items)
-        log.info(f"📋 Queue has {len(items)} items (after excluding {len(excluded_topics)} topics), sources: {unique_sources}")
+        log.info(f"📋 Global queue has {len(items)} items (after excluding {len(excluded_topics)} topics), sources: {unique_sources}")
         
         priority_items = []
         bing_items = []
@@ -3044,11 +3044,10 @@ def assemble_lego_podcast(
     log.info(f"   Selection: Priority tiers (HIGH → MEDIUM → LOW)")
     log.info("=" * 60)
     
-    # V12 DIAGNOSTIC: Count pending content before selection
+    # V17 DIAGNOSTIC: Count pending content in global queue
     try:
         pending_check = supabase.table("content_queue") \
             .select("id, source, keyword") \
-            .eq("user_id", user_id) \
             .eq("status", "pending") \
             .execute()
         
@@ -3063,7 +3062,7 @@ def assemble_lego_podcast(
             topic = item.get("keyword", "unknown")
             topic_counts[topic] = topic_counts.get(topic, 0) + 1
         
-        log.info(f"📊 QUEUE DIAGNOSTIC: {pending_count} pending articles")
+        log.info(f"📊 GLOBAL QUEUE DIAGNOSTIC: {pending_count} pending articles")
         log.info(f"   By source: {source_counts}")
         log.info(f"   By topic: {topic_counts}")
         

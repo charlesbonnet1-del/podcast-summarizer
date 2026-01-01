@@ -269,33 +269,22 @@ def generate_on_demand(user_id: str, format_type: str = None) -> dict | None:
     else:
         target_duration = FORMAT_DURATIONS.get(format_type, 15)
     
-    # V12 FIX: Check if we have enough pending content
-    min_articles_needed = 5 if format_type == "flash" else 8
+    # V17: Queue is now global - check global pending content
+    # No more per-user fetching, segments are pre-generated
+    min_segments_needed = 3 if format_type == "flash" else 6
     try:
+        # Check global queue for pending content
         pending_result = supabase.table("content_queue") \
             .select("id") \
-            .eq("user_id", user_id) \
             .eq("status", "pending") \
             .execute()
         
         pending_count = len(pending_result.data) if pending_result.data else 0
-        log.info(f"📋 Pending content check: {pending_count} articles in queue")
+        log.info(f"📋 Global queue check: {pending_count} articles pending")
         
-        if pending_count < min_articles_needed:
-            log.warning(f"⚠️ Not enough content ({pending_count} < {min_articles_needed}), running fetcher first...")
-            try:
-                from fetcher import fetch_for_user
-                fetch_count = fetch_for_user(user_id)
-                log.info(f"✅ Fetcher added {fetch_count} articles")
-            except ImportError:
-                log.warning("⚠️ fetcher.fetch_for_user not available, trying run_fetcher")
-                try:
-                    from fetcher import run_fetcher_for_user
-                    run_fetcher_for_user(user_id)
-                except:
-                    log.warning("⚠️ Could not run fetcher, proceeding with available content")
-            except Exception as e:
-                log.warning(f"⚠️ Fetcher failed: {e}, proceeding with available content")
+        if pending_count < min_segments_needed:
+            log.warning(f"⚠️ Low content in global queue ({pending_count}). Run fetcher cron job.")
+            # V17: No more on-demand fetching - queue should be filled by cron
     except Exception as e:
         log.warning(f"⚠️ Could not check pending content: {e}")
     

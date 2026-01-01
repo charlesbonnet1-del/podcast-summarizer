@@ -293,252 +293,177 @@ def fetch_bing_for_topics(topic_ids: list[str], max_articles: int = 10) -> list[
 
 
 # ============================================
-# MAIN FETCHER (3-Level Hierarchy)
+# MAIN FETCHER (V17 - Global Queue)
 # ============================================
+
+def get_all_gsheet_topics() -> list[str]:
+    """
+    Get all unique topics from GSheet RSS library.
+    These are the topics we can potentially serve.
+    """
+    try:
+        from sourcing import GSheetSourceLibrary
+        library = GSheetSourceLibrary()
+        if not library.sources:
+            return []
+        
+        topics = set()
+        for source in library.sources:
+            topic = source.get("topic", "").strip().lower()
+            if topic:
+                topics.add(topic)
+        
+        log.info(f"📋 Found {len(topics)} topics in GSheet: {sorted(topics)}")
+        return list(topics)
+    except Exception as e:
+        log.error(f"Failed to get GSheet topics: {e}")
+        return []
+
+
+def get_demanded_topics() -> set[str]:
+    """
+    Get topics that at least one user wants (weight > 0).
+    Used to filter which segments to generate.
+    """
+    try:
+        # Get all user_interests with their weights
+        interests_result = supabase.table("user_interests") \
+            .select("keyword") \
+            .execute()
+        
+        # Get all users' topic_weights
+        users_result = supabase.table("users") \
+            .select("topic_weights") \
+            .execute()
+        
+        demanded = set()
+        
+        # Add all keywords from user_interests
+        for item in (interests_result.data or []):
+            keyword = item.get("keyword", "").strip().lower()
+            if keyword:
+                demanded.add(keyword)
+        
+        # Add topics with weight > 0 from topic_weights
+        for user in (users_result.data or []):
+            weights = user.get("topic_weights") or {}
+            for topic, weight in weights.items():
+                if weight and weight > 0:
+                    demanded.add(topic.lower())
+        
+        log.info(f"📊 Demanded topics (at least 1 user wants): {sorted(demanded)}")
+        return demanded
+    except Exception as e:
+        log.error(f"Failed to get demanded topics: {e}")
+        return set()
+
 
 def run_fetcher(edition: str = "morning"):
     """
-    Main fetcher with 2-level sourcing hierarchy:
-    1. GSheet RSS Library - Trusted curated sources
-    2. Bing News - Backup when Level 1 insufficient
+    V17: Global fetcher - fetches ALL topics from GSheet into a GLOBAL queue.
     
-    V17: Removed manual URLs - will be separate podcast category.
+    No more per-user fetching. The queue is shared, segments are generated
+    globally, then distributed to users based on their preferences.
+    
+    Hierarchy:
+    1. GSheet RSS Library - All topics, FR + INT sources
+    2. Bing News - Backup for topics with insufficient GSheet content
     """
-    log.info("Starting Keernel fetcher", edition=edition)
+    log.info("🚀 Starting Keernel V17 Global Fetcher", edition=edition)
     start = datetime.now()
     
-    # Get all users with their settings
-    try:
-        users_result = supabase.table("users") \
-            .select("id, first_name, selected_verticals") \
-            .execute()
-        users = users_result.data or []
-    except Exception as e:
-        log.error("Failed to get users", error=str(e))
+    # Get ALL topics from GSheet
+    all_topics = get_all_gsheet_topics()
+    
+    if not all_topics:
+        log.warning("❌ No topics found in GSheet!")
         return
     
-    if not users:
-        log.info("No users found")
-        return
+    log.info(f"📋 Fetching content for {len(all_topics)} topics")
     
-    # Get custom keywords (user_interests) - these are the granular topics
+    articles = []
+    seen_urls = set()
+    
+    # Get existing URLs to avoid duplicates
     try:
-        interests_result = supabase.table("user_interests") \
-            .select("user_id, keyword, display_name, search_keywords") \
-            .execute()
-        interests_by_user = {}
-        for item in (interests_result.data or []):
-            uid = item["user_id"]
-            if uid not in interests_by_user:
-                interests_by_user[uid] = []
-            interests_by_user[uid].append({
-                "keyword": item["keyword"],
-                "display_name": item.get("display_name"),
-                "search_keywords": item.get("search_keywords")
-            })
-    except Exception as e:
-        log.warning("Failed to get interests", error=str(e))
-        interests_by_user = {}
-    
-    total_added = 0
-    
-    for user in users:
-        user_id = user["id"]
-        # V17: Removed include_international - always fetch all sources
-        
-        log.info("Processing user", user_id=user_id[:8])
-        
-        # Get user's topics (keywords from user_interests)
-        user_topics = interests_by_user.get(user_id, [])
-        topic_ids = [t["keyword"] for t in user_topics]
-        
-        if not topic_ids:
-            log.info("No topics for user, skipping", user_id=user_id[:8])
-            continue
-        
-        # V14: No limit - use all user topics
-        # topic_ids = topic_ids[:8]  # Removed artificial limit
-        
-        articles = []
-        seen_urls = set()
-        
-        # ============================================
-        # LEVEL 1: GSheet RSS Library (FR + INT)
-        # ============================================
-        # V17: Always fetches all sources (no international toggle)
-        gsheet_articles = get_gsheet_sources_for_topics(topic_ids)
-        
-        for article in gsheet_articles:
-            if article["url"] not in seen_urls:
-                seen_urls.add(article["url"])
-                articles.append(article)
-        
-        log.info("Level 1 (GSheet) articles", count=len(articles), user=user_id[:8])
-        
-        # ============================================
-        # LEVEL 2: Bing News (Backup)
-        # ============================================
-        # Only fetch from Bing if we don't have enough articles
-        target_articles = len(topic_ids) * 3  # ~3 articles per topic
-        
-        if len(articles) < target_articles:
-            remaining = target_articles - len(articles)
-            log.info("Fetching backup from Bing", 
-                    need=remaining, 
-                    user=user_id[:8])
-            
-            # V17: Always fetches FR + US (no international toggle)
-            bing_articles = fetch_bing_for_topics(
-                topic_ids, 
-                max_articles=remaining
-            )
-            
-            for article in bing_articles:
-                if article["url"] not in seen_urls:
-                    seen_urls.add(article["url"])
-                    articles.append(article)
-        
-        log.info("Total articles for user", 
-                count=len(articles), 
-                user=user_id[:8])
-        
-        # ============================================
-        # ADD TO CONTENT QUEUE
-        # ============================================
-        for article in articles:
-            # source_type: gsheet_rss, bing_news, etc. (for categorization)
-            # source_name: "Le Monde", "TechCrunch", etc. (for display in dialogue)
-            source_type = article.get("source_type", "unknown")
-            source_name = article.get("source", "unknown")  # Media name from GSheet or Bing
-            
-            result = add_to_content_queue_auto(
-                user_id=user_id,
-                url=article["url"],
-                title=article["title"],
-                keyword=article.get("topic", "general"),
-                edition=edition,
-                source=source_type,  # gsheet_rss, bing_news, etc.
-                source_name=source_name,  # V13: Media name for dialogue prompt
-                source_country=article.get("source_country", "FR"),
-                vertical_id=article.get("vertical_id")
-            )
-            if result:
-                total_added += 1
-    
-    elapsed = (datetime.now() - start).total_seconds()
-    log.info("Fetcher complete", 
-             users=len(users), 
-             articles_added=total_added, 
-             elapsed=round(elapsed, 1))
-
-
-def fetch_for_user(user_id: str, edition: str = None) -> int:
-    """
-    Fetch content for a specific user.
-    Called before on-demand generation to ensure enough content.
-    
-    Returns:
-        Number of articles added
-    """
-    if not edition:
-        edition = "morning" if datetime.now().hour < 14 else "evening"
-    
-    log.info(f"🔄 Fetching content for user {user_id[:8]}...")
-    
-    try:
-        # Get user settings
-        user_result = supabase.table("users") \
-            .select("id, first_name, selected_verticals") \
-            .eq("id", user_id) \
-            .single() \
-            .execute()
-        
-        if not user_result.data:
-            log.warning(f"User {user_id[:8]} not found")
-            return 0
-        
-        user = user_result.data
-        # V17: Removed include_international - always fetch all sources
-        
-        # Get user's topics
-        interests_result = supabase.table("user_interests") \
-            .select("keyword, display_name, search_keywords") \
-            .eq("user_id", user_id) \
-            .execute()
-        
-        topic_ids = [t["keyword"] for t in (interests_result.data or [])]
-        
-        if not topic_ids:
-            log.warning(f"No topics for user {user_id[:8]}")
-            return 0
-        
-        # V14: No limit - use all user topics
-        # topic_ids = topic_ids[:8]  # Removed artificial limit
-        
-        articles = []
-        seen_urls = set()
-        
-        # Get existing URLs to avoid duplicates
         existing = supabase.table("content_queue") \
             .select("url") \
-            .eq("user_id", user_id) \
             .eq("status", "pending") \
             .execute()
         
         for item in (existing.data or []):
             seen_urls.add(item["url"])
         
-        # Level 1: GSheet RSS (FR + INT)
-        # V17: Always fetches all sources
-        gsheet_articles = get_gsheet_sources_for_topics(topic_ids)
+        log.info(f"📦 {len(seen_urls)} URLs already in queue")
+    except Exception as e:
+        log.warning(f"Could not check existing URLs: {e}")
+    
+    # ============================================
+    # LEVEL 1: GSheet RSS Library (FR + INT)
+    # ============================================
+    gsheet_articles = get_gsheet_sources_for_topics(all_topics)
+    
+    for article in gsheet_articles:
+        if article["url"] not in seen_urls:
+            seen_urls.add(article["url"])
+            articles.append(article)
+    
+    log.info(f"📰 Level 1 (GSheet): {len(articles)} articles")
+    
+    # ============================================
+    # LEVEL 2: Bing News (Backup)
+    # ============================================
+    # Count articles per topic to find gaps
+    topic_counts = {}
+    for article in articles:
+        topic = article.get("topic", "general")
+        topic_counts[topic] = topic_counts.get(topic, 0) + 1
+    
+    # Find topics with insufficient content (< 5 articles)
+    MIN_ARTICLES_PER_TOPIC = 5
+    sparse_topics = [t for t in all_topics if topic_counts.get(t, 0) < MIN_ARTICLES_PER_TOPIC]
+    
+    if sparse_topics:
+        log.info(f"📰 Topics needing Bing backup: {sparse_topics}")
         
-        for article in gsheet_articles:
+        bing_articles = fetch_bing_for_topics(sparse_topics, max_articles=len(sparse_topics) * 3)
+        
+        for article in bing_articles:
             if article["url"] not in seen_urls:
                 seen_urls.add(article["url"])
                 articles.append(article)
         
-        log.info(f"📰 GSheet articles: {len(articles)}")
+        log.info(f"📰 After Bing backup: {len(articles)} total articles")
+    
+    # ============================================
+    # ADD TO GLOBAL CONTENT QUEUE
+    # ============================================
+    total_added = 0
+    
+    for article in articles:
+        source_type = article.get("source_type", "unknown")
+        source_name = article.get("source", "unknown")
         
-        # Level 2: Bing News backup - only if GSheet gave very few articles
-        target_articles = len(topic_ids) * 5  # V14: Increased from 3 to 5 per topic
-        if len(articles) < target_articles:
-            remaining = target_articles - len(articles)
-            # V17: Always fetches FR + US
-            bing_articles = fetch_bing_for_topics(topic_ids, max_articles=remaining)
-            
-            for article in bing_articles:
-                if article["url"] not in seen_urls:
-                    seen_urls.add(article["url"])
-                    articles.append(article)
-        
-        log.info(f"📰 Total articles: {len(articles)}")
-        
-        # Add to queue
-        added = 0
-        for article in articles:
-            source_type = article.get("source_type", "unknown")
-            source_name = article.get("source", None)  # Media name
-            
-            result = add_to_content_queue_auto(
-                user_id=user_id,
-                url=article["url"],
-                title=article["title"],
-                keyword=article.get("topic", "general"),
-                edition=edition,
-                source=source_type,
-                source_name=source_name,  # V13: Media name for dialogue
-                source_country=article.get("source_country", "FR"),
-                vertical_id=article.get("vertical_id")
-            )
-            if result:
-                added += 1
-        
-        log.info(f"✅ Added {added} articles for user {user_id[:8]}")
-        return added
-        
-    except Exception as e:
-        log.error(f"fetch_for_user failed: {e}")
-        return 0
+        result = add_to_content_queue_auto(
+            user_id="global",  # V17: Global queue, no user_id
+            url=article["url"],
+            title=article["title"],
+            keyword=article.get("topic", "general"),
+            edition=edition,
+            source=source_type,
+            source_name=source_name,
+            source_country=article.get("source_country", "FR"),
+            vertical_id=article.get("vertical_id")
+        )
+        if result:
+            total_added += 1
+    
+    elapsed = (datetime.now() - start).total_seconds()
+    log.info(f"✅ Fetcher complete: {total_added} articles added in {elapsed:.1f}s")
+
+
+# V17: fetch_for_user REMOVED - queue is now global
+# Segments are generated globally then distributed to users based on preferences
 
 
 def cleanup_old():
