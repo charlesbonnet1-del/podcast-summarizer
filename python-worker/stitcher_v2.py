@@ -128,14 +128,18 @@ CONTENT_QUEUE_DAYS = 3
 REPORT_RETENTION_DAYS = 365
 
 # Format configurations - OPTIMIZED FOR DENSITY
-# V12: Increased words per article for more substantial segments
+# V17: Added segment duration constraints (no article limits)
 FORMAT_CONFIG = {
     "flash": {
         "duration_minutes": 4,
         "total_words": 1000,           # Target ~4-5 min with segments
-        "max_segments": 4,             # V17: 3-4 segments (each segment can have multiple articles)
+        "max_segments": 4,             # V17: 3-4 segments
         "min_segments": 3,
-        "words_per_article": 150,      # ~35-40s per segment
+        # V17: Segment duration control (replaces article limits)
+        "segment_target_seconds": 45,  # Target ~45s per segment
+        "segment_max_seconds": 60,     # Hard max 60s (can stretch for major events)
+        "segment_target_words": 110,   # ~45s at 150 WPM
+        "segment_max_words": 150,      # ~60s at 150 WPM
         "style": "ultra-concis et percutant"
     },
     "digest": {
@@ -143,7 +147,11 @@ FORMAT_CONFIG = {
         "total_words": 2800,
         "max_segments": 8,             # V17: 6-8 segments
         "min_segments": 6,
-        "words_per_article": 240,
+        # V17: Segment duration control (replaces article limits)
+        "segment_target_seconds": 90,  # Target ~90s per segment
+        "segment_max_seconds": 120,    # Hard max 120s (can stretch for major events)
+        "segment_target_words": 225,   # ~90s at 150 WPM
+        "segment_max_words": 300,      # ~120s at 150 WPM
         "style": "approfondi et analytique"
     }
 }
@@ -1118,6 +1126,7 @@ def classify_deal_type(title: str) -> Optional[str]:
 def generate_cluster_dialogue_script(
     cluster_item: dict,
     word_count: int = 200,
+    max_word_count: int = None,
     style: str = "dynamique",
     topic_slug: str = None,
     user_id: str = None
@@ -1125,7 +1134,13 @@ def generate_cluster_dialogue_script(
     """
     V14: Generate DIALOGUE script from a pre-synthesized cluster.
     Uses the thesis/antithesis structure for better dialogue.
+    
+    V17: Added max_word_count for flexible duration control.
     """
+    # V17: Default max to target + 30% if not specified
+    if max_word_count is None:
+        max_word_count = int(word_count * 1.3)
+    
     if not groq_client:
         log.error("Groq client not available")
         return None
@@ -1138,6 +1153,7 @@ def generate_cluster_dialogue_script(
             content=cluster_item.get("content", ""),
             source_name=cluster_item.get("source_name", ""),
             word_count=word_count,
+            max_word_count=max_word_count,
             style=style,
             topic_slug=topic_slug,
             user_id=user_id
@@ -1207,6 +1223,7 @@ def generate_dialogue_segment_script(
     content: str,
     source_name: str,
     word_count: int = 200,
+    max_word_count: int = None,
     style: str = "dynamique",
     use_enrichment: bool = False,
     topic_slug: str = None,
@@ -1217,13 +1234,22 @@ def generate_dialogue_segment_script(
     """
     Generate DIALOGUE script for a segment.
     
+    V17: Added max_word_count for flexible duration control.
+    Target word_count for normal segments, can expand to max_word_count for major events.
+    
     Args:
+        word_count: Target word count (~target duration)
+        max_word_count: Maximum word count (can stretch for important content)
         use_enrichment: If True, uses Perplexity to add context (for Digest mode)
         topic_slug: Topic identifier to fetch previous segment
         user_id: User ID for context (optional)
         source_type: Type of source ("youtube_video", "article", etc.)
         metadata: Additional metadata (attribution_prefix for YouTube)
     """
+    # V17: Default max to target + 30% if not specified
+    if max_word_count is None:
+        max_word_count = int(word_count * 1.3)
+    
     if not groq_client:
         log.error("Groq client not available")
         return None
@@ -1549,11 +1575,16 @@ def get_or_create_segment(
     
     # 4. Generate DIALOGUE script (with Perplexity enrichment for Digest)
     # V12: Pass topic_slug to check for previous segment
+    # V17: Use segment duration constraints instead of words_per_article
+    target_words = format_config.get("segment_target_words", 150)
+    max_words = format_config.get("segment_max_words", 200)
+    
     script = generate_dialogue_segment_script(
         title=title,
         content=content,
         source_name=source_name,
-        word_count=format_config["words_per_article"],
+        word_count=target_words,
+        max_word_count=max_words,
         style=format_config["style"],
         use_enrichment=use_enrichment,
         topic_slug=topic_slug,

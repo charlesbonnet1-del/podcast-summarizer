@@ -63,10 +63,12 @@ def map_vertical(gsheet_vertical: str) -> str:
         return "ai_tech"  # Default
     key = gsheet_vertical.strip().lower()
     return VERTICAL_MAPPING.get(key, key)
-MAX_ARTICLES_PER_VERTICAL = 3
-MAX_ARTICLES_PER_TOPIC = 2
 
-# Markets configuration (Bing News - Level 3 backup)
+# V17: Removed MAX_ARTICLES_PER_VERTICAL and MAX_ARTICLES_PER_TOPIC
+# Segment duration is now controlled at generation time, not fetch time
+# This allows clustering to work with full data
+
+# Markets configuration (Bing News - Level 2 backup)
 MARKETS = {
     "FR": "https://www.bing.com/news/search?q={query}&format=rss&mkt=fr-FR",
     "US": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-US",
@@ -142,8 +144,9 @@ def get_gsheet_sources_for_topics(topic_ids: list[str], include_international: b
             log.info("Found GSheet sources (INT)", count=len(intl_sources))
         
         # Fetch from top sources (sorted by score)
+        # V17: Increased max_items per feed to 5 (was 2) - no topic limit
         for source in sources[:30]:  # V14: Increased from 15 to 30 RSS feeds
-            feed_articles = fetch_rss_feed(source["url"], max_items=MAX_ARTICLES_PER_TOPIC)
+            feed_articles = fetch_rss_feed(source["url"], max_items=5)
             
             if not feed_articles:
                 # RSS failed - decrement score
