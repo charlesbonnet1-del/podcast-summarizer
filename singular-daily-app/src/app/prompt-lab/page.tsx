@@ -15,7 +15,8 @@ import {
   Clock,
   Save,
   RefreshCw,
-  Zap
+  Zap,
+  Settings2
 } from "lucide-react";
 
 interface Article {
@@ -278,9 +279,17 @@ export default function PromptLabPage() {
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <FileText className="w-4 h-4" />
-            {totalArticles} articles en queue
+          <div className="flex items-center gap-4">
+            <Link href="/pipeline-lab">
+              <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 text-orange-400 hover:bg-orange-500/30 transition-all font-medium text-sm">
+                <Settings2 className="w-4 h-4" />
+                Pipeline Lab
+              </button>
+            </Link>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FileText className="w-4 h-4" />
+              {totalArticles} articles en queue
+            </div>
           </div>
         </div>
       </div>
