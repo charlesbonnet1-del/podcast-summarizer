@@ -213,17 +213,29 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
     """Add a news item to the content queue from automatic fetching.
     Checks for duplicates before inserting.
     
+    V17: Supports global queue with user_id=None or user_id="global"
+    
     Args:
+        user_id: User ID or "global"/None for global queue
         source: Source type (gsheet_rss, bing_news, manual, etc.)
         source_name: Display name of the media (e.g., "Le Monde", "TechCrunch") - optional
     """
     try:
-        # Check if URL already exists for this user (any status)
-        existing = supabase.table("content_queue") \
-            .select("id") \
-            .eq("user_id", user_id) \
-            .eq("url", url) \
-            .execute()
+        # V17: Handle global queue (user_id=None or "global")
+        is_global = user_id is None or user_id == "global"
+        
+        # Check if URL already exists (for global: just check URL, for user: check user+URL)
+        if is_global:
+            existing = supabase.table("content_queue") \
+                .select("id") \
+                .eq("url", url) \
+                .execute()
+        else:
+            existing = supabase.table("content_queue") \
+                .select("id") \
+                .eq("user_id", user_id) \
+                .eq("url", url) \
+                .execute()
         
         if existing.data:
             # Already exists, skip silently
@@ -231,7 +243,6 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
         
         # Build insert data
         insert_data = {
-            "user_id": user_id,
             "url": url,
             "title": title,
             "source_type": "article",
@@ -242,6 +253,11 @@ def add_to_content_queue_auto(user_id: str, url: str, title: str, keyword: str, 
             "priority": "normal",
             "status": "pending"
         }
+        
+        # V17: Only add user_id if not global
+        if not is_global:
+            insert_data["user_id"] = user_id
+        # For global queue, user_id will be NULL
         
         # Add source_name if provided (media display name)
         # Note: Column must exist in DB - run migration first
