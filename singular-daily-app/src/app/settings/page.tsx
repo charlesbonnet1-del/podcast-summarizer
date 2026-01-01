@@ -39,27 +39,36 @@ export default async function SettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-8">
-      {/* Header - Style like home */}
+      {/* Header - Premium style */}
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-card border border-brass/20 flex items-center justify-center glow-brass">
-          <Settings className="w-6 h-6 text-sand" />
+        <div 
+          className="w-14 h-14 rounded-2xl flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.15) 0%, rgba(0, 122, 255, 0.1) 100%)',
+            boxShadow: '0 0 30px rgba(0, 240, 255, 0.15)',
+          }}
+        >
+          <Settings className="w-7 h-7 text-[#00F0FF]" />
         </div>
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Settings
           </h1>
-          <p className="text-muted-foreground font-body">
+          <p className="text-muted-foreground">
             Customize your Keernel experience
           </p>
         </div>
       </div>
 
       {/* Profile Info */}
-      <Card className="matte-card border-0">
+      <Card className="bg-card/60 backdrop-blur-xl border-border/30 shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
-              <User className="w-5 h-5 text-sand" />
+            <div 
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(0, 240, 255, 0.1)' }}
+            >
+              <User className="w-5 h-5 text-[#00F0FF]" />
             </div>
             <div>
               <CardTitle className="text-lg font-display">Your Profile</CardTitle>
@@ -79,11 +88,14 @@ export default async function SettingsPage() {
       </Card>
 
       {/* Format Toggle - Express / Deep Dive */}
-      <Card className="matte-card border-0">
+      <Card className="bg-card/60 backdrop-blur-xl border-border/30 shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
-              <Clock className="w-5 h-5 text-sand" />
+            <div 
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(0, 240, 255, 0.1)' }}
+            >
+              <Clock className="w-5 h-5 text-[#00F0FF]" />
             </div>
             <div>
               <CardTitle className="text-lg font-display">Format</CardTitle>
@@ -99,11 +111,14 @@ export default async function SettingsPage() {
       </Card>
 
       {/* Signal Mixer - Topic Weights */}
-      <Card className="matte-card border-0">
+      <Card className="bg-card/60 backdrop-blur-xl border-border/30 shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
-              <Sliders className="w-5 h-5 text-sand" />
+            <div 
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(0, 240, 255, 0.1)' }}
+            >
+              <Sliders className="w-5 h-5 text-[#00F0FF]" />
             </div>
             <div>
               <CardTitle className="text-lg font-display">Signal Mixer</CardTitle>
@@ -119,11 +134,14 @@ export default async function SettingsPage() {
       </Card>
 
       {/* Notifications */}
-      <Card className="matte-card border-0">
+      <Card className="bg-card/60 backdrop-blur-xl border-border/30 shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
-              <Bell className="w-5 h-5 text-sand" />
+            <div 
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(0, 240, 255, 0.1)' }}
+            >
+              <Bell className="w-5 h-5 text-[#00F0FF]" />
             </div>
             <div>
               <CardTitle className="text-lg font-display">Notifications</CardTitle>
@@ -137,11 +155,14 @@ export default async function SettingsPage() {
       </Card>
 
       {/* RSS Feed */}
-      <Card className="matte-card border-0">
+      <Card className="bg-card/60 backdrop-blur-xl border-border/30 shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-card border border-brass/20 flex items-center justify-center">
-              <Rss className="w-5 h-5 text-sand" />
+            <div 
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(0, 240, 255, 0.1)' }}
+            >
+              <Rss className="w-5 h-5 text-[#00F0FF]" />
             </div>
             <div>
               <CardTitle className="text-lg font-display">Podcast Feed</CardTitle>
@@ -156,7 +177,7 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Separator />
+      <Separator className="bg-border/30" />
 
       {/* Danger Zone */}
       <DangerZone />
