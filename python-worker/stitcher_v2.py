@@ -14,6 +14,7 @@ V13 CHANGES:
 - Inventory-first architecture
 """
 import os
+import gc  # V16: Garbage collection for memory management
 import hashlib
 import tempfile
 from datetime import datetime, date, timezone, timedelta
@@ -970,10 +971,15 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
             except:
                 pass
         
+        # V16: Clean up memory after audio generation
+        del combined
+        gc.collect()
+        
         return output_path
         
     except Exception as e:
         log.error(f"❌ Combine failed: {e}")
+        gc.collect()
         return None
 
 
@@ -3377,8 +3383,15 @@ def assemble_lego_podcast(
                     })
                 
                 log.info(f"📊 Segment {cluster_idx}: {segment.get('duration', 0)}s | Total: {total_duration}s / {target_seconds}s")
+                
+                # V16: Free memory after each segment
+                gc.collect()
             else:
                 log.warning(f"⚠️ Failed to create segment for: {item.get('title', 'No title')[:40]}")
+    
+    # V16: Force garbage collection before stitching
+    gc.collect()
+    log.info("🧹 Memory cleaned before stitching")
     
     if not sources_data:
         log.error("❌ No segments generated!")
@@ -3672,10 +3685,18 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         except:
             pass
         
+        # V16: Force garbage collection after stitching
+        del combined
+        del dialogue_audios
+        del intro_block_audio
+        gc.collect()
+        log.info("🧹 Memory cleaned after stitching")
+        
         return final_url
         
     except Exception as e:
         log.error(f"Stitching failed: {e}")
+        gc.collect()  # Clean up even on failure
         return None
 
 
