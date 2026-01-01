@@ -890,12 +890,16 @@ Exemple : "2 - Iconique et universel"
 # ============================================
 
 BING_MARKETS = {
-    "FR": "https://www.bing.com/news/search?q={query}&format=rss&mkt=fr-FR",
-    "US": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-US",
+    # Add freshness=Day to only get articles from the last 24 hours
+    "FR": "https://www.bing.com/news/search?q={query}&format=rss&mkt=fr-FR&qft=interval%3d%227%22",
+    "US": "https://www.bing.com/news/search?q={query}&format=rss&mkt=en-US&qft=interval%3d%227%22",
 }
 
 def fetch_bing_news(query: str, market: str = "FR", max_items: int = 3) -> list[dict]:
-    """Fetch news from Bing News RSS (fallback source)."""
+    """Fetch news from Bing News RSS (fallback source).
+    
+    Note: Uses qft=interval%3d"7" to filter to last 7 days.
+    """
     url_template = BING_MARKETS.get(market, BING_MARKETS["FR"])
     url = url_template.format(query=quote_plus(query))
     
@@ -910,8 +914,21 @@ def fetch_bing_news(query: str, market: str = "FR", max_items: int = 3) -> list[
         for item in root.findall(".//item")[:max_items]:
             title = item.find("title")
             link = item.find("link")
+            pub_date = item.find("pubDate")
             
             if title is not None and link is not None:
+                # Check publication date if available
+                if pub_date is not None and pub_date.text:
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        article_date = parsedate_to_datetime(pub_date.text)
+                        age_days = (datetime.now(timezone.utc) - article_date).days
+                        if age_days > 7:
+                            log.debug("Skipping old Bing article", title=title.text[:50], age_days=age_days)
+                            continue
+                    except Exception:
+                        pass  # If date parsing fails, include the article
+                
                 # Extract real URL from Bing redirect
                 real_url = link.text
                 if "bing.com" in real_url:
