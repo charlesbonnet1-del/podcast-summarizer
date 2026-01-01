@@ -17,6 +17,15 @@ from worker_v2 import generate_on_demand, process_user_queue_v2
 from db import supabase
 from sourcing import parse_cloudmailin_webhook
 
+# V17: Pipeline Lab
+from pipeline_lab import (
+    get_default_params,
+    sandbox_fetch,
+    sandbox_cluster,
+    sandbox_select,
+    sandbox_full_pipeline
+)
+
 load_dotenv()
 log = structlog.get_logger()
 
@@ -502,6 +511,501 @@ def newsletter_webhook():
     except Exception as e:
         log.error("Newsletter webhook error", error=str(e))
         return jsonify({"error": str(e)}), 500
+
+
+# ============================================
+# V17: PIPELINE LAB ENDPOINTS
+# ============================================
+
+@app.route("/pipeline-lab/params", methods=["GET"])
+def pipeline_lab_params():
+    """Get default pipeline parameters."""
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    return jsonify(get_default_params())
+
+
+@app.route("/pipeline-lab/fetch", methods=["POST"])
+def pipeline_lab_fetch():
+    """
+    Sandbox fetch - fetch articles without saving to DB.
+    
+    Body:
+        {
+            "params": {...},  // Optional custom params
+            "topics": [...]   // Optional list of topics
+        }
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        data = request.get_json() or {}
+        params = {**get_default_params(), **(data.get("params") or {})}
+        topics = data.get("topics")
+        
+        result = sandbox_fetch(params, topics)
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error("Pipeline lab fetch error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/pipeline-lab/cluster", methods=["POST"])
+def pipeline_lab_cluster():
+    """
+    Sandbox cluster - cluster provided articles.
+    
+    Body:
+        {
+            "articles": [...],  // Articles from fetch step
+            "params": {...}     // Optional custom params
+        }
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        data = request.get_json() or {}
+        articles = data.get("articles", [])
+        params = {**get_default_params(), **(data.get("params") or {})}
+        
+        if not articles:
+            return jsonify({"error": "No articles provided"}), 400
+        
+        result = sandbox_cluster(articles, params)
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error("Pipeline lab cluster error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/pipeline-lab/select", methods=["POST"])
+def pipeline_lab_select():
+    """
+    Sandbox select - select segments from clusters.
+    
+    Body:
+        {
+            "clusters": [...],   // Clusters from cluster step
+            "articles": [...],   // Original articles (for fallback)
+            "params": {...},     // Optional custom params
+            "format": "flash"    // "flash" or "digest"
+        }
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        data = request.get_json() or {}
+        clusters = data.get("clusters", [])
+        articles = data.get("articles", [])
+        params = {**get_default_params(), **(data.get("params") or {})}
+        format_type = data.get("format", "flash")
+        
+        result = sandbox_select(clusters, articles, params, format_type)
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error("Pipeline lab select error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/pipeline-lab/run", methods=["POST"])
+def pipeline_lab_run():
+    """
+    Run full pipeline in sandbox mode.
+    
+    Body:
+        {
+            "params": {...},     // Optional custom params
+            "format": "flash",   // "flash" or "digest"
+            "topics": [...]      // Optional list of topics
+        }
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        data = request.get_json() or {}
+        params = {**get_default_params(), **(data.get("params") or {})}
+        format_type = data.get("format", "flash")
+        topics = data.get("topics")
+        
+        result = sandbox_full_pipeline(params, format_type, topics)
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error("Pipeline lab run error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/pipeline-lab/generate-script", methods=["POST"])
+def pipeline_lab_generate_script():
+    """
+    Generate script from selected segments (connects to Prompt Lab).
+    
+    Body:
+        {
+            "segments": [...],   // Segments from select step
+            "format": "flash",   // "flash" or "digest"
+            "prompt_id": "..."   // Optional: use specific prompt from Prompt Lab
+        }
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        data = request.get_json() or {}
+        segments = data.get("segments", [])
+        format_type = data.get("format", "flash")
+        prompt_id = data.get("prompt_id")
+        
+        if not segments:
+            return jsonify({"error": "No segments provided"}), 400
+        
+        # Get prompt (from DB or default)
+        if prompt_id:
+            prompt_result = supabase.table("prompts") \
+                .select("*") \
+                .eq("id", prompt_id) \
+                .single() \
+                .execute()
+            prompt_template = prompt_result.data.get("template", "") if prompt_result.data else None
+        else:
+            prompt_template = None
+        
+        # Build articles list from segments
+        all_articles = []
+        for seg in segments:
+            all_articles.extend(seg.get("articles", []))
+        
+        # Generate script using existing stitcher logic
+        from stitcher_v2 import generate_intro_script
+        
+        script = generate_intro_script(
+            all_articles,
+            format_type=format_type,
+            custom_prompt=prompt_template
+        )
+        
+        return jsonify({
+            "script": script,
+            "segments_used": len(segments),
+            "articles_used": len(all_articles)
+        })
+        
+    except Exception as e:
+        log.error("Pipeline lab generate script error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================
+# V16: PROMPT LAB - Text-only generation
+# ============================================
+
+@app.route("/prompt-lab/queue", methods=["GET"])
+def prompt_lab_queue():
+    """
+    Get all articles in queue grouped by topic.
+    V17: Global queue, no user_id filter.
+    """
+    try:
+        # V17: Global queue - no user_id filter
+        result = supabase.table("content_queue") \
+            .select("id, title, url, source_name, keyword, source") \
+            .eq("status", "pending") \
+            .order("keyword") \
+            .execute()
+        
+        # Group by topic
+        by_topic = {}
+        for article in (result.data or []):
+            topic = article.get("keyword", "general")
+            if topic not in by_topic:
+                by_topic[topic] = []
+            by_topic[topic].append({
+                "id": article["id"],
+                "title": article.get("title", "Sans titre"),
+                "source_name": article.get("source_name", article.get("source", "Unknown")),
+                "url": article.get("url", ""),
+                "keyword": topic
+            })
+        
+        return jsonify({
+            "success": True,
+            "total_count": len(result.data or []),
+            "topics": by_topic
+        })
+    except Exception as e:
+        log.error("Prompt lab queue error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/prompt-lab/prompts", methods=["GET"])
+def prompt_lab_get_prompts():
+    """
+    Get main prompt and all topic intentions.
+    """
+    try:
+        from stitcher_v2 import (
+            DIALOGUE_SEGMENT_PROMPT, 
+            DIALOGUE_MULTI_SOURCE_PROMPT,
+            TOPIC_INTENTIONS,
+            get_prompt_from_db
+        )
+        
+        # Get main prompts (from DB or default)
+        dialogue_segment = get_prompt_from_db("dialogue_segment", DIALOGUE_SEGMENT_PROMPT)
+        dialogue_multi = get_prompt_from_db("dialogue_multi_source", DIALOGUE_MULTI_SOURCE_PROMPT)
+        
+        # Get topic intentions from DB
+        topic_intentions = {}
+        try:
+            result = supabase.table("topics").select("keyword, editorial_intention").execute()
+            for t in (result.data or []):
+                if t.get("editorial_intention"):
+                    topic_intentions[t["keyword"]] = t["editorial_intention"]
+        except:
+            pass
+        
+        # Merge with hardcoded defaults
+        for slug, intention in TOPIC_INTENTIONS.items():
+            if slug not in topic_intentions:
+                topic_intentions[slug] = intention
+        
+        return jsonify({
+            "success": True,
+            "prompts": {
+                "dialogue_segment": dialogue_segment,
+                "dialogue_multi_source": dialogue_multi
+            },
+            "topic_intentions": topic_intentions
+        })
+    except Exception as e:
+        log.error("Prompt lab get prompts error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/prompt-lab/prompts", methods=["POST"])
+def prompt_lab_save_prompts():
+    """
+    Save prompts and topic intentions.
+    """
+    try:
+        data = request.get_json() or {}
+        
+        # Save main prompt if provided
+        prompt_name = data.get("prompt_name")
+        prompt_content = data.get("prompt_content")
+        
+        if prompt_name and prompt_content:
+            try:
+                supabase.table("prompts").upsert({
+                    "name": prompt_name,
+                    "content": prompt_content
+                }).execute()
+                log.info(f"✅ Saved prompt: {prompt_name}")
+            except Exception as e:
+                log.warning(f"Could not save prompt to DB: {e}")
+        
+        # Save topic intention if provided
+        topic_slug = data.get("topic_slug")
+        topic_intention = data.get("topic_intention")
+        
+        if topic_slug and topic_intention is not None:
+            try:
+                result = supabase.table("topics") \
+                    .update({"editorial_intention": topic_intention}) \
+                    .eq("keyword", topic_slug) \
+                    .execute()
+                
+                if not result.data:
+                    supabase.table("topics").insert({
+                        "keyword": topic_slug,
+                        "name": topic_slug.replace("_", " ").title(),
+                        "editorial_intention": topic_intention
+                    }).execute()
+                
+                log.info(f"✅ Saved topic intention: {topic_slug}")
+            except Exception as e:
+                log.warning(f"Could not save topic intention to DB: {e}")
+        
+        return jsonify({"success": True})
+    except Exception as e:
+        log.error("Prompt lab save error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/prompt-lab/generate", methods=["POST"])
+def prompt_lab_generate():
+    """
+    Generate TEXT ONLY (no audio) for testing prompts.
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        data = request.get_json() or {}
+        article_ids = data.get("article_ids", [])
+        topic = data.get("topic", "general")
+        custom_prompt = data.get("custom_prompt")
+        custom_intention = data.get("custom_intention")
+        use_enrichment = data.get("use_enrichment", False)
+        
+        if not article_ids:
+            return jsonify({"error": "article_ids required"}), 400
+        
+        # Get articles from queue
+        result = supabase.table("content_queue") \
+            .select("*") \
+            .in_("id", article_ids) \
+            .execute()
+        
+        if not result.data:
+            return jsonify({"error": "No articles found"}), 404
+        
+        articles = result.data
+        
+        from extractor import extract_content
+        from stitcher_v2 import (
+            enrich_content_with_perplexity,
+            get_topic_intention,
+            FORMAT_CONFIG,
+            DIALOGUE_SEGMENT_PROMPT,
+            DIALOGUE_MULTI_SOURCE_PROMPT,
+            get_prompt_from_db
+        )
+        from groq import Groq
+        
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if not groq_api_key:
+            return jsonify({"error": "GROQ_API_KEY not configured"}), 500
+        
+        groq_client = Groq(api_key=groq_api_key)
+        
+        # Extract content from all articles
+        combined_content = ""
+        combined_title = ""
+        source_names = []
+        
+        for article in articles:
+            url = article.get("url", "")
+            title = article.get("title", "Sans titre")
+            source_name = article.get("source_name", article.get("source", "Unknown"))
+            
+            if not combined_title:
+                combined_title = title
+            
+            source_names.append(source_name)
+            
+            extraction = extract_content(url)
+            if extraction:
+                _, extracted_title, content = extraction
+                if not combined_title and extracted_title:
+                    combined_title = extracted_title
+                combined_content += f"\n\n--- SOURCE: {source_name} ---\n{title}\n{content[:2000]}"
+        
+        if not combined_content:
+            return jsonify({"error": "Could not extract content from articles"}), 400
+        
+        # Get topic intention
+        if custom_intention:
+            topic_intention = f"\n{custom_intention}\n"
+        else:
+            topic_intention = get_topic_intention(topic)
+        
+        # Perplexity enrichment
+        enriched_context = None
+        perplexity_citations = []
+        
+        if use_enrichment:
+            enriched_context, perplexity_citations = enrich_content_with_perplexity(
+                combined_title, 
+                combined_content[:2000], 
+                source_names[0] if source_names else "Unknown"
+            )
+        
+        # Build full content for LLM
+        if enriched_context:
+            full_content = f"""ARTICLE PRINCIPAL:
+{combined_content[:3000]}
+
+CONTEXTE ENRICHI (sources additionnelles):
+{enriched_context}"""
+        else:
+            full_content = combined_content[:4000]
+        
+        # Get prompt template
+        config = FORMAT_CONFIG["flash"]
+        
+        if len(articles) > 1:
+            if custom_prompt:
+                prompt_template = custom_prompt
+            else:
+                prompt_template = get_prompt_from_db("dialogue_multi_source", DIALOGUE_MULTI_SOURCE_PROMPT)
+            
+            prompt = prompt_template.format(
+                word_count=config["words_per_article"],
+                topic_intention=topic_intention,
+                source_count=len(articles),
+                sources_content=full_content,
+                style=config["style"]
+            )
+        else:
+            if custom_prompt:
+                prompt_template = custom_prompt
+            else:
+                prompt_template = get_prompt_from_db("dialogue_segment", DIALOGUE_SEGMENT_PROMPT)
+            
+            prompt = prompt_template.format(
+                word_count=config["words_per_article"],
+                topic_intention=topic_intention,
+                title=combined_title,
+                source_label=f"Source: {source_names[0]}" if source_names else "Source inconnue",
+                content=full_content,
+                attribution_instruction=f'"Selon {source_names[0]}..."' if source_names else '"Selon les sources..."',
+                previous_segment_rule="",
+                previous_segment_context="",
+                style=config["style"]
+            )
+        
+        # Call Groq for script generation
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "Tu es un scripteur de podcast expert. Tu écris des dialogues naturels et informatifs."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1500,
+            temperature=0.7
+        )
+        
+        script = response.choices[0].message.content.strip()
+        
+        word_count = len(script.split())
+        generation_time_ms = int((time.time() - start_time) * 1000)
+        
+        return jsonify({
+            "success": True,
+            "script": script,
+            "enriched_context": enriched_context,
+            "perplexity_citations": perplexity_citations,
+            "word_count": word_count,
+            "generation_time_ms": generation_time_ms,
+            "topic": topic,
+            "topic_intention": topic_intention,
+            "sources": source_names,
+            "prompt_used": prompt[:500] + "..." if len(prompt) > 500 else prompt
+        })
+        
+    except Exception as e:
+        log.error("Prompt lab generate error", error=str(e))
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 
 def run_server(port: int = 8080):
