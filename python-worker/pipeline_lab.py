@@ -19,7 +19,7 @@ from db import supabase
 from sourcing import (
     GSheetSourceLibrary,
     fetch_rss_feed,
-    search_bing_news
+    fetch_bing_news
 )
 
 log = structlog.get_logger()
@@ -184,10 +184,10 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
             if topic_count < bing_threshold:
                 try:
                     # Search Bing for this topic
-                    bing_results = search_bing_news(
+                    bing_results = fetch_bing_news(
                         query=topic,
-                        count=10,
-                        market="fr-FR"
+                        market="FR",
+                        max_items=10
                     )
                     
                     for art in bing_results:
