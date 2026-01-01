@@ -121,7 +121,10 @@ except:
 # ============================================
 
 WORDS_PER_MINUTE = 150
-SEGMENT_CACHE_DAYS = 7
+# V17: Segments are only served on day of creation, then never re-served
+SEGMENT_CACHE_DAYS = 1  # Segments only eligible on creation day
+# V17: Content queue sources stay eligible for 3 days for clustering
+CONTENT_QUEUE_DAYS = 3
 REPORT_RETENTION_DAYS = 365
 
 # Format configurations - OPTIMIZED FOR DENSITY
@@ -2490,11 +2493,15 @@ def select_inventory_first(user_id: str, max_segments: int = 8) -> list[dict]:
     Respects user topic preferences with intelligent fallback.
     
     Algorithm:
-    1. Get segments from cache (7 days eligible)
+    1. Get segments from cache (TODAY only - segments are single-day)
     2. Exclude segments already served to this user (user_history)
     3. Classify topics by priority tier based on user weights
     4. Select from HIGH priority first, then MEDIUM, then LOW
     5. Topics at 0% are EXCLUDED except for Breaking News (exceptional events)
+    
+    V17 Segment Rule:
+    - Segments are ONLY served on their creation day
+    - After day J, segment is never re-served to anyone
     
     Priority Tiers:
     - HIGH:    70-100% weight → Served first
@@ -2514,6 +2521,7 @@ def select_inventory_first(user_id: str, max_segments: int = 8) -> list[dict]:
     
     now = datetime.now()
     from datetime import timedelta
+    # V17: Only today's segments are eligible
     cache_cutoff = (now - timedelta(days=SEGMENT_CACHE_DAYS)).isoformat()
     
     # 1. Get user preferences
@@ -2531,11 +2539,11 @@ def select_inventory_first(user_id: str, max_segments: int = 8) -> list[dict]:
     log.info(f"   🟢 LOW (1-29%): {low_priority_topics}")
     log.info(f"   ⛔ EXCLUDED (0%): {excluded_topics}")
     
-    # 2. Get already-served segment hashes (KEEP - no re-serve)
+    # 2. Get already-served segment hashes (no re-serve to same user)
     served_hashes = get_user_history_hashes(user_id)
     log.info(f"📚 User has {len(served_hashes)} segments in history")
     
-    # 3. Get eligible segments from cache
+    # 3. Get eligible segments from cache (today only)
     try:
         result = supabase.table("audio_segments") \
             .select("id, content_hash, topic_slug, source_title, source_url, audio_url, audio_duration, script_text, relevance_score, timeliness_score, article_count, created_at") \
@@ -2545,11 +2553,11 @@ def select_inventory_first(user_id: str, max_segments: int = 8) -> list[dict]:
             .execute()
         
         if not result.data:
-            log.warning("❌ No segments in cache! Falling back to content_queue")
+            log.warning("❌ No segments in cache for today! Falling back to content_queue")
             return select_smart_content(user_id, max_segments)
         
         segments = result.data
-        log.info(f"📦 Found {len(segments)} segments in cache (last 7 days)")
+        log.info(f"📦 Found {len(segments)} segments in cache (today)")
         
     except Exception as e:
         log.error(f"❌ Failed to query segment cache: {e}")

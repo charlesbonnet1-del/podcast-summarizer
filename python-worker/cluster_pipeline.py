@@ -52,7 +52,8 @@ DISCOVERY_BONUS_WEIGHT = 0.15  # 15% weight for originality
 DISCOVERY_DISTANCE_THRESHOLD = 0.7  # Min distance from dominant clusters
 
 # V14.3: MATURATION WINDOW
-MATURATION_WINDOW_HOURS = 72  # 72h sliding window (was 24h)
+# V17: Content queue sources stay eligible for 3 days
+MATURATION_WINDOW_HOURS = 72  # 3 days = 72h for content queue clustering
 MERGE_SIMILARITY_THRESHOLD = 0.85  # Cosine similarity for cluster merge
 
 # Initialize clients

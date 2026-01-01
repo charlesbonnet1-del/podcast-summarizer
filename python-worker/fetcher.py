@@ -535,15 +535,20 @@ def fetch_for_user(user_id: str, edition: str = None) -> int:
 
 
 def cleanup_old():
-    """Remove pending items older than 48h."""
+    """
+    Remove pending items older than 3 days.
+    
+    V17: Content queue items stay eligible for 3 days for clustering,
+    then are cleaned up.
+    """
     try:
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=72)).isoformat()
         supabase.table("content_queue") \
             .delete() \
             .eq("status", "pending") \
             .lt("created_at", cutoff) \
             .execute()
-        log.info("Cleanup complete")
+        log.info("Cleanup complete (removed items older than 3 days)")
     except Exception as e:
         log.error("Cleanup failed", error=str(e))
 
