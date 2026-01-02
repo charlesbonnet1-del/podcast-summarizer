@@ -88,6 +88,82 @@ def get_default_params() -> dict:
 
 
 # ============================================
+# NOISE DETECTION
+# ============================================
+
+def is_noise_article(title: str, url: str, description: str = "") -> tuple[bool, str]:
+    """
+    Detect if an article is actually noise (non-article page).
+    
+    Returns:
+        (is_noise: bool, reason: str)
+    """
+    title_lower = title.lower().strip()
+    url_lower = url.lower()
+    
+    # 1. Title too short (likely navigation page)
+    word_count = len(title.split())
+    if word_count < 4:
+        return True, f"Title too short ({word_count} words)"
+    
+    # 2. Title matches common non-article patterns
+    noise_title_patterns = [
+        # Navigation pages
+        "home -", "- home", "homepage",
+        "contact -", "- contact", "contact us",
+        "about -", "- about", "about us",
+        "login", "sign in", "sign up", "register",
+        "subscribe", "subscription",
+        "careers", "jobs", "work with us", "join us",
+        "pricing", "plans", "tarifs",
+        "terms", "privacy", "legal", "conditions",
+        "faq", "help center", "support",
+        "404", "page not found", "error",
+        # Generic company pages
+        "consultant -", "- consultant",
+        "global management consulting",
+        "who we are", "what we do",
+        "our team", "our mission", "our values",
+        "press room", "newsroom",  # These are index pages, not articles
+    ]
+    
+    for pattern in noise_title_patterns:
+        if pattern in title_lower:
+            return True, f"Title matches noise pattern: '{pattern}'"
+    
+    # 3. Title is just company name + section
+    # Pattern: "Section - Company" or "Company | Section" with very short section
+    if " - " in title or " | " in title:
+        parts = title.replace(" | ", " - ").split(" - ")
+        if len(parts) == 2:
+            # Both parts are short (likely "Home - Company" or "Company - About")
+            if len(parts[0].split()) <= 2 and len(parts[1].split()) <= 3:
+                return True, f"Title looks like navigation: '{title}'"
+    
+    # 4. URL patterns that indicate non-article pages
+    noise_url_patterns = [
+        "/home", "/index", "/default",
+        "/about", "/contact", "/careers", "/jobs",
+        "/login", "/signin", "/signup", "/register",
+        "/subscribe", "/subscription", "/pricing",
+        "/terms", "/privacy", "/legal",
+        "/faq", "/help", "/support",
+        "/tag/", "/category/", "/author/",  # Index pages
+        "/page/", "/p/",  # Pagination
+    ]
+    
+    for pattern in noise_url_patterns:
+        if pattern in url_lower:
+            return True, f"URL matches noise pattern: '{pattern}'"
+    
+    # 5. No description and short title = probably not an article
+    if not description and word_count < 6:
+        return True, "No description and short title"
+    
+    return False, ""
+
+
+# ============================================
 # SANDBOX FETCH
 # ============================================
 
@@ -151,15 +227,31 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
         
         # Track articles per topic
         articles_by_topic = {t: [] for t in fetch_topics}
+        noise_count = 0
         
         for art in queue_articles:
+            title = art.get("title", "")
+            url = art.get("url", "")
+            description = art.get("description", "")
             topic = art.get("keyword", art.get("topic", "general")).lower()
+            
+            # ========== NOISE FILTER ==========
+            is_noise, noise_reason = is_noise_article(title, url, description)
+            if is_noise:
+                noise_count += 1
+                exclusions.append({
+                    "type": "noise_filtered",
+                    "title": title[:50],
+                    "url": url[:80],
+                    "reason": noise_reason
+                })
+                continue
             
             # Skip if topic not in our fetch list
             if topic not in fetch_topics:
                 exclusions.append({
                     "type": "topic_not_enabled",
-                    "title": art.get("title", "")[:50],
+                    "title": title[:50],
                     "topic": topic,
                     "reason": f"Topic '{topic}' not in enabled topics"
                 })
@@ -167,14 +259,14 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
             
             article = {
                 "id": art.get("id"),
-                "url": art.get("url", ""),
-                "title": art.get("title", ""),
+                "url": url,
+                "title": title,
                 "source_type": art.get("source_type", "queue"),
                 "source_name": art.get("source_name", art.get("source", "Unknown")),
                 "source_country": art.get("source_country", "FR"),
                 "topic": topic,
                 "keyword": topic,
-                "description": art.get("description", ""),
+                "description": description,
                 "content": art.get("processed_content", art.get("content", "")),
                 "published": art.get("published_at", art.get("created_at", "")),
                 "fetched_at": art.get("created_at", datetime.now().isoformat()),
@@ -187,7 +279,11 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
         # Count topics that got articles
         stats["topics_fetched"] = sum(1 for t in fetch_topics if articles_by_topic.get(t))
         stats["total_articles"] = len(articles)
+        stats["noise_filtered"] = noise_count
         stats["duration_seconds"] = (datetime.now() - start_time).total_seconds()
+        
+        if noise_count > 0:
+            log.info(f"🗑️ Filtered {noise_count} noise articles (non-article pages)")
         
         # Add per-topic stats
         stats["by_topic"] = {
