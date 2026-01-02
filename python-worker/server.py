@@ -971,10 +971,8 @@ def prompt_lab_generate():
             # Use content already available (from pipeline or DB)
             content = article.get("processed_content") or article.get("content") or article.get("description") or ""
             
-            log.debug(f"  Article: {title[:50]}...")
-            log.debug(f"    - processed_content: {len(article.get('processed_content', '') or '')} chars")
-            log.debug(f"    - content: {len(article.get('content', '') or '')} chars")
-            log.debug(f"    - description: {len(article.get('description', '') or '')} chars")
+            log.info(f"  📄 Article: {title[:50]}...")
+            log.info(f"    - content available: {len(content)} chars")
             
             # Extract if content is missing OR too short (less than 200 chars)
             if (not content or len(content) < 200) and url:
