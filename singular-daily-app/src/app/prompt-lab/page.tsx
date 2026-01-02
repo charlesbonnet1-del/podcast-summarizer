@@ -21,7 +21,8 @@ import {
   Target,
   Play,
   AlertTriangle,
-  XCircle
+  XCircle,
+  Download
 } from "lucide-react";
 
 // ============================================
@@ -154,6 +155,7 @@ export default function PromptLabPage() {
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [fillingQueue, setFillingQueue] = useState(false);
   const [currentStep, setCurrentStep] = useState<"idle" | "fetch" | "cluster" | "select">("idle");
   
   // Pipeline params (sandbox - not saved until "Save" clicked)
@@ -240,6 +242,32 @@ export default function PromptLabPage() {
       setError("Failed to load data");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fillQueue() {
+    setFillingQueue(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/prompt-lab", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "fill-queue" })
+      });
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        // Reload queue after a short delay to let the backend process
+        setTimeout(() => {
+          loadData();
+        }, 3000);
+      }
+    } catch (err) {
+      console.error("Fill queue failed:", err);
+      setError("Fill queue failed");
+    } finally {
+      setFillingQueue(false);
     }
   }
 
@@ -605,6 +633,15 @@ export default function PromptLabPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">{totalArticles} articles en queue</span>
+            <button 
+              onClick={fillQueue} 
+              disabled={fillingQueue}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 disabled:opacity-50 transition-colors text-sm font-medium"
+              title="Fetch fresh articles from all sources"
+            >
+              {fillingQueue ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Fill Queue
+            </button>
             <button onClick={loadData} className="p-2 rounded-lg hover:bg-background/50 transition-colors" title="Refresh all">
               <RefreshCw className="w-4 h-4 text-muted-foreground" />
             </button>

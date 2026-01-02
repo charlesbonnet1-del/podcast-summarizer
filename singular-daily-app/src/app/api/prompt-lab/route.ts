@@ -47,11 +47,15 @@ export async function POST(request: NextRequest) {
       endpoint = "/prompt-lab/generate";
       payload = {
         article_ids: body.article_ids,
+        articles: body.articles,
         topic: body.topic,
         custom_prompt: body.custom_prompt,
         custom_intention: body.custom_intention,
         use_enrichment: body.use_enrichment,
       };
+    } else if (action === "fill-queue") {
+      endpoint = "/cron/fill-queue";
+      payload = {};
     }
 
     const res = await fetch(`${WORKER_URL}${endpoint}`, {

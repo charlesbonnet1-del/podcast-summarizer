@@ -408,6 +408,63 @@ def cron_redemption():
     return jsonify({"success": True, "message": "Redemption job started"})
 
 
+@app.route("/cron/fill-queue", methods=["POST"])
+def cron_fill_queue():
+    """
+    Fill content_queue with fresh articles from all RSS sources.
+    This fetches from GSheet sources and Bing backup, then stores in DB.
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    log.info("📥 Fill queue cron triggered")
+    
+    def run_fill():
+        try:
+            from sourcing import fetch_all_sources
+            
+            # Fetch all sources
+            articles = fetch_all_sources(user_id=None)
+            log.info(f"📰 Fetched {len(articles)} articles from sources")
+            
+            # Store in content_queue
+            inserted = 0
+            for art in articles:
+                try:
+                    # Check if URL already exists
+                    existing = supabase.table("content_queue") \
+                        .select("id") \
+                        .eq("url", art.get("url", "")) \
+                        .execute()
+                    
+                    if existing.data:
+                        continue  # Skip duplicates
+                    
+                    supabase.table("content_queue").insert({
+                        "url": art.get("url", ""),
+                        "title": art.get("title", "")[:500],
+                        "source_name": art.get("source_name", "Unknown"),
+                        "source": art.get("source_name", "Unknown"),
+                        "keyword": art.get("keyword", art.get("topic_slug", "general")),
+                        "source_score": art.get("score", 50),
+                        "status": "pending",
+                        "description": art.get("description", "")[:1000] if art.get("description") else None
+                    }).execute()
+                    inserted += 1
+                except Exception as e:
+                    log.warning(f"Could not insert article: {e}")
+            
+            log.info(f"✅ Fill queue complete: {inserted} new articles added")
+            
+        except Exception as e:
+            log.error(f"❌ Fill queue error: {e}")
+    
+    thread = threading.Thread(target=run_fill)
+    thread.start()
+    
+    return jsonify({"success": True, "message": "Fill queue job started"})
+
+
 @app.route("/source/<domain>/score", methods=["GET"])
 def get_source_score(domain: str):
     """Get dynamic score for a specific source."""
