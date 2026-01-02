@@ -407,12 +407,54 @@ export default function PromptLabPage() {
     setResult(null);
 
     try {
+      // Collect full article data from queue (sidebar) or from pipeline results
+      const articlesToSend: Article[] = [];
+      
+      // First, try to get articles from selectResult segments (pipeline path)
+      if (selectResult?.segments) {
+        for (const segment of selectResult.segments) {
+          if (segment.articles) {
+            for (const art of segment.articles) {
+              if (selectedArticles.has(art.id) || selectedArticles.has(art.url)) {
+                articlesToSend.push(art);
+              }
+            }
+          }
+        }
+      }
+      
+      // Also check clusterResult
+      if (clusterResult?.clusters) {
+        for (const cluster of clusterResult.clusters) {
+          if (cluster.articles) {
+            for (const art of cluster.articles) {
+              const artId = art.id || art.url;
+              if (selectedArticles.has(artId) && !articlesToSend.find(a => (a.id || a.url) === artId)) {
+                articlesToSend.push(art);
+              }
+            }
+          }
+        }
+      }
+      
+      // Fall back to queue articles (sidebar selection)
+      if (articlesToSend.length === 0) {
+        for (const topic of Object.keys(queue)) {
+          for (const art of queue[topic]) {
+            if (selectedArticles.has(art.id)) {
+              articlesToSend.push(art);
+            }
+          }
+        }
+      }
+
       const res = await fetch("/api/prompt-lab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "generate",
           article_ids: Array.from(selectedArticles),
+          articles: articlesToSend, // Send full article data to avoid re-extraction
           topic: selectedTopic,
           custom_prompt: editedPrompt !== savedPrompts.dialogue_segment ? editedPrompt : undefined,
           custom_intention: editedIntention !== savedIntentions[selectedTopic] ? editedIntention : undefined,
