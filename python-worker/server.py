@@ -1023,7 +1023,7 @@ CONTEXTE ENRICHI (sources additionnelles):
                 prompt_template = get_prompt_from_db("dialogue_multi_source", DIALOGUE_MULTI_SOURCE_PROMPT)
             
             prompt = prompt_template.format(
-                word_count=config["words_per_article"],
+                word_count=config.get("segment_target_words", config.get("words_per_article", 150)),
                 topic_intention=topic_intention,
                 source_count=len(articles),
                 sources_content=full_content,
@@ -1036,7 +1036,7 @@ CONTEXTE ENRICHI (sources additionnelles):
                 prompt_template = get_prompt_from_db("dialogue_segment", DIALOGUE_SEGMENT_PROMPT)
             
             prompt = prompt_template.format(
-                word_count=config["words_per_article"],
+                word_count=config.get("segment_target_words", config.get("words_per_article", 150)),
                 topic_intention=topic_intention,
                 title=combined_title,
                 source_label=f"Source: {source_names[0]}" if source_names else "Source inconnue",

@@ -299,8 +299,71 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         embeddings_array = np.array(embeddings)
         embeddings_normalized = normalize(embeddings_array)
         
+        # ========== DIAGNOSTIC: Similarity distribution ==========
+        from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine
+        
+        # Calculate pairwise similarities (only upper triangle to save memory)
+        n_articles = len(embeddings_normalized)
+        similarities = []
+        top_pairs = []  # Store top similar pairs for inspection
+        
+        for i in range(n_articles):
+            for j in range(i + 1, n_articles):
+                sim = float(np.dot(embeddings_normalized[i], embeddings_normalized[j]))
+                similarities.append(sim)
+                if sim > 0.5:  # Track high similarity pairs
+                    top_pairs.append({
+                        "similarity": round(sim, 3),
+                        "article_1": articles[i].get("title", "")[:50],
+                        "article_2": articles[j].get("title", "")[:50]
+                    })
+        
+        # Log distribution stats
+        similarities_arr = np.array(similarities)
+        log.info(f"📊 SIMILARITY DISTRIBUTION ({len(similarities)} pairs):")
+        log.info(f"   Min: {similarities_arr.min():.3f}")
+        log.info(f"   Max: {similarities_arr.max():.3f}")
+        log.info(f"   Mean: {similarities_arr.mean():.3f}")
+        log.info(f"   Median: {np.median(similarities_arr):.3f}")
+        log.info(f"   Std: {similarities_arr.std():.3f}")
+        
+        # Count pairs above different thresholds
+        thresholds = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+        for thresh in thresholds:
+            count = np.sum(similarities_arr >= thresh)
+            pct = 100 * count / len(similarities_arr)
+            log.info(f"   Pairs with similarity >= {thresh}: {count} ({pct:.1f}%)")
+        
+        # Log top similar pairs
+        top_pairs.sort(key=lambda x: x["similarity"], reverse=True)
+        if top_pairs:
+            log.info(f"🔝 TOP {min(5, len(top_pairs))} SIMILAR PAIRS:")
+            for pair in top_pairs[:5]:
+                log.info(f"   {pair['similarity']}: '{pair['article_1']}' <-> '{pair['article_2']}'")
+        else:
+            log.info("⚠️ NO PAIRS with similarity > 0.5 found!")
+        
+        # Store in stats for frontend display
+        stats["similarity_distribution"] = {
+            "min": round(float(similarities_arr.min()), 3),
+            "max": round(float(similarities_arr.max()), 3),
+            "mean": round(float(similarities_arr.mean()), 3),
+            "median": round(float(np.median(similarities_arr)), 3),
+            "std": round(float(similarities_arr.std()), 3),
+            "pairs_above_0.5": int(np.sum(similarities_arr >= 0.5)),
+            "pairs_above_0.6": int(np.sum(similarities_arr >= 0.6)),
+            "pairs_above_0.7": int(np.sum(similarities_arr >= 0.7)),
+            "total_pairs": len(similarities)
+        }
+        stats["top_similar_pairs"] = top_pairs[:10]
+        # ========== END DIAGNOSTIC ==========
+        
         # DBSCAN clustering
-        # eps=0.5 means cosine similarity > 0.5 are neighbors (on normalized vectors)
+        # eps=0.5 means distance < 0.5, i.e. cosine similarity > 0.75 on normalized vectors
+        # Note: euclidean distance on normalized vectors: d = sqrt(2 - 2*cos_sim)
+        # So eps=0.5 -> cos_sim > 1 - 0.5²/2 = 0.875 (very strict!)
+        # eps=0.7 -> cos_sim > 1 - 0.7²/2 = 0.755
+        # eps=1.0 -> cos_sim > 1 - 1.0²/2 = 0.5
         clusterer = DBSCAN(
             eps=0.5,
             min_samples=min_cluster_size,
