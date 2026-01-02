@@ -1027,7 +1027,9 @@ CONTEXTE ENRICHI (sources additionnelles):
                 topic_intention=topic_intention,
                 source_count=len(articles),
                 sources_content=full_content,
-                style=config["style"]
+                style=config["style"],
+                previous_segment_rule="",
+                previous_segment_context=""
             )
         else:
             if custom_prompt:

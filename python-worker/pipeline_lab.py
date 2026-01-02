@@ -359,13 +359,14 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         # ========== END DIAGNOSTIC ==========
         
         # DBSCAN clustering
-        # eps=0.5 means distance < 0.5, i.e. cosine similarity > 0.75 on normalized vectors
+        # eps=0.5 means distance < 0.5, i.e. cosine similarity > 0.875 on normalized vectors
         # Note: euclidean distance on normalized vectors: d = sqrt(2 - 2*cos_sim)
         # So eps=0.5 -> cos_sim > 1 - 0.5²/2 = 0.875 (very strict!)
+        # eps=0.65 -> cos_sim > 1 - 0.65²/2 = 0.79
         # eps=0.7 -> cos_sim > 1 - 0.7²/2 = 0.755
         # eps=1.0 -> cos_sim > 1 - 1.0²/2 = 0.5
         clusterer = DBSCAN(
-            eps=0.5,
+            eps=0.65,  # Requires cosine similarity > 0.79
             min_samples=min_cluster_size,
             metric='euclidean',
             n_jobs=-1
