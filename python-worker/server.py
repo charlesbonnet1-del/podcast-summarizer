@@ -951,14 +951,17 @@ def prompt_lab_generate():
         
         groq_client = Groq(api_key=groq_api_key)
         
-        # Build content from articles - USE EXISTING CONTENT, NO RE-EXTRACTION
+        # Build content from articles - EXTRACT IF NEEDED
         combined_content = ""
         combined_title = ""
         source_names = []
         
+        log.info(f"📝 Processing {len(articles)} articles for generation")
+        
         for article in articles:
             title = article.get("title", "Sans titre")
             source_name = article.get("source_name", article.get("source", "Unknown"))
+            url = article.get("url", "")
             
             if not combined_title:
                 combined_title = title
@@ -968,18 +971,30 @@ def prompt_lab_generate():
             # Use content already available (from pipeline or DB)
             content = article.get("processed_content") or article.get("content") or article.get("description") or ""
             
-            # Only extract if we have NO content at all
-            if not content and article.get("url"):
-                log.info(f"No cached content, extracting from URL: {article.get('url')}")
+            log.debug(f"  Article: {title[:50]}...")
+            log.debug(f"    - processed_content: {len(article.get('processed_content', '') or '')} chars")
+            log.debug(f"    - content: {len(article.get('content', '') or '')} chars")
+            log.debug(f"    - description: {len(article.get('description', '') or '')} chars")
+            
+            # Extract if content is missing OR too short (less than 200 chars)
+            if (not content or len(content) < 200) and url:
+                log.info(f"⚡ Extracting content from URL: {url[:60]}...")
                 from extractor import extract_content
-                extraction = extract_content(article.get("url"))
+                extraction = extract_content(url)
                 if extraction:
-                    _, extracted_title, content = extraction
+                    _, extracted_title, extracted_content = extraction
+                    if extracted_content and len(extracted_content) > len(content):
+                        content = extracted_content
+                        log.info(f"  ✅ Extracted {len(content)} chars")
                     if not combined_title and extracted_title:
                         combined_title = extracted_title
+                else:
+                    log.warning(f"  ❌ Extraction failed for {url[:60]}")
             
             if content:
                 combined_content += f"\n\n--- SOURCE: {source_name} ---\n{title}\n{content[:2000]}"
+        
+        log.info(f"📊 Total content for LLM: {len(combined_content)} chars from {len(source_names)} sources")
         
         if not combined_content:
             return jsonify({"error": "No content available for articles"}), 400
@@ -1014,7 +1029,9 @@ CONTEXTE ENRICHI (sources additionnelles):
             full_content = combined_content[:4000]
         
         # Get prompt template
+        # Use higher word count for full script (not just one segment)
         config = FORMAT_CONFIG["flash"]
+        target_word_count = 300  # Full script, not just one segment
         
         if len(articles) > 1:
             if custom_prompt:
@@ -1023,7 +1040,7 @@ CONTEXTE ENRICHI (sources additionnelles):
                 prompt_template = get_prompt_from_db("dialogue_multi_source", DIALOGUE_MULTI_SOURCE_PROMPT)
             
             prompt = prompt_template.format(
-                word_count=config.get("segment_target_words", config.get("words_per_article", 150)),
+                word_count=target_word_count,
                 topic_intention=topic_intention,
                 source_count=len(articles),
                 sources_content=full_content,
@@ -1038,7 +1055,7 @@ CONTEXTE ENRICHI (sources additionnelles):
                 prompt_template = get_prompt_from_db("dialogue_segment", DIALOGUE_SEGMENT_PROMPT)
             
             prompt = prompt_template.format(
-                word_count=config.get("segment_target_words", config.get("words_per_article", 150)),
+                word_count=target_word_count,
                 topic_intention=topic_intention,
                 title=combined_title,
                 source_label=f"Source: {source_names[0]}" if source_names else "Source inconnue",
