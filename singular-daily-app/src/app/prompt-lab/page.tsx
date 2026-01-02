@@ -272,7 +272,7 @@ export default function PromptLabPage() {
         setError(data.error);
       } else {
         setFetchResult(data);
-        setExpandedSections(prev => new Set([...prev, "fetch-results"]));
+        setExpandedSections(prev => { const next = new Set(Array.from(prev)); next.add("fetch-results"); return next; });
       }
     } catch (err) {
       setError("Fetch failed");
@@ -305,7 +305,7 @@ export default function PromptLabPage() {
         setError(data.error);
       } else {
         setClusterResult(data);
-        setExpandedSections(prev => new Set([...prev, "cluster-results"]));
+        setExpandedSections(prev => { const next = new Set(Array.from(prev)); next.add("cluster-results"); return next; });
       }
     } catch (err) {
       setError("Clustering failed");
@@ -343,7 +343,7 @@ export default function PromptLabPage() {
         setError(data.error);
       } else {
         setSelectResult(data);
-        setExpandedSections(prev => new Set([...prev, "select-results"]));
+        setExpandedSections(prev => { const next = new Set(Array.from(prev)); next.add("select-results"); return next; });
       }
     } catch (err) {
       setError("Selection failed");
