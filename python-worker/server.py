@@ -919,15 +919,17 @@ def prompt_lab_generate():
             topic_intention = get_topic_intention(topic)
         
         # Perplexity enrichment
+        # FIX: enrich_content_with_perplexity returns a single string, not a tuple
         enriched_context = None
         perplexity_citations = []
         
         if use_enrichment:
-            enriched_context, perplexity_citations = enrich_content_with_perplexity(
+            enriched_context = enrich_content_with_perplexity(
                 combined_title, 
                 combined_content[:2000], 
                 source_names[0] if source_names else "Unknown"
             )
+            # Note: perplexity_citations stays empty as the function doesn't return citations
         
         # Build full content for LLM
         if enriched_context:
