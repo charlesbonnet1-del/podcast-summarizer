@@ -844,6 +844,7 @@ def prompt_lab_save_prompts():
 def prompt_lab_generate():
     """
     Generate TEXT ONLY (no audio) for testing prompts.
+    Uses content already in database when available, falls back to extraction only if needed.
     """
     import time
     start_time = time.time()
@@ -856,21 +857,27 @@ def prompt_lab_generate():
         custom_intention = data.get("custom_intention")
         use_enrichment = data.get("use_enrichment", False)
         
-        if not article_ids:
-            return jsonify({"error": "article_ids required"}), 400
+        # NEW: Accept articles directly from frontend (from pipeline results)
+        articles_data = data.get("articles", [])
         
-        # Get articles from queue
-        result = supabase.table("content_queue") \
-            .select("*") \
-            .in_("id", article_ids) \
-            .execute()
+        if not article_ids and not articles_data:
+            return jsonify({"error": "article_ids or articles required"}), 400
         
-        if not result.data:
-            return jsonify({"error": "No articles found"}), 404
+        # If articles provided directly, use them
+        if articles_data:
+            articles = articles_data
+        else:
+            # Get articles from queue
+            result = supabase.table("content_queue") \
+                .select("*") \
+                .in_("id", article_ids) \
+                .execute()
+            
+            if not result.data:
+                return jsonify({"error": "No articles found"}), 404
+            
+            articles = result.data
         
-        articles = result.data
-        
-        from extractor import extract_content
         from stitcher_v2 import (
             enrich_content_with_perplexity,
             get_topic_intention,
@@ -887,13 +894,12 @@ def prompt_lab_generate():
         
         groq_client = Groq(api_key=groq_api_key)
         
-        # Extract content from all articles
+        # Build content from articles - USE EXISTING CONTENT, NO RE-EXTRACTION
         combined_content = ""
         combined_title = ""
         source_names = []
         
         for article in articles:
-            url = article.get("url", "")
             title = article.get("title", "Sans titre")
             source_name = article.get("source_name", article.get("source", "Unknown"))
             
@@ -902,15 +908,24 @@ def prompt_lab_generate():
             
             source_names.append(source_name)
             
-            extraction = extract_content(url)
-            if extraction:
-                _, extracted_title, content = extraction
-                if not combined_title and extracted_title:
-                    combined_title = extracted_title
+            # Use content already available (from pipeline or DB)
+            content = article.get("processed_content") or article.get("content") or article.get("description") or ""
+            
+            # Only extract if we have NO content at all
+            if not content and article.get("url"):
+                log.info(f"No cached content, extracting from URL: {article.get('url')}")
+                from extractor import extract_content
+                extraction = extract_content(article.get("url"))
+                if extraction:
+                    _, extracted_title, content = extraction
+                    if not combined_title and extracted_title:
+                        combined_title = extracted_title
+            
+            if content:
                 combined_content += f"\n\n--- SOURCE: {source_name} ---\n{title}\n{content[:2000]}"
         
         if not combined_content:
-            return jsonify({"error": "Could not extract content from articles"}), 400
+            return jsonify({"error": "No content available for articles"}), 400
         
         # Get topic intention
         if custom_intention:
