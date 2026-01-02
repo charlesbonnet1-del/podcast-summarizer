@@ -697,15 +697,9 @@ export default function PromptLabPage() {
               <AccordionSection title="Cluster Results" icon={<Layers className="w-4 h-4 text-purple-400" />} expanded={expandedSections.has("cluster-results")} onToggle={() => toggleSection("cluster-results")} stats={`${clusterResult.stats.clusters_formed || 0} clusters`}>
                 <div className="space-y-3">
                   {clusterResult.clusters && clusterResult.clusters.length > 0 && (
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {clusterResult.clusters.map((cluster, i) => (
-                        <div key={i} className="p-2 bg-background/30 rounded-lg border border-border/20">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs uppercase text-purple-400 font-medium">{cluster.topic}</span>
-                            <span className="text-xs text-muted-foreground">{cluster.size} articles</span>
-                          </div>
-                          <p className="text-xs truncate">{cluster.representative_title}</p>
-                        </div>
+                        <ClusterCard key={i} cluster={cluster} />
                       ))}
                     </div>
                   )}
@@ -723,15 +717,9 @@ export default function PromptLabPage() {
               <AccordionSection title="Selection Results" icon={<Target className="w-4 h-4 text-emerald-400" />} expanded={expandedSections.has("select-results")} onToggle={() => toggleSection("select-results")} stats={`${selectResult.stats.segments_created || 0} segments`}>
                 <div className="space-y-3">
                   {selectResult.segments && selectResult.segments.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {selectResult.segments.map((seg, i) => (
-                        <div key={i} className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs uppercase text-emerald-400 font-medium">{seg.topic}</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${seg.type === "cluster" ? "bg-purple-500/20 text-purple-400" : "bg-amber-500/20 text-amber-400"}`}>{seg.type}</span>
-                          </div>
-                          <p className="text-xs truncate">{seg.representative_title}</p>
-                        </div>
+                        <SegmentCard key={i} segment={seg} />
                       ))}
                     </div>
                   )}
@@ -889,6 +877,83 @@ function ExclusionsList({ exclusions }: { exclusions: Exclusion[] }) {
         ))}
       </div>
       {exclusions.length > 3 && <button onClick={() => setShowAll(!showAll)} className="text-[10px] text-amber-400 mt-1 hover:underline">{showAll ? "Show less" : `Show all ${exclusions.length}`}</button>}
+    </div>
+  );
+}
+
+function ClusterCard({ cluster }: { cluster: Cluster }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="bg-background/30 rounded-lg border border-border/20 overflow-hidden">
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-2 flex items-center justify-between hover:bg-background/50 transition-colors"
+      >
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {expanded ? <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+          <span className="text-xs uppercase text-purple-400 font-medium">{cluster.topic}</span>
+          <span className="text-xs text-muted-foreground flex-shrink-0">{cluster.size} articles</span>
+        </div>
+      </button>
+      <p className="px-2 pb-2 text-xs truncate text-muted-foreground">{cluster.representative_title}</p>
+      
+      {expanded && cluster.articles && cluster.articles.length > 0 && (
+        <div className="border-t border-border/20 divide-y divide-border/10">
+          {cluster.articles.map((article, i) => (
+            <div key={i} className="px-3 py-2 flex items-start gap-2 hover:bg-background/30">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium">{article.title}</p>
+                <p className="text-[10px] text-muted-foreground">{article.source_name}</p>
+              </div>
+              {article.url && (
+                <a href={article.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-background/50 rounded flex-shrink-0">
+                  <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SegmentCard({ segment }: { segment: Segment }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="bg-emerald-500/10 rounded-lg border border-emerald-500/20 overflow-hidden">
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-2 flex items-center justify-between hover:bg-emerald-500/20 transition-colors"
+      >
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {expanded ? <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+          <span className="text-xs uppercase text-emerald-400 font-medium">{segment.topic}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded ${segment.type === "cluster" ? "bg-purple-500/20 text-purple-400" : "bg-amber-500/20 text-amber-400"}`}>{segment.type}</span>
+          <span className="text-xs text-muted-foreground flex-shrink-0">{segment.articles?.length || 0} articles</span>
+        </div>
+      </button>
+      <p className="px-2 pb-2 text-xs truncate text-muted-foreground">{segment.representative_title}</p>
+      
+      {expanded && segment.articles && segment.articles.length > 0 && (
+        <div className="border-t border-emerald-500/20 divide-y divide-emerald-500/10">
+          {segment.articles.map((article, i) => (
+            <div key={i} className="px-3 py-2 flex items-start gap-2 hover:bg-emerald-500/10">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium">{article.title}</p>
+                <p className="text-[10px] text-muted-foreground">{article.source_name}</p>
+              </div>
+              {article.url && (
+                <a href={article.url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-background/50 rounded flex-shrink-0">
+                  <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
