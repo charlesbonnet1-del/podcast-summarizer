@@ -255,7 +255,7 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
             "stats": {...}
         }
     """
-    from cluster_pipeline import cluster_articles_by_topic, extract_clusters
+    # Note: Using local cluster_by_similarity function instead of cluster_pipeline imports
     
     start_time = datetime.now()
     clusters = []
