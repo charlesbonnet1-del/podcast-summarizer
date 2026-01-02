@@ -21,6 +21,11 @@ from sourcing import (
     fetch_rss_feed,
     fetch_bing_news
 )
+from cluster_pipeline import (
+    embed_articles,
+    get_embeddings_batch,
+    EMBEDDING_MODEL
+)
 
 log = structlog.get_logger()
 
@@ -217,7 +222,10 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
 
 def sandbox_cluster(articles: list[dict], params: dict) -> dict:
     """
-    Cluster articles in sandbox mode.
+    Cluster articles using OpenAI embeddings + DBSCAN.
+    
+    Uses the same embedding approach as production (cluster_pipeline.py)
+    for high-quality semantic clustering.
     
     Args:
         articles: List of articles from fetch step
@@ -230,7 +238,9 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
             "stats": {...}
         }
     """
-    # Note: Using local cluster_by_similarity function instead of cluster_pipeline imports
+    from sklearn.cluster import DBSCAN
+    from sklearn.preprocessing import normalize
+    import numpy as np
     
     start_time = datetime.now()
     clusters = []
@@ -239,71 +249,120 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         "input_articles": len(articles),
         "clusters_formed": 0,
         "articles_clustered": 0,
-        "articles_excluded": 0
+        "articles_excluded": 0,
+        "embedding_model": EMBEDDING_MODEL,
+        "method": "OpenAI embeddings + DBSCAN"
     }
     
     min_cluster_size = params.get("min_cluster_size", 3)
     
     try:
-        # Group articles by topic
-        by_topic = {}
-        for art in articles:
-            topic = art.get("topic", "unknown")
-            if topic not in by_topic:
-                by_topic[topic] = []
-            by_topic[topic].append(art)
-        
-        # Cluster each topic
-        for topic, topic_articles in by_topic.items():
-            if len(topic_articles) < 2:
-                # Can't cluster single articles
-                for art in topic_articles:
-                    exclusions.append({
-                        "type": "insufficient_for_clustering",
-                        "article": art.get("title", "")[:50],
-                        "topic": topic,
-                        "reason": f"Only {len(topic_articles)} article(s) in topic, need at least 2"
-                    })
-                stats["articles_excluded"] += len(topic_articles)
-                continue
-            
-            # Use existing clustering logic
-            try:
-                # Simple clustering by title similarity
-                topic_clusters = cluster_by_similarity(topic_articles, min_cluster_size)
-                
-                for cluster in topic_clusters:
-                    if len(cluster["articles"]) >= min_cluster_size:
-                        clusters.append({
-                            "topic": topic,
-                            "cluster_id": f"{topic}_{len(clusters)}",
-                            "size": len(cluster["articles"]),
-                            "articles": cluster["articles"],
-                            "representative_title": cluster["articles"][0].get("title", ""),
-                            "sources": list(set(a.get("source_name", "") for a in cluster["articles"]))
-                        })
-                        stats["clusters_formed"] += 1
-                        stats["articles_clustered"] += len(cluster["articles"])
-                    else:
-                        # Cluster too small
-                        for art in cluster["articles"]:
-                            exclusions.append({
-                                "type": "cluster_too_small",
-                                "article": art.get("title", "")[:50],
-                                "topic": topic,
-                                "reason": f"Cluster has {len(cluster['articles'])} articles, need {min_cluster_size}"
-                            })
-                        stats["articles_excluded"] += len(cluster["articles"])
-                        
-            except Exception as e:
+        if len(articles) < min_cluster_size:
+            log.warning(f"⚠️ Too few articles ({len(articles)}) for clustering")
+            for art in articles:
                 exclusions.append({
-                    "type": "clustering_error",
-                    "topic": topic,
-                    "reason": str(e)
+                    "type": "insufficient_articles",
+                    "article": art.get("title", "")[:50],
+                    "reason": f"Only {len(articles)} article(s), need at least {min_cluster_size}"
                 })
-                stats["articles_excluded"] += len(topic_articles)
+            stats["articles_excluded"] = len(articles)
+            stats["duration_seconds"] = (datetime.now() - start_time).total_seconds()
+            return {"clusters": [], "exclusions": exclusions, "stats": stats}
+        
+        # ========== STEP 1: EMBED ARTICLES ==========
+        log.info(f"📊 Embedding {len(articles)} articles with OpenAI...")
+        
+        # Build text for embedding: description + content (NO title, NO source name)
+        texts = []
+        for article in articles:
+            description = article.get("description", "")
+            content = article.get("content", article.get("processed_content", ""))
+            # Use description + content, limited to 1000 chars
+            text = f"{description} {content}".strip()[:1000]
+            if not text:
+                # Fallback to title if no content
+                text = article.get("title", "No content")
+            texts.append(text)
+        
+        embeddings = get_embeddings_batch(texts)
+        
+        # Attach embeddings to articles
+        for article, embedding in zip(articles, embeddings):
+            article["embedding"] = embedding
+        
+        stats["embeddings_generated"] = len(embeddings)
+        log.info(f"✅ Generated {len(embeddings)} embeddings")
+        
+        # ========== STEP 2: CLUSTER WITH DBSCAN ==========
+        log.info(f"🔬 Clustering with DBSCAN (min_cluster_size={min_cluster_size})...")
+        
+        embeddings_array = np.array(embeddings)
+        embeddings_normalized = normalize(embeddings_array)
+        
+        # DBSCAN clustering
+        # eps=0.5 means cosine similarity > 0.5 are neighbors (on normalized vectors)
+        clusterer = DBSCAN(
+            eps=0.5,
+            min_samples=min_cluster_size,
+            metric='euclidean',
+            n_jobs=-1
+        )
+        
+        labels = clusterer.fit_predict(embeddings_normalized)
+        
+        # ========== STEP 3: GROUP BY CLUSTER ==========
+        cluster_groups = {}
+        noise_articles = []
+        
+        for idx, label in enumerate(labels):
+            if label == -1:
+                noise_articles.append(articles[idx])
+            else:
+                if label not in cluster_groups:
+                    cluster_groups[label] = []
+                cluster_groups[label].append(articles[idx])
+        
+        # Build cluster objects
+        for label, cluster_articles in cluster_groups.items():
+            # Determine dominant topic
+            topic_counts = {}
+            for art in cluster_articles:
+                topic = art.get("topic", art.get("keyword", "unknown"))
+                topic_counts[topic] = topic_counts.get(topic, 0) + 1
+            dominant_topic = max(topic_counts, key=topic_counts.get) if topic_counts else "unknown"
+            
+            # Get unique sources
+            sources = list(set(a.get("source_name", "Unknown") for a in cluster_articles))
+            
+            clusters.append({
+                "topic": dominant_topic,
+                "cluster_id": f"cluster_{label}",
+                "size": len(cluster_articles),
+                "articles": cluster_articles,
+                "representative_title": cluster_articles[0].get("title", ""),
+                "sources": sources,
+                "source_diversity": len(sources)
+            })
+            stats["clusters_formed"] += 1
+            stats["articles_clustered"] += len(cluster_articles)
+        
+        # Handle noise articles
+        for art in noise_articles:
+            exclusions.append({
+                "type": "no_cluster",
+                "article": art.get("title", "")[:50],
+                "topic": art.get("topic", "unknown"),
+                "reason": "Article did not fit any cluster (too unique or isolated)"
+            })
+            stats["articles_excluded"] += 1
+        
+        # Sort clusters by size (largest first)
+        clusters.sort(key=lambda c: c["size"], reverse=True)
         
         stats["duration_seconds"] = (datetime.now() - start_time).total_seconds()
+        stats["noise_articles"] = len(noise_articles)
+        
+        log.info(f"✅ Clustering complete: {len(clusters)} clusters, {len(noise_articles)} noise articles")
         
     except Exception as e:
         log.error("Sandbox cluster error", error=str(e))
@@ -317,57 +376,6 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         "exclusions": exclusions,
         "stats": stats
     }
-
-
-def cluster_by_similarity(articles: list[dict], min_size: int) -> list[dict]:
-    """
-    Simple clustering by title word overlap.
-    Returns list of {"articles": [...]} dicts.
-    """
-    if not articles:
-        return []
-    
-    # Simple approach: group by significant word overlap
-    import re
-    
-    def get_words(title: str) -> set:
-        # Extract significant words (>3 chars, lowercase)
-        words = re.findall(r'\b\w{4,}\b', title.lower())
-        # Remove common words
-        stopwords = {'dans', 'pour', 'avec', 'cette', 'sont', 'plus', 'leur', 'mais', 'être', 'avoir', 'fait', 'comme', 'tout', 'après', 'entre'}
-        return set(w for w in words if w not in stopwords)
-    
-    # Calculate word sets for each article
-    article_words = [(art, get_words(art.get("title", ""))) for art in articles]
-    
-    # Greedy clustering
-    used = set()
-    clusters = []
-    
-    for i, (art, words) in enumerate(article_words):
-        if i in used:
-            continue
-        
-        # Start new cluster
-        cluster_articles = [art]
-        used.add(i)
-        
-        # Find similar articles
-        for j, (other_art, other_words) in enumerate(article_words):
-            if j in used:
-                continue
-            
-            # Check overlap
-            if words and other_words:
-                overlap = len(words & other_words)
-                min_len = min(len(words), len(other_words))
-                if min_len > 0 and overlap / min_len >= 0.3:  # 30% overlap threshold
-                    cluster_articles.append(other_art)
-                    used.add(j)
-        
-        clusters.append({"articles": cluster_articles})
-    
-    return clusters
 
 
 # ============================================
