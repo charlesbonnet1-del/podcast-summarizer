@@ -88,7 +88,11 @@ def get_default_params() -> dict:
 
 def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
     """
-    Fetch articles in sandbox mode (not saved to DB).
+    Fetch articles from content_queue (DB) - NOT from RSS directly.
+    
+    The content_queue should be filled by the Fill Queue cron job.
+    This ensures we use high-quality, pre-fetched articles instead of
+    falling back to Bing backup.
     
     Args:
         params: Custom parameters
@@ -107,17 +111,12 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
     stats = {
         "topics_requested": 0,
         "topics_fetched": 0,
-        "gsheet_articles": 0,
-        "bing_articles": 0,
+        "queue_articles": 0,
         "total_articles": 0,
-        "sources_failed": 0
+        "source": "content_queue"
     }
     
     try:
-        # Load GSheet sources
-        library = GSheetSourceLibrary()
-        all_sources = library.get_all_sources()
-        
         # Determine which topics to fetch
         topics_enabled = params.get("topics_enabled", DEFAULT_PARAMS["topics_enabled"])
         
@@ -130,87 +129,55 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
         
         stats["topics_requested"] = len(fetch_topics)
         
-        # Track articles per topic for Bing backup decision
+        # ========== READ FROM CONTENT_QUEUE ==========
+        # Get articles from the last N days
+        content_queue_days = params.get("content_queue_days", 3)
+        cutoff_date = (datetime.now() - timedelta(days=content_queue_days)).isoformat()
+        
+        # Query content_queue for pending articles
+        result = supabase.table("content_queue") \
+            .select("*") \
+            .eq("status", "pending") \
+            .gte("created_at", cutoff_date) \
+            .execute()
+        
+        queue_articles = result.data or []
+        log.info(f"📦 Found {len(queue_articles)} articles in content_queue")
+        
+        # Track articles per topic
         articles_by_topic = {t: [] for t in fetch_topics}
         
-        # ========== LEVEL 1: GSheet RSS ==========
-        for source in all_sources:
-            topic = source.get("topic", "").lower()
+        for art in queue_articles:
+            topic = art.get("keyword", art.get("topic", "general")).lower()
             
+            # Skip if topic not in our fetch list
             if topic not in fetch_topics:
-                continue
-            
-            rss_url = source.get("rss_url", "")
-            if not rss_url:
-                continue
-            
-            try:
-                feed_articles = fetch_rss_feed(
-                    rss_url,
-                    max_items=params.get("max_articles_per_rss", 10),
-                    timeout=params.get("rss_timeout_seconds", 10)
-                )
-                
-                for art in feed_articles:
-                    article = {
-                        "url": art.get("url", art.get("link", "")),
-                        "title": art.get("title", ""),
-                        "source_type": "gsheet_rss",
-                        "source_name": source.get("name", "Unknown"),
-                        "source_country": source.get("origin", "FR"),
-                        "topic": topic,
-                        "published": art.get("published", ""),
-                        "fetched_at": datetime.now().isoformat()
-                    }
-                    articles.append(article)
-                    articles_by_topic[topic].append(article)
-                    stats["gsheet_articles"] += 1
-                    
-            except Exception as e:
-                stats["sources_failed"] += 1
                 exclusions.append({
-                    "type": "source_failed",
-                    "source": source.get("name", rss_url),
+                    "type": "topic_not_enabled",
+                    "title": art.get("title", "")[:50],
                     "topic": topic,
-                    "reason": str(e)
+                    "reason": f"Topic '{topic}' not in enabled topics"
                 })
-        
-        # ========== LEVEL 2: Bing Backup ==========
-        bing_threshold = params.get("bing_backup_threshold", 5)
-        
-        for topic in fetch_topics:
-            topic_count = len(articles_by_topic.get(topic, []))
+                continue
             
-            if topic_count < bing_threshold:
-                try:
-                    # Search Bing for this topic
-                    bing_results = fetch_bing_news(
-                        query=topic,
-                        market="FR",
-                        max_items=10
-                    )
-                    
-                    for art in bing_results:
-                        article = {
-                            "url": art.get("url", ""),
-                            "title": art.get("name", art.get("title", "")),
-                            "source_type": "bing_news",
-                            "source_name": art.get("provider", [{}])[0].get("name", "Bing News") if art.get("provider") else "Bing News",
-                            "source_country": "FR",
-                            "topic": topic,
-                            "published": art.get("datePublished", ""),
-                            "fetched_at": datetime.now().isoformat()
-                        }
-                        articles.append(article)
-                        articles_by_topic[topic].append(article)
-                        stats["bing_articles"] += 1
-                        
-                except Exception as e:
-                    exclusions.append({
-                        "type": "bing_backup_failed",
-                        "topic": topic,
-                        "reason": str(e)
-                    })
+            article = {
+                "id": art.get("id"),
+                "url": art.get("url", ""),
+                "title": art.get("title", ""),
+                "source_type": art.get("source_type", "queue"),
+                "source_name": art.get("source_name", art.get("source", "Unknown")),
+                "source_country": art.get("source_country", "FR"),
+                "topic": topic,
+                "keyword": topic,
+                "description": art.get("description", ""),
+                "content": art.get("processed_content", art.get("content", "")),
+                "published": art.get("published_at", art.get("created_at", "")),
+                "fetched_at": art.get("created_at", datetime.now().isoformat()),
+                "source_score": art.get("source_score", 50)
+            }
+            articles.append(article)
+            articles_by_topic[topic].append(article)
+            stats["queue_articles"] += 1
         
         # Count topics that got articles
         stats["topics_fetched"] = sum(1 for t in fetch_topics if articles_by_topic.get(t))
@@ -221,6 +188,14 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
         stats["by_topic"] = {
             topic: len(arts) for topic, arts in articles_by_topic.items()
         }
+        
+        # Warn if queue is empty
+        if len(articles) == 0:
+            log.warning("⚠️ content_queue is empty! Run 'Fill Queue' first.")
+            exclusions.append({
+                "type": "empty_queue",
+                "reason": "No articles in content_queue. Click 'Fill Queue' button to fetch articles from RSS sources."
+            })
         
     except Exception as e:
         log.error("Sandbox fetch error", error=str(e))
