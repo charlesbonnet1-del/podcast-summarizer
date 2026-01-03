@@ -108,28 +108,38 @@ Rules:
 - Professional tone
 - Write in the same language as the articles (French if articles are in French)""",
 
-    "script": """You are a podcast host delivering an intelligence briefing.
+    "script": """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
 
-TOPIC: {topic}
-CLUSTER SUMMARY:
-{summary}
+## SYNTHÈSE À TRANSFORMER EN DIALOGUE
+**Sujet**: {topic}
+**Résumé**: {summary}
+**Contexte additionnel**: {context}
 
-ADDITIONAL CONTEXT:
-{context}
+## LES HÔTES
+- [B] L'ANALYSTE (voix masculine) = Présente la THÈSE avec les données clés
+- [A] LA SCEPTIQUE (voix féminine) = Apporte l'ANTITHÈSE et les nuances
 
-Write a podcast script segment (60-90 seconds when read aloud) that:
-1. Opens with a hook that grabs attention
-2. Delivers the key insights conversationally
-3. Explains why this matters to the listener
-4. Transitions smoothly to the next topic
+## RÈGLES ABSOLUES
+⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
+⚠️ STYLE DENSE: Chaque phrase apporte de l'information
 
-Style:
-- Conversational but authoritative
-- No filler words or clichés
-- Speak directly to the listener ("you")
-- Include specific details (names, numbers)
+## FORMAT
+[B]
+(expose la thèse avec données)
 
-Write ONLY the script, no stage directions or notes."""
+[A]
+(apporte l'antithèse ou nuance)
+
+## STRUCTURE OBLIGATOIRE
+1. [B] ouvre avec une accroche et la thèse principale + données
+2. [A] challenge avec l'antithèse ou demande une précision
+3. [B] répond avec des données complémentaires
+4. [A] apporte une nuance finale ou perspective
+5. [B] CONCLUT avec une synthèse
+
+Minimum 6 répliques. Cite les sources naturellement.
+
+## GÉNÈRE LE DIALOGUE ({word_count} mots):"""
 }
 
 
@@ -475,26 +485,53 @@ def lab_cluster(
         valid_articles[i]["cluster_id"] = label_int
         clusters[label_int].append(valid_articles[i])
     
+    # Generate cluster names from article titles
+    def generate_cluster_name(cluster_articles: list[dict]) -> str:
+        """Generate a descriptive name for a cluster based on article titles."""
+        titles = [a.get("title", "") for a in cluster_articles[:3]]
+        # Find common words/themes
+        words = []
+        for t in titles:
+            words.extend(t.lower().split())
+        
+        # Filter out common words
+        stopwords = {"the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "et", "le", "la", "les", "de", "du", "des", "un", "une", "en", "est", "sont", "pour", "sur", "dans", "par", "au", "aux", "ce", "cette", "ces", "qui", "que", "dont", "où", "how", "why", "what", "when", "new", "will", "can", "could", "would", "should"}
+        meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
+        
+        # Count frequencies
+        from collections import Counter
+        freq = Counter(meaningful)
+        top_words = [w for w, _ in freq.most_common(3)]
+        
+        if top_words:
+            return " ".join(top_words).title()
+        else:
+            # Fallback: first 5 words of first title
+            return " ".join(titles[0].split()[:5]) if titles else "Cluster"
+    
     # Prepare display data
     cluster_info = []
     for cluster_id, cluster_articles in clusters.items():
         if cluster_id == -1:
             cluster_info.append({
                 "cluster_id": -1,
+                "name": "Noise (unclustered)",
                 "label": "Noise (unclustered)",
                 "count": len(cluster_articles),
-                "articles": [{"title": a.get("title", "")[:60], "source": a.get("source_name", "")} for a in cluster_articles]
+                "articles": [{"title": a.get("title", "")[:60], "url": a.get("url", ""), "source": a.get("source_name", "")} for a in cluster_articles]
             })
         else:
             sources = list(set(a.get("source_name", "") for a in cluster_articles))
             tiers = list(set(a.get("source_tier", "") for a in cluster_articles))
+            cluster_name = generate_cluster_name(cluster_articles)
             cluster_info.append({
                 "cluster_id": cluster_id,
-                "label": f"Cluster {cluster_id}",
+                "name": cluster_name,
+                "label": f"Cluster {cluster_id}: {cluster_name}",
                 "count": len(cluster_articles),
                 "sources": sources,
                 "tiers": tiers,
-                "articles": [{"title": a.get("title", "")[:60], "source": a.get("source_name", ""), "tier": a.get("source_tier", "")} for a in cluster_articles]
+                "articles": [{"title": a.get("title", "")[:60], "url": a.get("url", ""), "source": a.get("source_name", ""), "tier": a.get("source_tier", "")} for a in cluster_articles]
             })
     
     # Sort: valid clusters first, then noise
@@ -751,9 +788,10 @@ def lab_script(
     summary: dict,
     context: str = "",
     model: str = "llama-3.3-70b-versatile",
-    prompt_template: str = None
+    prompt_template: str = None,
+    word_count: int = 250
 ) -> dict:
-    """Generate podcast script for cluster."""
+    """Generate podcast dialogue script for cluster."""
     start_time = time.time()
     prompt_template = prompt_template or DEFAULT_PROMPTS["script"]
     
@@ -763,14 +801,15 @@ def lab_script(
     prompt = prompt_template.format(
         topic=topic.upper(),
         summary=summary_text,
-        context=context or "No additional context."
+        context=context or "No additional context.",
+        word_count=word_count
     )
     
-    result = call_groq(prompt, model=model, max_tokens=800, temperature=0.7)
+    result = call_groq(prompt, model=model, max_tokens=1000, temperature=0.7)
     
     script_text = result.get("content", "")
-    word_count = len(script_text.split()) if script_text else 0
-    estimated_duration = int(word_count / 2.5)  # ~150 words per minute
+    actual_word_count = len(script_text.split()) if script_text else 0
+    estimated_duration = int(actual_word_count / 2.5)  # ~150 words per minute
     
     return {
         "step": "script",
@@ -780,7 +819,8 @@ def lab_script(
         "prompt": prompt,
         "prompt_template": prompt_template,
         "script": script_text,
-        "word_count": word_count,
+        "word_count": actual_word_count,
+        "target_word_count": word_count,
         "estimated_duration_seconds": estimated_duration,
         "llm_result": result,
         "duration_ms": int((time.time() - start_time) * 1000)
