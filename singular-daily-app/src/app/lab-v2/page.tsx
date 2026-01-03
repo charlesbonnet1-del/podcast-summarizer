@@ -53,6 +53,7 @@ interface Article {
 
 interface Cluster {
   cluster_id: number;
+  name?: string;
   articles: Article[];
   authority_count?: number;
   generalist_count?: number;
