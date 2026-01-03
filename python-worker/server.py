@@ -8,6 +8,7 @@ import os
 import hmac
 import hashlib
 import threading
+from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 import structlog
 from dotenv import load_dotenv
@@ -1108,6 +1109,225 @@ CONTEXTE ENRICHI (sources additionnelles):
 # ============================================
 # PIPELINE V2 - B2B Intelligence Platform
 # ============================================
+
+@app.route("/cron/daily", methods=["POST", "GET"])
+def cron_daily():
+    """
+    Daily CRON endpoint - runs the full intelligence pipeline.
+    
+    Should be triggered at 6h Paris time via Render Cron.
+    
+    Query params:
+    - topics: Comma-separated topics (default: ia,macro,asia)
+    - dry_run: Don't store to DB (default: false)
+    - with_podcast: Also generate podcast (default: false)
+    """
+    try:
+        # Parse params
+        topics_str = request.args.get("topics") or "ia,macro,asia"
+        topics = [t.strip() for t in topics_str.split(",")]
+        dry_run = request.args.get("dry_run", "false").lower() == "true"
+        with_podcast = request.args.get("with_podcast", "false").lower() == "true"
+        
+        log.info(f"🌅 Daily CRON triggered", topics=topics, dry_run=dry_run)
+        
+        from daily_cron import run_daily_cron
+        
+        results = run_daily_cron(
+            topics=topics,
+            generate_podcast=with_podcast,
+            dry_run=dry_run
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": "Daily CRON completed",
+            "results": results
+        })
+        
+    except ImportError as e:
+        log.error("Daily CRON import error", error=str(e))
+        return jsonify({
+            "success": False,
+            "error": f"Import error: {str(e)}",
+            "hint": "Make sure daily_cron.py is deployed"
+        }), 500
+        
+    except Exception as e:
+        log.error("Daily CRON error", error=str(e))
+        import traceback
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "trace": traceback.format_exc()
+        }), 500
+
+
+@app.route("/api/intelligence/today", methods=["GET"])
+def intelligence_today():
+    """
+    Get today's intelligence briefings.
+    
+    Query params:
+    - topics: Comma-separated topics (default: ia,macro,asia)
+    """
+    try:
+        topics_str = request.args.get("topics") or "ia,macro,asia"
+        topics = [t.strip() for t in topics_str.split(",")]
+        
+        from daily_cron import get_todays_summaries
+        
+        summaries = get_todays_summaries(topics)
+        
+        return jsonify({
+            "success": True,
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "topics": topics,
+            "summaries": summaries,
+            "count": len(summaries)
+        })
+        
+    except Exception as e:
+        log.error("Intelligence today error", error=str(e))
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/intelligence/archive", methods=["GET"])
+def intelligence_archive():
+    """
+    Get archive of past briefings.
+    
+    Query params:
+    - date: Specific date (YYYY-MM-DD)
+    - limit: Number of dates to return (default: 30)
+    """
+    try:
+        date = request.args.get("date")
+        limit = int(request.args.get("limit") or 30)
+        
+        from daily_cron import get_summaries_by_date, get_archive_dates
+        
+        if date:
+            # Get summaries for specific date
+            summaries = get_summaries_by_date(date)
+            return jsonify({
+                "success": True,
+                "date": date,
+                "summaries": summaries,
+                "count": len(summaries)
+            })
+        else:
+            # Get list of available dates
+            dates = get_archive_dates(limit)
+            return jsonify({
+                "success": True,
+                "dates": dates
+            })
+        
+    except Exception as e:
+        log.error("Intelligence archive error", error=str(e))
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/favorites/toggle", methods=["POST"])
+def toggle_favorite():
+    """
+    Toggle favorite status for an item.
+    
+    Body:
+    - user_id: UUID
+    - item_type: 'summary' | 'cluster' | 'episode' | 'article'
+    - item_id: UUID
+    - note: Optional note
+    """
+    try:
+        data = request.get_json() or {}
+        user_id = data.get("user_id")
+        item_type = data.get("item_type")
+        item_id = data.get("item_id")
+        note = data.get("note")
+        
+        if not all([user_id, item_type, item_id]):
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        from db import supabase
+        
+        # Check if already favorited
+        existing = supabase.table("user_favorites") \
+            .select("id") \
+            .eq("user_id", user_id) \
+            .eq("item_type", item_type) \
+            .eq("item_id", item_id) \
+            .execute()
+        
+        if existing.data:
+            # Remove favorite
+            supabase.table("user_favorites") \
+                .delete() \
+                .eq("id", existing.data[0]["id"]) \
+                .execute()
+            
+            return jsonify({
+                "success": True,
+                "action": "removed",
+                "is_favorited": False
+            })
+        else:
+            # Add favorite
+            supabase.table("user_favorites").insert({
+                "user_id": user_id,
+                "item_type": item_type,
+                "item_id": item_id,
+                "note": note
+            }).execute()
+            
+            return jsonify({
+                "success": True,
+                "action": "added",
+                "is_favorited": True
+            })
+        
+    except Exception as e:
+        log.error("Toggle favorite error", error=str(e))
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/favorites", methods=["GET"])
+def get_favorites():
+    """
+    Get user's favorites.
+    
+    Query params:
+    - user_id: UUID (required)
+    - item_type: Filter by type (optional)
+    """
+    try:
+        user_id = request.args.get("user_id")
+        item_type = request.args.get("item_type")
+        
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+        
+        from db import supabase
+        
+        query = supabase.table("user_favorites") \
+            .select("*, cluster_summaries(title, topic, summary_markdown)") \
+            .eq("user_id", user_id)
+        
+        if item_type:
+            query = query.eq("item_type", item_type)
+        
+        result = query.order("created_at", desc=True).execute()
+        
+        return jsonify({
+            "success": True,
+            "favorites": result.data if result.data else []
+        })
+        
+    except Exception as e:
+        log.error("Get favorites error", error=str(e))
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route("/api/pipeline/v2/test", methods=["GET", "POST"])
 def pipeline_v2_test():
