@@ -688,6 +688,15 @@ export default function LabV2Page() {
                             <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full">{a.topic}</span>
                           </div>
                         </div>
+                        <a
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1 text-muted-foreground hover:text-primary"
+                          title="Open article"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
                         <button
                           onClick={() => setArticles(arr => arr.filter(x => x.url !== a.url))}
                           className="opacity-0 group-hover:opacity-100 p-1 text-red-500"
@@ -747,7 +756,7 @@ export default function LabV2Page() {
                       c.cluster_id === -1 ? "bg-muted/30 border-dashed" : "bg-muted/50"
                     )}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{c.label}</span>
+                        <span className="font-medium">{c.name || c.label}</span>
                         <span className="text-sm text-muted-foreground">{c.count} articles</span>
                       </div>
                       {c.tiers && (
@@ -758,10 +767,22 @@ export default function LabV2Page() {
                         </div>
                       )}
                       <div className="text-xs text-muted-foreground space-y-1">
-                        {c.articles.slice(0, 3).map((a: any, i: number) => (
-                          <p key={i} className="truncate">• {a.title}</p>
+                        {c.articles.slice(0, 5).map((a: any, i: number) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <p className="truncate flex-1">• {a.title}</p>
+                            {a.url && (
+                              <a
+                                href={a.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:text-primary/80 shrink-0"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
                         ))}
-                        {c.articles.length > 3 && <p>+{c.articles.length - 3} more</p>}
+                        {c.articles.length > 5 && <p>+{c.articles.length - 5} more</p>}
                       </div>
                     </div>
                   ))}
@@ -785,7 +806,9 @@ export default function LabV2Page() {
                       )}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">Cluster {c.cluster_id}</span>
+                        <span className="font-medium">
+                          {(c as any).name || `Cluster ${c.cluster_id}`}
+                        </span>
                         <span className={cn("text-xl font-bold", c.is_valid ? "text-green-600" : "text-red-600")}>
                           {c.total_score}
                         </span>
