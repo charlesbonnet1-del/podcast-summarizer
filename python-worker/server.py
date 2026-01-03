@@ -1031,38 +1031,44 @@ CONTEXTE ENRICHI (sources additionnelles):
         config = FORMAT_CONFIG["flash"]
         target_word_count = 300  # Full script, not just one segment
         
+        # Common template variables
+        template_vars = {
+            "word_count": target_word_count,
+            "topic_intention": topic_intention,
+            "topic": topic,
+            "theme": topic,  # Alias for topic
+            "style": config["style"],
+            "previous_segment_rule": "",
+            "previous_segment_context": "",
+            "source_count": len(articles),
+            "sources_content": full_content,
+            "title": combined_title,
+            "source_label": f"Source: {source_names[0]}" if source_names else "Source inconnue",
+            "content": full_content,
+            "attribution_instruction": f'"Selon {source_names[0]}..."' if source_names else '"Selon les sources..."',
+        }
+        
         if len(articles) > 1:
             if custom_prompt:
                 prompt_template = custom_prompt
             else:
                 prompt_template = get_prompt_from_db("dialogue_multi_source", DIALOGUE_MULTI_SOURCE_PROMPT)
-            
-            prompt = prompt_template.format(
-                word_count=target_word_count,
-                topic_intention=topic_intention,
-                source_count=len(articles),
-                sources_content=full_content,
-                style=config["style"],
-                previous_segment_rule="",
-                previous_segment_context=""
-            )
         else:
             if custom_prompt:
                 prompt_template = custom_prompt
             else:
                 prompt_template = get_prompt_from_db("dialogue_segment", DIALOGUE_SEGMENT_PROMPT)
-            
-            prompt = prompt_template.format(
-                word_count=target_word_count,
-                topic_intention=topic_intention,
-                title=combined_title,
-                source_label=f"Source: {source_names[0]}" if source_names else "Source inconnue",
-                content=full_content,
-                attribution_instruction=f'"Selon {source_names[0]}..."' if source_names else '"Selon les sources..."',
-                previous_segment_rule="",
-                previous_segment_context="",
-                style=config["style"]
-            )
+        
+        # Safe format - ignore missing variables
+        try:
+            prompt = prompt_template.format(**template_vars)
+        except KeyError as e:
+            log.warning(f"⚠️ Missing template variable: {e}, using partial format")
+            # Use partial formatting for unknown variables
+            import re
+            prompt = prompt_template
+            for key, value in template_vars.items():
+                prompt = prompt.replace("{" + key + "}", str(value))
         
         # Call Groq for script generation
         response = groq_client.chat.completions.create(
@@ -1097,6 +1103,166 @@ CONTEXTE ENRICHI (sources additionnelles):
         log.error("Prompt lab generate error", error=str(e))
         import traceback
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+
+# ============================================
+# PIPELINE V2 - B2B Intelligence Platform
+# ============================================
+
+@app.route("/api/pipeline/v2/test", methods=["GET", "POST"])
+def pipeline_v2_test():
+    """
+    Test Pipeline V2 - fetches, classifies, clusters, scores articles.
+    
+    Query params:
+    - topics: Comma-separated topics (default: ia,macro,asia)
+    - dry_run: Don't store to DB (default: true)
+    - limit: Max articles per source (default: 5)
+    """
+    try:
+        # Parse params
+        if request.method == "POST":
+            data = request.get_json() or {}
+        else:
+            data = {}
+        
+        topics_str = request.args.get("topics") or data.get("topics") or "ia,macro,asia"
+        topics = [t.strip() for t in topics_str.split(",")]
+        dry_run = request.args.get("dry_run", "true").lower() == "true"
+        limit = int(request.args.get("limit") or data.get("limit") or 5)
+        
+        log.info(f"🚀 Pipeline V2 test started", topics=topics, dry_run=dry_run, limit=limit)
+        
+        # Import pipeline V2
+        from pipeline_v2 import run_pipeline
+        
+        # Run pipeline
+        results = run_pipeline(
+            topics=topics,
+            mvp_only=True,
+            do_fetch=True,
+            do_classify=True,
+            do_cluster=True,
+            do_score=True,
+            do_store=not dry_run,
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": "Pipeline V2 completed",
+            "dry_run": dry_run,
+            "results": results
+        })
+        
+    except ImportError as e:
+        log.error("Pipeline V2 import error", error=str(e))
+        return jsonify({
+            "success": False,
+            "error": f"Import error: {str(e)}",
+            "hint": "Make sure pipeline_v2.py, sourcing_v2.py, classifier.py, scoring.py are deployed"
+        }), 500
+        
+    except Exception as e:
+        log.error("Pipeline V2 error", error=str(e))
+        import traceback
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "trace": traceback.format_exc()
+        }), 500
+
+
+@app.route("/api/pipeline/v2/sources", methods=["GET"])
+def pipeline_v2_sources():
+    """
+    Get source library stats from GSheet.
+    """
+    try:
+        from sourcing_v2 import SourceLibrary
+        
+        library = SourceLibrary()
+        stats = library.get_stats()
+        
+        # Get sample sources
+        mvp_sources = library.get_mvp_sources()
+        sample = mvp_sources[:10] if mvp_sources else []
+        
+        # Clean sample for JSON (remove row_index, etc.)
+        sample_clean = []
+        for s in sample:
+            sample_clean.append({
+                "topic": s["topic"],
+                "source_name": s["source_name"],
+                "tier": s["tier"],
+                "score": s["score"],
+            })
+        
+        return jsonify({
+            "success": True,
+            "stats": stats,
+            "sample_sources": sample_clean
+        })
+        
+    except Exception as e:
+        log.error("Sources endpoint error", error=str(e))
+        import traceback
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "trace": traceback.format_exc()
+        }), 500
+
+
+@app.route("/api/pipeline/v2/fetch", methods=["GET", "POST"])
+def pipeline_v2_fetch():
+    """
+    Fetch articles only (no classification/clustering).
+    
+    Query params:
+    - topics: Comma-separated topics
+    - limit: Max articles per source
+    """
+    try:
+        topics_str = request.args.get("topics") or "ia"
+        topics = [t.strip() for t in topics_str.split(",")]
+        limit = int(request.args.get("limit") or 3)
+        
+        from sourcing_v2 import SourceLibrary, fetch_all_sources
+        
+        library = SourceLibrary()
+        articles = fetch_all_sources(
+            library,
+            topics=topics,
+            mvp_only=True,
+            max_articles_per_source=limit
+        )
+        
+        # Clean for JSON
+        articles_clean = []
+        for a in articles[:50]:  # Limit response size
+            articles_clean.append({
+                "title": a.get("title", "")[:100],
+                "url": a.get("url", ""),
+                "source_name": a.get("source_name", ""),
+                "source_tier": a.get("source_tier", ""),
+                "topic": a.get("topic", ""),
+            })
+        
+        return jsonify({
+            "success": True,
+            "topics": topics,
+            "total_fetched": len(articles),
+            "articles": articles_clean
+        })
+        
+    except Exception as e:
+        log.error("Fetch endpoint error", error=str(e))
+        import traceback
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "trace": traceback.format_exc()
+        }), 500
 
 
 def run_server(port: int = 8080):
