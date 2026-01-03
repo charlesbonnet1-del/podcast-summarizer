@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { KernelDashboard } from "@/components/dashboard/keernel-dashboard";
+import { IntelligenceFeed } from "@/components/dashboard/intelligence-feed";
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -13,67 +13,39 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // Fetch user profile
-  const { data: profile } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  // Fetch latest episode
-  const { data: latestEpisode } = await supabase
-    .from("episodes")
-    .select("*")
+  // Fetch user's favorites
+  const { data: favoritesData } = await supabase
+    .from("user_favorites")
+    .select("item_id")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
+    .eq("item_type", "summary");
 
-  // Fetch user interests (topics) - still used for hasTopics check
-  const { data: interests } = await supabase
-    .from("user_interests")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  const favoriteIds = favoritesData?.map(f => f.item_id) || [];
 
-  // Fetch ONLY manual pending content
-  const { data: manualContent } = await supabase
-    .from("content_queue")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("status", "pending")
-    .eq("source", "manual")
-    .order("created_at", { ascending: false });
-
-  // V13: Count INVENTORY (cached segments from last 7 days)
-  // This is what the podcast actually pulls from
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  
-  const { count: inventoryCount } = await supabase
-    .from("audio_segments")
-    .select("*", { count: "exact", head: true })
-    .gte("created_at", sevenDaysAgo.toISOString());
-
-  // Fetch signal weights
-  const { data: signalWeightsData } = await supabase
-    .from("user_signal_weights")
-    .select("weights")
-    .eq("user_id", user.id)
-    .single();
+  // We'll fetch summaries client-side to keep the page fast
+  // The IntelligenceFeed component will fetch from the backend
 
   return (
-    <KernelDashboard
-      user={{
-        firstName: profile?.first_name || "",
-        email: user.email || "",
-        avatarUrl: profile?.avatar_url,
-      }}
-      episode={latestEpisode}
-      topics={interests || []}
-      manualContent={manualContent || []}
-      pendingCount={inventoryCount ?? 0}
-      signalWeights={signalWeightsData?.weights || {}}
-    />
+    <div className="space-y-8">
+      {/* Welcome header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold text-foreground">
+          Bonjour 👋
+        </h1>
+        <p className="text-muted-foreground">
+          Voici votre briefing intelligence du {new Date().toLocaleDateString("fr-FR", { 
+            weekday: "long", 
+            day: "numeric", 
+            month: "long" 
+          })}
+        </p>
+      </div>
+
+      {/* Intelligence Feed */}
+      <IntelligenceFeed 
+        userId={user.id}
+        initialFavorites={favoriteIds}
+      />
+    </div>
   );
 }
