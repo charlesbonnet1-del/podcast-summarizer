@@ -111,9 +111,12 @@ Rules:
     "script": """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
 
 ## SYNTHÈSE À TRANSFORMER EN DIALOGUE
-**Sujet**: {topic}
-**Résumé**: {summary}
-**Contexte additionnel**: {context}
+**Sujet**: {theme}
+**Accroche**: {hook}
+**Thèse (fait principal)**: {thesis}
+**Antithèse (nuances/contre-arguments)**: {antithesis}
+**Données clés**: {key_data}
+**Sources**: {sources}
 
 ## LES HÔTES
 - [B] L'ANALYSTE (voix masculine) = Présente la THÈSE avec les données clés
@@ -131,7 +134,7 @@ Rules:
 (apporte l'antithèse ou nuance)
 
 ## STRUCTURE OBLIGATOIRE
-1. [B] ouvre avec une accroche et la thèse principale + données
+1. [B] ouvre avec l'accroche et la thèse principale + données
 2. [A] challenge avec l'antithèse ou demande une précision
 3. [B] répond avec des données complémentaires
 4. [A] apporte une nuance finale ou perspective
@@ -254,10 +257,14 @@ def call_perplexity(query: str, max_tokens: int = 500) -> dict:
 
 def lab_fetch(
     topics: list[str] = MVP_TOPICS,
-    max_per_source: int = 10
+    max_per_source: int = 10,
+    max_age_days_generalist: int = 3,
+    max_age_days_corporate: int = 7
 ) -> dict:
-    """Fetch articles from sources."""
+    """Fetch articles from sources with time filtering."""
     from sourcing_v2 import SourceLibrary, fetch_all_sources
+    from datetime import datetime, timedelta
+    import dateutil.parser
     
     start_time = time.time()
     
@@ -271,9 +278,50 @@ def lab_fetch(
         max_articles_per_source=max_per_source
     )
     
+    # Apply time filters based on tier
+    now = datetime.now(timezone.utc)
+    cutoff_generalist = now - timedelta(days=max_age_days_generalist)
+    cutoff_corporate = now - timedelta(days=max_age_days_corporate)
+    
+    filtered_articles = []
+    filtered_count = {"generalist": 0, "corporate": 0, "authority_kept": 0}
+    
+    for a in articles:
+        tier = a.get("source_tier", "generalist")
+        
+        # Authority sources: no time filter (will be validated at cluster level)
+        if tier == "authority":
+            filtered_articles.append(a)
+            filtered_count["authority_kept"] += 1
+            continue
+        
+        # Check publication date if available
+        pub_date = a.get("published_at") or a.get("pub_date")
+        if pub_date:
+            try:
+                if isinstance(pub_date, str):
+                    article_date = dateutil.parser.parse(pub_date)
+                    if article_date.tzinfo is None:
+                        article_date = article_date.replace(tzinfo=timezone.utc)
+                else:
+                    article_date = pub_date
+                
+                # Apply tier-specific cutoff
+                if tier == "generalist" and article_date < cutoff_generalist:
+                    filtered_count["generalist"] += 1
+                    continue
+                elif tier == "corporate" and article_date < cutoff_corporate:
+                    filtered_count["corporate"] += 1
+                    continue
+                    
+            except Exception:
+                pass  # If we can't parse date, keep the article
+        
+        filtered_articles.append(a)
+    
     # Group by source for display
     by_source = {}
-    for a in articles:
+    for a in filtered_articles:
         source = a.get("source_name", "Unknown")
         if source not in by_source:
             by_source[source] = []
@@ -283,15 +331,23 @@ def lab_fetch(
             "description": a.get("description", "")[:200] if a.get("description") else "",
             "topic": a.get("topic", ""),
             "tier": a.get("source_tier", ""),
+            "published_at": a.get("published_at") or a.get("pub_date"),
         })
     
     return {
         "step": "fetch",
-        "articles": articles,
-        "count": len(articles),
+        "articles": filtered_articles,
+        "count": len(filtered_articles),
+        "original_count": len(articles),
+        "filtered_out": filtered_count,
         "by_source": by_source,
         "source_count": len(by_source),
         "library_stats": stats,
+        "time_filters": {
+            "generalist_max_days": max_age_days_generalist,
+            "corporate_max_days": max_age_days_corporate,
+            "authority": "no limit (validated at cluster level)"
+        },
         "duration_ms": int((time.time() - start_time) * 1000)
     }
 
@@ -485,30 +541,6 @@ def lab_cluster(
         valid_articles[i]["cluster_id"] = label_int
         clusters[label_int].append(valid_articles[i])
     
-    # Generate cluster names from article titles
-    def generate_cluster_name(cluster_articles: list[dict]) -> str:
-        """Generate a descriptive name for a cluster based on article titles."""
-        titles = [a.get("title", "") for a in cluster_articles[:3]]
-        # Find common words/themes
-        words = []
-        for t in titles:
-            words.extend(t.lower().split())
-        
-        # Filter out common words
-        stopwords = {"the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "et", "le", "la", "les", "de", "du", "des", "un", "une", "en", "est", "sont", "pour", "sur", "dans", "par", "au", "aux", "ce", "cette", "ces", "qui", "que", "dont", "où", "how", "why", "what", "when", "new", "will", "can", "could", "would", "should"}
-        meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
-        
-        # Count frequencies
-        from collections import Counter
-        freq = Counter(meaningful)
-        top_words = [w for w, _ in freq.most_common(3)]
-        
-        if top_words:
-            return " ".join(top_words).title()
-        else:
-            # Fallback: first 5 words of first title
-            return " ".join(titles[0].split()[:5]) if titles else "Cluster"
-    
     # Prepare display data
     cluster_info = []
     for cluster_id, cluster_articles in clusters.items():
@@ -556,9 +588,15 @@ def lab_score(
     clusters: dict[int, list[dict]],
     params: dict = None
 ) -> dict:
-    """Score clusters using Radar + Loupe strategy."""
+    """Score clusters using Radar + Loupe strategy with authority validation."""
+    from datetime import datetime, timedelta
+    import dateutil.parser
+    
     start_time = time.time()
     params = params or DEFAULT_PARAMS
+    
+    now = datetime.now(timezone.utc)
+    recent_cutoff = now - timedelta(days=3)  # Generalist must be < 3 days
     
     scored_clusters = []
     
@@ -567,10 +605,42 @@ def lab_score(
             continue  # Skip noise
         
         # Count by tier
-        authority_count = sum(1 for a in articles if a.get("source_tier") == "authority")
-        generalist_count = sum(1 for a in articles if a.get("source_tier") == "generalist")
-        corporate_count = sum(1 for a in articles if a.get("source_tier") == "corporate")
+        authority_articles = [a for a in articles if a.get("source_tier") == "authority"]
+        generalist_articles = [a for a in articles if a.get("source_tier") == "generalist"]
+        corporate_articles = [a for a in articles if a.get("source_tier") == "corporate"]
+        
+        authority_count = len(authority_articles)
+        generalist_count = len(generalist_articles)
+        corporate_count = len(corporate_articles)
         source_count = len(set(a.get("source_name", "") for a in articles))
+        
+        # Check if cluster has recent generalist article (required for authority to be valid)
+        has_recent_generalist = False
+        for a in generalist_articles:
+            pub_date = a.get("published_at") or a.get("pub_date")
+            if pub_date:
+                try:
+                    if isinstance(pub_date, str):
+                        article_date = dateutil.parser.parse(pub_date)
+                        if article_date.tzinfo is None:
+                            article_date = article_date.replace(tzinfo=timezone.utc)
+                    else:
+                        article_date = pub_date
+                    
+                    if article_date >= recent_cutoff:
+                        has_recent_generalist = True
+                        break
+                except:
+                    # If can't parse, assume it's recent
+                    has_recent_generalist = True
+                    break
+            else:
+                # No date = assume recent
+                has_recent_generalist = True
+                break
+        
+        # Authority articles only count if cluster has recent generalist
+        effective_authority = authority_count if has_recent_generalist else 0
         
         # Calculate base score with tier multipliers
         multipliers = params.get("tier_multipliers", DEFAULT_PARAMS["tier_multipliers"])
@@ -578,11 +648,16 @@ def lab_score(
         for a in articles:
             tier = a.get("source_tier", "generalist")
             source_score = a.get("source_score", 50)
+            
+            # Authority only scores if validated
+            if tier == "authority" and not has_recent_generalist:
+                continue
+                
             base_score += source_score * multipliers.get(tier, 1.0)
         
         # Bonuses
         source_bonus = (source_count - 1) * params.get("cluster_bonus_per_source", 20)
-        mixed_bonus = params.get("mixed_tier_bonus", 50) if (authority_count > 0 and generalist_count > 0) else 0
+        mixed_bonus = params.get("mixed_tier_bonus", 50) if (effective_authority > 0 and generalist_count > 0) else 0
         
         # Corporate penalty
         corporate_penalty = max(0, corporate_count - params.get("max_corporate_per_cluster", 1)) * 50
@@ -593,22 +668,30 @@ def lab_score(
         is_valid = False
         reason = ""
         
-        if authority_count >= params.get("min_authority_sources", 1):
+        if effective_authority >= params.get("min_authority_sources", 1):
             is_valid = True
-            reason = f"Radar: {authority_count} authority source(s)"
+            reason = f"Radar: {effective_authority} authority + {generalist_count} recent generalist"
         elif generalist_count >= params.get("min_generalist_sources", 5):
             is_valid = True
             reason = f"Loupe: {generalist_count} generalist sources"
+        elif authority_count > 0 and not has_recent_generalist:
+            reason = f"Invalid: {authority_count} authority but no recent generalist to validate"
         else:
-            reason = f"Insufficient: {authority_count} authority, {generalist_count} generalist"
+            reason = f"Insufficient: {effective_authority} authority, {generalist_count} generalist"
+        
+        # Generate cluster name
+        cluster_name = generate_cluster_name(articles)
         
         scored_clusters.append({
             "cluster_id": cluster_id,
+            "name": cluster_name,
             "articles": articles,
             "authority_count": authority_count,
+            "effective_authority": effective_authority,
             "generalist_count": generalist_count,
             "corporate_count": corporate_count,
             "source_count": source_count,
+            "has_recent_generalist": has_recent_generalist,
             "base_score": round(base_score, 1),
             "source_bonus": source_bonus,
             "mixed_bonus": mixed_bonus,
@@ -636,43 +719,116 @@ def lab_score(
     }
 
 
+def generate_cluster_name(cluster_articles: list[dict]) -> str:
+    """Generate a descriptive name for a cluster based on article titles."""
+    titles = [a.get("title", "") for a in cluster_articles[:3]]
+    # Find common words/themes
+    words = []
+    for t in titles:
+        words.extend(t.lower().split())
+    
+    # Filter out common words
+    stopwords = {"the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "et", "le", "la", "les", "de", "du", "des", "un", "une", "en", "est", "sont", "pour", "sur", "dans", "par", "au", "aux", "ce", "cette", "ces", "qui", "que", "dont", "où", "how", "why", "what", "when", "new", "will", "can", "could", "would", "should"}
+    meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
+    
+    # Count frequencies
+    from collections import Counter
+    freq = Counter(meaningful)
+    top_words = [w for w, _ in freq.most_common(3)]
+    
+    if top_words:
+        return " ".join(top_words).title()
+    else:
+        # Fallback: first 5 words of first title
+        return " ".join(titles[0].split()[:5]) if titles else "Cluster"
+
+
 # ============================================
 # STEP 6: ENRICH
 # ============================================
 
 def lab_enrich(cluster: dict) -> dict:
-    """Enrich cluster with Perplexity context."""
+    """Enrich cluster with Perplexity context - generates structured elements for dialogue."""
     start_time = time.time()
     
     articles = cluster.get("articles", [])
     titles = [a.get("title", "") for a in articles[:5]]
+    descriptions = [a.get("description", "")[:200] for a in articles[:5] if a.get("description")]
     
     # Determine topic
     topic = articles[0].get("classified_topic") or articles[0].get("topic", "unknown") if articles else "unknown"
     
-    # Build query
+    # Build query for structured enrichment
     articles_text = "\n".join([f"- {t}" for t in titles])
-    query = f"""I'm researching these news stories about {topic}:
+    descriptions_text = "\n".join([f"- {d}" for d in descriptions[:3]])
+    
+    query = f"""Analyse ces articles d'actualité sur le thème "{topic}":
 
+TITRES:
 {articles_text}
 
-Please provide:
-1. Brief background context (2-3 sentences) that helps understand why this matters
-2. Any important recent developments related to these stories
-3. Key stakeholders or companies involved
+EXTRAITS:
+{descriptions_text}
 
-Be concise and factual."""
+Réponds en JSON avec cette structure EXACTE (en français):
+{{
+  "hook": "Une phrase d'accroche percutante qui capte l'attention (max 20 mots)",
+  "thesis": "Le fait principal / la thèse centrale de cette actualité (2-3 phrases)",
+  "antithesis": "Les nuances, contre-arguments ou perspectives alternatives (2-3 phrases)",
+  "key_data": "Les chiffres clés, dates, noms importants mentionnés (liste à puces)",
+  "context": "Contexte de fond pour comprendre pourquoi c'est important (2-3 phrases)"
+}}
 
-    result = call_perplexity(query)
+Sois factuel et précis. Utilise les informations des articles."""
+
+    result = call_perplexity(query, max_tokens=800)
+    
+    # Parse JSON response
+    enrichment = {
+        "hook": "",
+        "thesis": "",
+        "antithesis": "",
+        "key_data": "",
+        "context": ""
+    }
+    
+    if result.get("context"):
+        try:
+            # Try to parse as JSON
+            import json
+            import re
+            
+            content = result["context"]
+            # Extract JSON from response (might be wrapped in markdown)
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                enrichment.update({
+                    "hook": parsed.get("hook", ""),
+                    "thesis": parsed.get("thesis", ""),
+                    "antithesis": parsed.get("antithesis", ""),
+                    "key_data": parsed.get("key_data", ""),
+                    "context": parsed.get("context", "")
+                })
+        except (json.JSONDecodeError, Exception) as e:
+            # Fallback: use raw context
+            enrichment["context"] = result.get("context", "")
+            log.warning("Failed to parse Perplexity JSON", error=str(e))
     
     return {
         "step": "enrich",
         "cluster_id": cluster.get("cluster_id"),
         "topic": topic,
         "query": query,
-        "context": result.get("context", ""),
+        "enrichment": enrichment,
+        "hook": enrichment["hook"],
+        "thesis": enrichment["thesis"],
+        "antithesis": enrichment["antithesis"],
+        "key_data": enrichment["key_data"],
+        "context": enrichment["context"],
         "citations": result.get("citations", []),
         "error": result.get("error"),
+        "raw_response": result.get("context", ""),
         "duration_ms": int((time.time() - start_time) * 1000)
     }
 
@@ -786,26 +942,40 @@ def parse_summary(text: str) -> dict:
 
 def lab_script(
     summary: dict,
-    context: str = "",
+    enrichment: dict = None,
     model: str = "llama-3.3-70b-versatile",
     prompt_template: str = None,
-    word_count: int = 250
+    word_count: int = 375  # ~2.5 min per cluster, 2 clusters = 5 min
 ) -> dict:
-    """Generate podcast dialogue script for cluster."""
+    """Generate podcast dialogue script for cluster using Perplexity enrichment."""
     start_time = time.time()
     prompt_template = prompt_template or DEFAULT_PROMPTS["script"]
     
     topic = summary.get("topic", "unknown")
-    summary_text = summary.get("summary_markdown", "")
+    cluster_name = summary.get("cluster_name", summary.get("title", topic))
+    
+    # Get enrichment data (from Perplexity)
+    enrichment = enrichment or {}
+    hook = enrichment.get("hook", "")
+    thesis = enrichment.get("thesis", "")
+    antithesis = enrichment.get("antithesis", "")
+    key_data = enrichment.get("key_data", "")
+    
+    # Get sources from cluster
+    articles = summary.get("articles", [])
+    sources = ", ".join(set(a.get("source_name", "") for a in articles[:5])) if articles else "Multiple sources"
     
     prompt = prompt_template.format(
-        topic=topic.upper(),
-        summary=summary_text,
-        context=context or "No additional context.",
+        theme=cluster_name,
+        hook=hook or "À déterminer",
+        thesis=thesis or summary.get("summary_markdown", "")[:500],
+        antithesis=antithesis or "Nuances à explorer",
+        key_data=key_data or "Données à extraire",
+        sources=sources,
         word_count=word_count
     )
     
-    result = call_groq(prompt, model=model, max_tokens=1000, temperature=0.7)
+    result = call_groq(prompt, model=model, max_tokens=1200, temperature=0.7)
     
     script_text = result.get("content", "")
     actual_word_count = len(script_text.split()) if script_text else 0
@@ -815,6 +985,7 @@ def lab_script(
         "step": "script",
         "cluster_id": summary.get("cluster_id"),
         "topic": topic,
+        "theme": cluster_name,
         "model": model,
         "prompt": prompt,
         "prompt_template": prompt_template,
@@ -822,6 +993,12 @@ def lab_script(
         "word_count": actual_word_count,
         "target_word_count": word_count,
         "estimated_duration_seconds": estimated_duration,
+        "enrichment_used": {
+            "hook": hook,
+            "thesis": thesis[:100] + "..." if len(thesis) > 100 else thesis,
+            "antithesis": antithesis[:100] + "..." if len(antithesis) > 100 else antithesis,
+            "key_data": key_data[:100] + "..." if len(key_data) > 100 else key_data,
+        },
         "llm_result": result,
         "duration_ms": int((time.time() - start_time) * 1000)
     }

@@ -1648,14 +1648,17 @@ def lab_v2_script():
         data = request.get_json() or {}
         summary = data.get("summary", {})
         context = data.get("context", "")
+        enrichment = data.get("enrichment", {})
         model = data.get("model", "llama-3.3-70b-versatile")
         prompt_template = data.get("prompt_template")
+        word_count = data.get("word_count", 375)
         
         result = lab_script(
             summary=summary,
-            context=context,
+            enrichment=enrichment,
             model=model,
-            prompt_template=prompt_template
+            prompt_template=prompt_template,
+            word_count=word_count
         )
         return jsonify({"success": True, **result})
     except Exception as e:
