@@ -1485,6 +1485,249 @@ def pipeline_v2_fetch():
         }), 500
 
 
+# ============================================
+# PROMPT LAB V2 - Full Pipeline Control
+# ============================================
+
+@app.route("/api/lab/v2/config", methods=["GET"])
+def lab_v2_config():
+    """Get Prompt Lab configuration (models, prompts, params)."""
+    try:
+        from prompt_lab_v2 import get_lab_config
+        config = get_lab_config()
+        return jsonify({"success": True, **config})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/lab/v2/fetch", methods=["POST"])
+def lab_v2_fetch():
+    """Step 1: Fetch articles from sources."""
+    try:
+        from prompt_lab_v2 import lab_fetch, MVP_TOPICS
+        
+        data = request.get_json() or {}
+        topics = data.get("topics", MVP_TOPICS)
+        max_per_source = data.get("max_per_source", 10)
+        
+        result = lab_fetch(topics=topics, max_per_source=max_per_source)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/classify", methods=["POST"])
+def lab_v2_classify():
+    """Step 2: Classify articles by topic."""
+    try:
+        from prompt_lab_v2 import lab_classify, MVP_TOPICS
+        
+        data = request.get_json() or {}
+        articles = data.get("articles", [])
+        topics = data.get("topics", MVP_TOPICS)
+        model = data.get("model", "llama-3.3-70b-versatile")
+        prompt_template = data.get("prompt_template")
+        
+        result = lab_classify(
+            articles=articles,
+            topics=topics,
+            model=model,
+            prompt_template=prompt_template
+        )
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/embed", methods=["POST"])
+def lab_v2_embed():
+    """Step 3: Generate embeddings."""
+    try:
+        from prompt_lab_v2 import lab_embed
+        
+        data = request.get_json() or {}
+        articles = data.get("articles", [])
+        
+        result = lab_embed(articles=articles)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/cluster", methods=["POST"])
+def lab_v2_cluster():
+    """Step 4: Cluster articles."""
+    try:
+        from prompt_lab_v2 import lab_cluster
+        
+        data = request.get_json() or {}
+        articles = data.get("articles", [])
+        eps = data.get("eps", 0.65)
+        min_samples = data.get("min_samples", 2)
+        
+        result = lab_cluster(articles=articles, eps=eps, min_samples=min_samples)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/score", methods=["POST"])
+def lab_v2_score():
+    """Step 5: Score clusters."""
+    try:
+        from prompt_lab_v2 import lab_score
+        
+        data = request.get_json() or {}
+        clusters = data.get("clusters", {})
+        params = data.get("params")
+        
+        # Convert string keys back to int
+        clusters_int = {int(k): v for k, v in clusters.items()}
+        
+        result = lab_score(clusters=clusters_int, params=params)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/enrich", methods=["POST"])
+def lab_v2_enrich():
+    """Step 6: Enrich cluster with Perplexity."""
+    try:
+        from prompt_lab_v2 import lab_enrich
+        
+        data = request.get_json() or {}
+        cluster = data.get("cluster", {})
+        
+        result = lab_enrich(cluster=cluster)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/summarize", methods=["POST"])
+def lab_v2_summarize():
+    """Step 7: Generate cluster summary."""
+    try:
+        from prompt_lab_v2 import lab_summarize
+        
+        data = request.get_json() or {}
+        cluster = data.get("cluster", {})
+        context = data.get("context", "")
+        model = data.get("model", "llama-3.3-70b-versatile")
+        prompt_template = data.get("prompt_template")
+        
+        result = lab_summarize(
+            cluster=cluster,
+            context=context,
+            model=model,
+            prompt_template=prompt_template
+        )
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/script", methods=["POST"])
+def lab_v2_script():
+    """Step 8: Generate podcast script."""
+    try:
+        from prompt_lab_v2 import lab_script
+        
+        data = request.get_json() or {}
+        summary = data.get("summary", {})
+        context = data.get("context", "")
+        model = data.get("model", "llama-3.3-70b-versatile")
+        prompt_template = data.get("prompt_template")
+        
+        result = lab_script(
+            summary=summary,
+            context=context,
+            model=model,
+            prompt_template=prompt_template
+        )
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/store", methods=["POST"])
+def lab_v2_store():
+    """Step 9: Store results to database."""
+    try:
+        from prompt_lab_v2 import lab_store
+        
+        data = request.get_json() or {}
+        articles = data.get("articles")
+        clusters = data.get("clusters")
+        summaries = data.get("summaries")
+        dry_run = data.get("dry_run", True)
+        
+        result = lab_store(
+            articles=articles,
+            clusters=clusters,
+            summaries=summaries,
+            dry_run=dry_run
+        )
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/v2/prompts", methods=["GET", "POST"])
+def lab_v2_prompts():
+    """Get or save prompts."""
+    try:
+        from prompt_lab_v2 import get_prompts, save_prompt
+        
+        if request.method == "GET":
+            prompts = get_prompts()
+            return jsonify({"success": True, "prompts": prompts})
+        else:
+            data = request.get_json() or {}
+            name = data.get("name")
+            template = data.get("template")
+            
+            if not name or not template:
+                return jsonify({"success": False, "error": "name and template required"}), 400
+            
+            result = save_prompt(name, template)
+            return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/lab/v2/params", methods=["GET", "POST"])
+def lab_v2_params():
+    """Get or save parameters."""
+    try:
+        from prompt_lab_v2 import get_params, save_params
+        
+        if request.method == "GET":
+            params = get_params()
+            return jsonify({"success": True, "params": params})
+        else:
+            data = request.get_json() or {}
+            params = data.get("params")
+            
+            if not params:
+                return jsonify({"success": False, "error": "params required"}), 400
+            
+            result = save_params(params)
+            return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 def run_server(port: int = 8080):
     """Run the Flask server."""
     log.info("Starting HTTP server", port=port)
