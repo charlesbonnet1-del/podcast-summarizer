@@ -10,7 +10,8 @@ import {
   TrendingUp,
   Globe,
   Loader2,
-  Inbox
+  Inbox,
+  Zap
 } from "lucide-react";
 import { SummaryCard, SummaryCardSkeleton } from "./summary-card";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,7 @@ export function IntelligenceFeed({
   const [selectedTopic, setSelectedTopic] = useState("all");
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Fetch summaries on mount if none provided
@@ -101,6 +103,30 @@ export function IntelligenceFeed({
       console.error("Failed to fetch summaries:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // DEV ONLY: Trigger the CRON manually
+  const handleManualFetch = async () => {
+    setIsFetching(true);
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+      const response = await fetch(`${backendUrl}/cron/daily?topics=ia,macro,asia&dry_run=false`);
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log("CRON results:", data.results);
+        // Wait a bit then refresh summaries
+        setTimeout(() => {
+          fetchSummaries();
+        }, 1000);
+      } else {
+        console.error("CRON failed:", data.error);
+      }
+    } catch (error) {
+      console.error("Failed to trigger CRON:", error);
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -169,14 +195,36 @@ export function IntelligenceFeed({
           )}
         </div>
         
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-full transition-all disabled:opacity-50"
-        >
-          <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
-          Actualiser
-        </button>
+        <div className="flex items-center gap-2">
+          {/* DEV ONLY: Manual fetch button */}
+          <button
+            onClick={handleManualFetch}
+            disabled={isFetching}
+            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50 rounded-full transition-all disabled:opacity-50"
+            title="Dev only - Trigger CRON"
+          >
+            {isFetching ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Fetching...
+              </>
+            ) : (
+              <>
+                <Zap className="w-3 h-3" />
+                Fetch Now
+              </>
+            )}
+          </button>
+          
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded-full transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+            Actualiser
+          </button>
+        </div>
       </div>
 
       {/* Topic filters */}
