@@ -388,9 +388,9 @@ def run_pipeline(
             results["clusters_valid"] = len(valid_clusters)
             
             # Get best articles from each valid cluster
-            for cluster_id, cluster_articles, cs in valid_clusters:
+            for cluster_id, articles_in_cluster, cs in valid_clusters:
                 # Score articles within cluster
-                scored = score_articles(cluster_articles)
+                scored = score_articles(articles_in_cluster)
                 # Take top N per cluster
                 selected_articles.extend(scored[:MAX_ARTICLES_PER_CLUSTER])
         else:
