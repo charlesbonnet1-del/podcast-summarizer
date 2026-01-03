@@ -10,6 +10,7 @@ import hashlib
 import threading
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import structlog
 from dotenv import load_dotenv
 
@@ -31,6 +32,9 @@ load_dotenv()
 log = structlog.get_logger()
 
 app = Flask(__name__)
+
+# Enable CORS for all routes
+CORS(app, origins=["https://podcast-summarizer1.vercel.app", "http://localhost:3000"])
 
 # Simple auth token (set in environment)
 WORKER_SECRET = os.getenv("WORKER_SECRET", "")
