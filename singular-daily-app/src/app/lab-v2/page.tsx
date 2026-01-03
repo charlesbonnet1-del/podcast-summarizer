@@ -111,8 +111,14 @@ export default function LabV2Page() {
   const [clusters, setClusters] = useState<Record<string, Article[]>>({});
   const [scoredClusters, setScoredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
-  const [enrichContext, setEnrichContext] = useState("");
-  const [enrichCitations, setEnrichCitations] = useState<string[]>([]);
+  const [enrichment, setEnrichment] = useState<{
+    hook: string;
+    thesis: string;
+    antithesis: string;
+    key_data: string;
+    context: string;
+    citations: string[];
+  }>({ hook: "", thesis: "", antithesis: "", key_data: "", context: "", citations: [] });
   const [summary, setSummary] = useState<any>(null);
   const [script, setScript] = useState<any>(null);
 
@@ -198,8 +204,16 @@ export default function LabV2Page() {
 
         case "enrich":
           result = await runEnrich();
-          if (result.context) setEnrichContext(result.context);
-          if (result.citations) setEnrichCitations(result.citations);
+          if (result.hook || result.thesis || result.context) {
+            setEnrichment({
+              hook: result.hook || "",
+              thesis: result.thesis || "",
+              antithesis: result.antithesis || "",
+              key_data: result.key_data || "",
+              context: result.context || "",
+              citations: result.citations || []
+            });
+          }
           break;
 
         case "summarize":
@@ -307,7 +321,7 @@ export default function LabV2Page() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         cluster: selectedCluster,
-        context: enrichContext,
+        context: enrichment.context,
         model: stepModels.summarize,
         prompt_template: prompts.summary
       })
@@ -317,14 +331,28 @@ export default function LabV2Page() {
 
   const runScript = async () => {
     if (!summary) return { error: "Generate summary first" };
+    
+    // Get enrichment from previous step
+    const enrichment = stepResults.enrich?.enrichment || {
+      hook: stepResults.enrich?.hook || "",
+      thesis: stepResults.enrich?.thesis || "",
+      antithesis: stepResults.enrich?.antithesis || "",
+      key_data: stepResults.enrich?.key_data || "",
+    };
+    
     const res = await fetch(`${backendUrl}/api/lab/v2/script`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        summary,
-        context: enrichContext,
+        summary: {
+          ...summary,
+          cluster_name: selectedCluster?.name || summary.title,
+          articles: selectedCluster?.articles || []
+        },
+        enrichment,
         model: stepModels.script,
-        prompt_template: prompts.script
+        prompt_template: prompts.script,
+        word_count: 375  // ~2.5 min per cluster
       })
     });
     return res.json();
@@ -383,8 +411,7 @@ export default function LabV2Page() {
     setClusters({});
     setScoredClusters([]);
     setSelectedCluster(null);
-    setEnrichContext("");
-    setEnrichCitations([]);
+    setEnrichment({ hook: "", thesis: "", antithesis: "", key_data: "", context: "", citations: [] });
     setSummary(null);
     setScript(null);
     toast.info("Pipeline reset");
@@ -827,17 +854,45 @@ export default function LabV2Page() {
               {/* ENRICH */}
               {currentStep.id === "enrich" && (
                 <div className="space-y-4">
-                  {enrichContext ? (
+                  {stepResults.enrich?.enrichment ? (
                     <>
-                      <div className="p-4 bg-muted/50 rounded-lg">
-                        <h4 className="font-medium mb-2">Perplexity Context</h4>
-                        <p className="text-sm whitespace-pre-wrap">{enrichContext}</p>
+                      <div className="grid gap-4">
+                        {/* Hook */}
+                        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                          <h4 className="font-medium text-sm text-yellow-700 dark:text-yellow-400 mb-1">🎣 Hook</h4>
+                          <p className="text-sm">{stepResults.enrich.hook || "Non généré"}</p>
+                        </div>
+                        
+                        {/* Thesis */}
+                        <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                          <h4 className="font-medium text-sm text-green-700 dark:text-green-400 mb-1">✅ Thèse</h4>
+                          <p className="text-sm">{stepResults.enrich.thesis || "Non généré"}</p>
+                        </div>
+                        
+                        {/* Antithesis */}
+                        <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                          <h4 className="font-medium text-sm text-red-700 dark:text-red-400 mb-1">⚖️ Antithèse</h4>
+                          <p className="text-sm">{stepResults.enrich.antithesis || "Non généré"}</p>
+                        </div>
+                        
+                        {/* Key Data */}
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <h4 className="font-medium text-sm text-blue-700 dark:text-blue-400 mb-1">📊 Données clés</h4>
+                          <p className="text-sm whitespace-pre-wrap">{stepResults.enrich.key_data || "Non généré"}</p>
+                        </div>
+                        
+                        {/* Context */}
+                        <div className="p-4 bg-muted/50 rounded-lg">
+                          <h4 className="font-medium text-sm mb-1">📝 Contexte</h4>
+                          <p className="text-sm">{stepResults.enrich.context || "Non généré"}</p>
+                        </div>
                       </div>
-                      {enrichCitations.length > 0 && (
+                      
+                      {stepResults.enrich.citations?.length > 0 && (
                         <div>
-                          <h4 className="font-medium mb-2 text-sm">Citations</h4>
+                          <h4 className="font-medium text-sm mb-2">Citations</h4>
                           <div className="flex flex-wrap gap-2">
-                            {enrichCitations.map((url, i) => (
+                            {stepResults.enrich.citations.map((url: string, i: number) => (
                               <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1">
                                 <ExternalLink className="w-3 h-3" />
                                 {new URL(url).hostname}
@@ -847,6 +902,11 @@ export default function LabV2Page() {
                         </div>
                       )}
                     </>
+                  ) : enrichment.context ? (
+                    <div className="p-4 bg-muted/50 rounded-lg">
+                      <h4 className="font-medium mb-2">Perplexity Context (raw)</h4>
+                      <p className="text-sm whitespace-pre-wrap">{enrichment.context}</p>
+                    </div>
                   ) : (
                     <p className="text-muted-foreground">Select a cluster and run enrichment</p>
                   )}
