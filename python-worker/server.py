@@ -1735,6 +1735,543 @@ def lab_v2_params():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# ============================================
+# SIGNAL DETECTION API
+# ============================================
+
+@app.route("/api/signals", methods=["GET"])
+def get_signals():
+    """Get signals list with filters."""
+    try:
+        topic = request.args.get("topic")
+        status = request.args.get("status")
+        severity = request.args.get("severity")
+        limit = int(request.args.get("limit", 20))
+        
+        query = supabase.table("signals").select(
+            "*, clusters(name, article_count, source_names)"
+        ).order("detected_at", desc=True).limit(limit)
+        
+        if topic:
+            query = query.eq("topic", topic)
+        if status:
+            query = query.eq("status", status)
+        if severity:
+            query = query.eq("severity", severity)
+        
+        result = query.execute()
+        
+        return jsonify({
+            "success": True,
+            "signals": result.data or [],
+            "count": len(result.data or [])
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/signals/<signal_id>", methods=["GET"])
+def get_signal(signal_id: str):
+    """Get single signal with full details."""
+    try:
+        result = supabase.table("signals").select(
+            "*, clusters(*)"
+        ).eq("id", signal_id).single().execute()
+        
+        if not result.data:
+            return jsonify({"success": False, "error": "Signal not found"}), 404
+        
+        signal = result.data
+        cluster_id = signal.get("cluster_id")
+        
+        # Get articles for this cluster
+        articles = []
+        if cluster_id:
+            articles_result = supabase.table("articles").select(
+                "id, title, url, source_name, source_tier, published_at"
+            ).eq("cluster_id", cluster_id).order("published_at", desc=True).execute()
+            articles = articles_result.data or []
+        
+        return jsonify({
+            "success": True,
+            "signal": signal,
+            "articles": articles
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/signals/detect", methods=["POST"])
+def trigger_detection():
+    """Trigger signal detection manually."""
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        from signal_detector import run_detection_cycle
+        
+        data = request.get_json() or {}
+        topic = data.get("topic")
+        
+        results = run_detection_cycle(topic)
+        
+        return jsonify({
+            "success": True,
+            **results
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/signals/<signal_id>/feedback", methods=["POST"])
+def signal_feedback(signal_id: str):
+    """Record feedback on a signal."""
+    try:
+        from signal_detector import record_feedback
+        
+        data = request.get_json() or {}
+        rating = data.get("rating")  # useful, not_useful, acted_on
+        comment = data.get("comment")
+        
+        if rating not in ["useful", "not_useful", "acted_on"]:
+            return jsonify({"success": False, "error": "Invalid rating"}), 400
+        
+        result = record_feedback(supabase, signal_id, rating, comment)
+        
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/signals/stats", methods=["GET"])
+def signal_stats():
+    """Get signal statistics."""
+    try:
+        from datetime import timedelta
+        
+        # Get signals from last 30 days
+        thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        
+        signals_result = supabase.table("signals").select(
+            "id, topic, severity, status, total_score"
+        ).gte("detected_at", thirty_days_ago).execute()
+        
+        signals = signals_result.data or []
+        
+        # Get feedback
+        feedback_result = supabase.table("signal_feedback").select(
+            "signal_id, rating"
+        ).execute()
+        
+        feedbacks = feedback_result.data or []
+        feedback_by_signal = {}
+        for f in feedbacks:
+            feedback_by_signal[f["signal_id"]] = f["rating"]
+        
+        # Calculate stats
+        stats = {
+            "total_signals": len(signals),
+            "by_topic": {},
+            "by_severity": {},
+            "feedback": {
+                "useful": 0,
+                "not_useful": 0,
+                "acted_on": 0,
+                "no_feedback": 0
+            },
+            "precision": 0
+        }
+        
+        for s in signals:
+            # By topic
+            topic = s["topic"]
+            if topic not in stats["by_topic"]:
+                stats["by_topic"][topic] = 0
+            stats["by_topic"][topic] += 1
+            
+            # By severity
+            severity = s["severity"]
+            if severity not in stats["by_severity"]:
+                stats["by_severity"][severity] = 0
+            stats["by_severity"][severity] += 1
+            
+            # Feedback
+            fb = feedback_by_signal.get(s["id"])
+            if fb:
+                stats["feedback"][fb] += 1
+            else:
+                stats["feedback"]["no_feedback"] += 1
+        
+        # Calculate precision
+        total_rated = stats["feedback"]["useful"] + stats["feedback"]["not_useful"] + stats["feedback"]["acted_on"]
+        if total_rated > 0:
+            useful = stats["feedback"]["useful"] + stats["feedback"]["acted_on"]
+            stats["precision"] = round(useful / total_rated * 100, 1)
+        
+        # Get thresholds
+        thresholds_result = supabase.table("signal_thresholds").select("*").execute()
+        stats["thresholds"] = thresholds_result.data or []
+        
+        return jsonify({"success": True, "stats": stats})
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/signals/thresholds", methods=["GET", "POST"])
+def signal_thresholds():
+    """Get or update signal thresholds."""
+    try:
+        if request.method == "GET":
+            result = supabase.table("signal_thresholds").select("*").execute()
+            return jsonify({"success": True, "thresholds": result.data or []})
+        else:
+            if not verify_auth():
+                return jsonify({"error": "Unauthorized"}), 401
+            
+            data = request.get_json() or {}
+            topic = data.get("topic")
+            updates = {k: v for k, v in data.items() if k != "topic" and k in [
+                "min_velocity", "min_score", "min_authority_sources", "min_total_sources"
+            ]}
+            
+            if not topic or not updates:
+                return jsonify({"success": False, "error": "topic and updates required"}), 400
+            
+            supabase.table("signal_thresholds").update(updates).eq("topic", topic).execute()
+            
+            return jsonify({"success": True, "message": f"Thresholds updated for {topic}"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/signals/recalibrate", methods=["POST"])
+def recalibrate():
+    """Recalibrate thresholds based on feedback."""
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        from signal_detector import recalibrate_thresholds, apply_recommendations
+        
+        data = request.get_json() or {}
+        topic = data.get("topic")
+        apply_now = data.get("apply", False)
+        
+        if not topic:
+            return jsonify({"success": False, "error": "topic required"}), 400
+        
+        result = recalibrate_thresholds(supabase, topic)
+        
+        if apply_now and result.get("recommended_velocity"):
+            apply_result = apply_recommendations(supabase, topic)
+            result["applied"] = apply_result
+        
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============================================
+# PIPELINE OBSERVER API (Lab)
+# ============================================
+
+@app.route("/api/lab/pipeline/run", methods=["POST"])
+def lab_pipeline_run():
+    """Run full pipeline and return all intermediate steps."""
+    try:
+        from signal_detector import get_supabase, get_embedding, find_or_create_cluster, update_cluster_stats, calculate_velocity, score_signal
+        from prompt_lab_v2 import lab_fetch, lab_classify, lab_cluster
+        import time
+        
+        data = request.get_json() or {}
+        topics = data.get("topics", ["ia", "macro", "asia"])
+        max_age_days = data.get("max_age_days", 3)
+        
+        pipeline_result = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "steps": {}
+        }
+        
+        # Step 1: Fetch
+        step1_start = time.time()
+        fetch_result = lab_fetch(topics=topics, max_age_days=max_age_days)
+        pipeline_result["steps"]["fetch"] = {
+            "duration_ms": int((time.time() - step1_start) * 1000),
+            "total_articles": len(fetch_result.get("articles", [])),
+            "by_topic": {},
+            "by_tier": {"authority": 0, "generalist": 0, "corporate": 0},
+            "articles": fetch_result.get("articles", [])[:50]  # Limit for display
+        }
+        
+        for a in fetch_result.get("articles", []):
+            topic = a.get("topic", "unknown")
+            tier = a.get("source_tier", "generalist")
+            if topic not in pipeline_result["steps"]["fetch"]["by_topic"]:
+                pipeline_result["steps"]["fetch"]["by_topic"][topic] = 0
+            pipeline_result["steps"]["fetch"]["by_topic"][topic] += 1
+            pipeline_result["steps"]["fetch"]["by_tier"][tier] += 1
+        
+        # Step 2: Classification (for general sources)
+        step2_start = time.time()
+        general_articles = [a for a in fetch_result.get("articles", []) if a.get("topic") == "general"]
+        classified = []
+        for a in general_articles[:10]:  # Limit LLM calls
+            try:
+                class_result = lab_classify(article=a)
+                a["classified_topic"] = class_result.get("topic", "discard")
+                classified.append(a)
+            except:
+                pass
+        
+        pipeline_result["steps"]["classify"] = {
+            "duration_ms": int((time.time() - step2_start) * 1000),
+            "general_articles": len(general_articles),
+            "classified": len(classified),
+            "results": classified
+        }
+        
+        # Step 3: Clustering
+        step3_start = time.time()
+        cluster_result = lab_cluster(
+            articles=fetch_result.get("articles", []),
+            eps=data.get("dbscan_eps", 0.65),
+            min_samples=data.get("dbscan_min_samples", 2)
+        )
+        
+        clusters = cluster_result.get("clusters", [])
+        pipeline_result["steps"]["cluster"] = {
+            "duration_ms": int((time.time() - step3_start) * 1000),
+            "total_clusters": len(clusters),
+            "clusters": clusters
+        }
+        
+        # Step 4: Velocity calculation
+        step4_start = time.time()
+        velocity_data = []
+        for c in clusters:
+            # Simulate velocity (in real system, this comes from DB history)
+            article_count = c.get("article_count", 0)
+            baseline = max(0.5, article_count / 3)  # Simulated baseline
+            velocity = article_count / baseline
+            
+            velocity_data.append({
+                "cluster_id": c.get("id"),
+                "cluster_name": c.get("name", "Unknown"),
+                "topic": c.get("topic"),
+                "article_count": article_count,
+                "baseline": round(baseline, 2),
+                "current": article_count,
+                "velocity": round(velocity, 2)
+            })
+        
+        # Sort by velocity
+        velocity_data.sort(key=lambda x: x["velocity"], reverse=True)
+        
+        pipeline_result["steps"]["velocity"] = {
+            "duration_ms": int((time.time() - step4_start) * 1000),
+            "data": velocity_data
+        }
+        
+        # Step 5: Scoring
+        step5_start = time.time()
+        
+        # Get thresholds
+        thresholds_result = supabase.table("signal_thresholds").select("*").execute()
+        thresholds_by_topic = {t["topic"]: t for t in (thresholds_result.data or [])}
+        
+        scoring_data = []
+        for i, c in enumerate(clusters):
+            topic = c.get("topic", "ia")
+            thresholds = thresholds_by_topic.get(topic, {
+                "min_velocity": 5.0,
+                "min_score": 60,
+                "min_authority_sources": 1,
+                "min_total_sources": 3
+            })
+            
+            vel = velocity_data[i] if i < len(velocity_data) else {"velocity": 1}
+            
+            # Calculate score components
+            velocity_points = min(30, vel.get("velocity", 1) * 6)
+            
+            authority = len([a for a in c.get("articles", []) if a.get("source_tier") == "authority"])
+            generalist = len([a for a in c.get("articles", []) if a.get("source_tier") == "generalist"])
+            corporate = len([a for a in c.get("articles", []) if a.get("source_tier") == "corporate"])
+            
+            source_points = min(15, authority * 10) + min(10, generalist * 2)
+            
+            sources = c.get("sources", [])
+            diversity_points = min(15, len(sources) * 3)
+            
+            # Novelty (new clusters score higher)
+            novelty_points = 15  # Default for lab
+            
+            volume_points = min(10, c.get("article_count", 0) * 2)
+            
+            total = min(100, velocity_points + source_points + diversity_points + novelty_points + volume_points)
+            
+            # Determine if valid signal
+            is_valid = False
+            if authority >= thresholds.get("min_authority_sources", 1) and vel.get("velocity", 0) >= thresholds.get("min_velocity", 5) * 0.6:
+                is_valid = True
+            elif len(sources) >= thresholds.get("min_total_sources", 3) and vel.get("velocity", 0) >= thresholds.get("min_velocity", 5):
+                is_valid = True
+            
+            passes_threshold = total >= thresholds.get("min_score", 60) and is_valid
+            
+            # Determine severity
+            if total >= 85:
+                severity = "breaking"
+            elif total >= 70:
+                severity = "alert"
+            elif total >= 60:
+                severity = "digest"
+            else:
+                severity = "log"
+            
+            scoring_data.append({
+                "cluster_id": c.get("id"),
+                "cluster_name": c.get("name", "Unknown"),
+                "topic": topic,
+                "breakdown": {
+                    "velocity": round(velocity_points, 1),
+                    "sources": round(source_points, 1),
+                    "diversity": round(diversity_points, 1),
+                    "novelty": novelty_points,
+                    "volume": volume_points
+                },
+                "source_mix": {
+                    "authority": authority,
+                    "generalist": generalist,
+                    "corporate": corporate
+                },
+                "total_score": round(total),
+                "is_valid": is_valid,
+                "passes_threshold": passes_threshold,
+                "severity": severity,
+                "threshold_used": thresholds.get("min_score", 60)
+            })
+        
+        # Sort by score
+        scoring_data.sort(key=lambda x: x["total_score"], reverse=True)
+        
+        pipeline_result["steps"]["scoring"] = {
+            "duration_ms": int((time.time() - step5_start) * 1000),
+            "data": scoring_data
+        }
+        
+        # Step 6: Signals generated vs rejected
+        signals_generated = [s for s in scoring_data if s["passes_threshold"]]
+        signals_rejected = [s for s in scoring_data if not s["passes_threshold"]]
+        
+        pipeline_result["steps"]["signals"] = {
+            "generated": signals_generated,
+            "rejected": signals_rejected,
+            "generated_count": len(signals_generated),
+            "rejected_count": len(signals_rejected)
+        }
+        
+        # Add thresholds info
+        pipeline_result["thresholds"] = thresholds_result.data or []
+        
+        return jsonify({"success": True, "pipeline": pipeline_result})
+    
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/cluster/<cluster_id>", methods=["GET"])
+def lab_cluster_detail(cluster_id: str):
+    """Get detailed info about a specific cluster."""
+    try:
+        # Get cluster
+        cluster_result = supabase.table("clusters").select("*").eq("id", cluster_id).single().execute()
+        
+        if not cluster_result.data:
+            return jsonify({"success": False, "error": "Cluster not found"}), 404
+        
+        cluster = cluster_result.data
+        
+        # Get articles
+        articles_result = supabase.table("articles").select(
+            "id, title, url, source_name, source_tier, description, published_at, first_seen_at"
+        ).eq("cluster_id", cluster_id).order("published_at", desc=True).execute()
+        
+        articles = articles_result.data or []
+        
+        # Calculate velocity
+        from signal_detector import calculate_velocity
+        velocity = calculate_velocity(supabase, cluster_id)
+        
+        # Get thresholds for this topic
+        topic = cluster.get("topic", "ia")
+        thresholds_result = supabase.table("signal_thresholds").select("*").eq("topic", topic).single().execute()
+        thresholds = thresholds_result.data or {}
+        
+        return jsonify({
+            "success": True,
+            "cluster": cluster,
+            "articles": articles,
+            "velocity": velocity,
+            "thresholds": thresholds
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/lab/force-signal", methods=["POST"])
+def lab_force_signal():
+    """Force create a signal from a cluster (manual override)."""
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        data = request.get_json() or {}
+        cluster_id = data.get("cluster_id")
+        
+        if not cluster_id:
+            return jsonify({"success": False, "error": "cluster_id required"}), 400
+        
+        # Get cluster
+        cluster_result = supabase.table("clusters").select("*").eq("id", cluster_id).single().execute()
+        cluster = cluster_result.data
+        
+        if not cluster:
+            return jsonify({"success": False, "error": "Cluster not found"}), 404
+        
+        # Create signal manually
+        signal = {
+            "topic": cluster.get("topic"),
+            "title": cluster.get("name", "Manual Signal"),
+            "slug": f"manual-{cluster_id[:8]}-{int(time.time())}",
+            "cluster_id": cluster_id,
+            "velocity_score": 0,
+            "velocity_details": {"manual": True},
+            "source_quality_score": 0,
+            "source_mix": {
+                "authority": cluster.get("authority_count", 0),
+                "generalist": cluster.get("generalist_count", 0),
+                "corporate": cluster.get("corporate_count", 0)
+            },
+            "total_score": 100,
+            "score_breakdown": {"manual_override": 100},
+            "status": "detected",
+            "severity": "alert",
+            "detected_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        result = supabase.table("signals").insert(signal).execute()
+        
+        return jsonify({"success": True, "signal": result.data[0] if result.data else None})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 def run_server(port: int = 8080):
     """Run the Flask server."""
     log.info("Starting HTTP server", port=port)

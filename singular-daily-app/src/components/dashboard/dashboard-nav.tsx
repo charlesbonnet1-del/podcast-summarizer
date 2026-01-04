@@ -5,9 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { 
-  Newspaper, 
+  Zap,
+  FlaskConical,
   Archive, 
-  Headphones, 
   Settings,
   Menu,
   X,
@@ -40,21 +40,21 @@ interface DashboardNavProps {
 const NAV_ITEMS = [
   { 
     href: "/dashboard", 
-    label: "Feed", 
-    icon: Newspaper,
-    description: "Briefings du jour"
+    label: "Signals", 
+    icon: Zap,
+    description: "Alertes détectées"
+  },
+  { 
+    href: "/dashboard/lab", 
+    label: "Lab", 
+    icon: FlaskConical,
+    description: "Observer le pipeline"
   },
   { 
     href: "/dashboard/archive", 
     label: "Archive", 
     icon: Archive,
     description: "Historique"
-  },
-  { 
-    href: "/dashboard/podcast", 
-    label: "Podcast", 
-    icon: Headphones,
-    description: "Écouter"
   },
   { 
     href: "/dashboard/settings", 
