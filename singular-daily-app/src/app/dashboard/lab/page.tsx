@@ -199,6 +199,25 @@ export default function LabPage() {
                         ))}
                       </div>
                     </div>
+                    
+                    {/* Alternative sources stats */}
+                    {result.steps.fetch.alternative_stats && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Sources alternatives</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(result.steps.fetch.alternative_stats).map(([source, data]: [string, any]) => (
+                            <div key={source} className={cn(
+                              "flex items-center gap-2 px-3 py-1.5 rounded-lg",
+                              data.count > 0 ? "bg-green-500/10 text-green-500" : "bg-muted text-muted-foreground"
+                            )}>
+                              <span className="text-sm capitalize">{source}:</span>
+                              <span className="font-medium">{data.count}</span>
+                              {data.error && <span className="text-xs text-red-500">({data.error})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <h4 className="text-sm font-medium mb-2">Échantillon</h4>
                       <div className="space-y-1 max-h-48 overflow-y-auto">
