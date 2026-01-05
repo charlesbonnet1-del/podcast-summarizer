@@ -1983,6 +1983,7 @@ def lab_pipeline_run():
     """Run full pipeline and return all intermediate steps."""
     try:
         from prompt_lab_v2 import lab_fetch, lab_classify, lab_cluster, lab_score
+        from alternative_sources import fetch_alternative_sources
         import time
         import httpx
         import os
@@ -1990,29 +1991,47 @@ def lab_pipeline_run():
         data = request.get_json() or {}
         topics = data.get("topics", ["ia", "macro", "asia"])
         max_age_days = data.get("max_age_days", 3)
+        include_alternative = data.get("include_alternative", True)
         
         pipeline_result = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "steps": {}
         }
         
-        # Step 1: Fetch
+        # Step 1: Fetch RSS sources
         step1_start = time.time()
         fetch_result = lab_fetch(topics=topics, max_age_days_generalist=max_age_days)
         articles = fetch_result.get("articles", [])
         
+        # Step 1b: Fetch alternative sources (ArXiv, SEC, GitHub, Reddit)
+        alt_articles = []
+        alt_stats = {}
+        if include_alternative:
+            alt_articles, alt_stats = fetch_alternative_sources(
+                include_arxiv=True,
+                include_sec=True,
+                include_github=True,
+                include_reddit=True
+            )
+            articles.extend(alt_articles)
+        
         pipeline_result["steps"]["fetch"] = {
             "duration_ms": int((time.time() - step1_start) * 1000),
             "total_articles": len(articles),
+            "rss_articles": len(fetch_result.get("articles", [])),
+            "alternative_articles": len(alt_articles),
+            "alternative_stats": alt_stats,
             "by_topic": {},
             "by_tier": {"authority": 0, "generalist": 0, "corporate": 0},
+            "by_source_type": {},
             "articles": [
                 {
                     "title": a.get("title", "")[:80],
                     "url": a.get("url", ""),
                     "source_name": a.get("source_name", ""),
                     "source_tier": a.get("source_tier", "generalist"),
-                    "topic": a.get("topic", "unknown")
+                    "topic": a.get("topic", "unknown"),
+                    "source_type": a.get("source_type", "rss")
                 }
                 for a in articles[:50]
             ],
@@ -2023,11 +2042,18 @@ def lab_pipeline_run():
         for a in articles:
             topic = a.get("topic", "unknown")
             tier = a.get("source_tier", "generalist")
+            source_type = a.get("source_type", "rss")
+            
             if topic not in pipeline_result["steps"]["fetch"]["by_topic"]:
                 pipeline_result["steps"]["fetch"]["by_topic"][topic] = 0
             pipeline_result["steps"]["fetch"]["by_topic"][topic] += 1
+            
             if tier in pipeline_result["steps"]["fetch"]["by_tier"]:
                 pipeline_result["steps"]["fetch"]["by_tier"][tier] += 1
+            
+            if source_type not in pipeline_result["steps"]["fetch"]["by_source_type"]:
+                pipeline_result["steps"]["fetch"]["by_source_type"][source_type] = 0
+            pipeline_result["steps"]["fetch"]["by_source_type"][source_type] += 1
         
         # Step 2: Embedding
         step2_start = time.time()

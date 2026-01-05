@@ -39,11 +39,42 @@ MVP_TOPICS = ["ia", "macro", "asia"]
 
 # All supported topics
 ALL_TOPICS = [
-    "ia", "macro", "asia",  # MVP
+    "ia", "macro", "asia", "general",  # MVP + general
     "cyber", "deep_tech", "health", "space", "energy",  # Phase 2
     "crypto", "deals", "regulation", "resources",  # Phase 2
     "info", "attention", "persuasion"  # Phase 2
 ]
+
+# Supported languages
+SUPPORTED_LANGUAGES = [
+    "en",   # English
+    "fr",   # French
+    "es",   # Spanish
+    "de",   # German (note: 'ge' in sheet should be 'de')
+    "it",   # Italian
+    "sv",   # Swedish (note: 'sw' in sheet should be 'sv')
+    "no",   # Norwegian (note: 'nor' in sheet should be 'no')
+]
+
+# Language code normalization (user input -> standard)
+LANGUAGE_NORMALIZATION = {
+    "ge": "de",      # German
+    "ger": "de",
+    "german": "de",
+    "sw": "sv",      # Swedish
+    "swe": "sv",
+    "swedish": "sv",
+    "nor": "no",     # Norwegian
+    "norwegian": "no",
+    "esp": "es",     # Spanish
+    "spanish": "es",
+    "ita": "it",     # Italian
+    "italian": "it",
+    "fra": "fr",     # French
+    "french": "fr",
+    "eng": "en",     # English
+    "english": "en",
+}
 
 # Tier values
 TIER_AUTHORITY = "authority"
@@ -199,6 +230,9 @@ class SourceLibrary:
         tier = safe_get(self.COL_TIER, TIER_AUTHORITY).lower()
         url_rss = safe_get(self.COL_URL_RSS)
         language = safe_get(self.COL_LANGUAGE, "en").lower()
+        
+        # Normalize language code
+        language = LANGUAGE_NORMALIZATION.get(language, language)
         
         # Parse score
         try:
@@ -391,7 +425,7 @@ def fetch_rss_feed(
     max_items: int = 10,
     max_age_hours: int = 72,
     filter_noise: bool = True
-) -> list[dict]:
+) -> tuple[list[dict], str | None]:
     """
     Fetch and parse RSS feed with noise filtering.
     
@@ -402,7 +436,7 @@ def fetch_rss_feed(
         filter_noise: Apply noise filtering
     
     Returns:
-        List of articles with title, url, description, published_at
+        Tuple of (list of articles, error message or None)
     """
     try:
         headers = {
@@ -470,17 +504,22 @@ def fetch_rss_feed(
             if len(articles) >= max_items:
                 break
         
-        return articles
+        return articles, None
         
     except httpx.HTTPStatusError as e:
+        error_msg = f"HTTP {e.response.status_code}"
         log.warning("RSS HTTP error", url=url[:50], status=e.response.status_code)
-        return []
+        return [], error_msg
     except ET.ParseError:
         log.warning("RSS parse error", url=url[:50])
-        return []
+        return [], "Parse error"
+    except httpx.TimeoutException:
+        log.warning("RSS timeout", url=url[:50])
+        return [], "Timeout"
     except Exception as e:
-        log.warning("RSS fetch failed", url=url[:50], error=str(e))
-        return []
+        error_str = str(e)[:50]
+        log.warning("RSS fetch failed", url=url[:50], error=error_str)
+        return [], error_str
 
 
 # ============================================
@@ -491,13 +530,22 @@ def fetch_all_sources(
     library: SourceLibrary,
     topics: list[str] = None,
     mvp_only: bool = True,
-    max_articles_per_source: int = 10
-) -> list[dict]:
+    max_articles_per_source: int = 10,
+    return_errors: bool = False
+) -> list[dict] | tuple[list[dict], list[dict]]:
     """
     Fetch articles from all sources in the library.
     
-    Returns articles enriched with source metadata:
-    - source_name, source_tier, source_score, topic
+    Args:
+        library: SourceLibrary instance
+        topics: Filter by topics
+        mvp_only: Only MVP sources
+        max_articles_per_source: Max articles per source
+        return_errors: If True, also return list of failed sources
+    
+    Returns:
+        If return_errors=False: List of articles
+        If return_errors=True: Tuple of (articles, failed_sources)
     """
     if topics:
         sources = library.get_sources_by_topic(topics, mvp_only=mvp_only)
@@ -507,14 +555,24 @@ def fetch_all_sources(
     log.info(f"🔍 Fetching from {len(sources)} sources...")
     
     all_articles = []
+    failed_sources = []
     success_count = 0
     
     for source in sources:
-        articles = fetch_rss_feed(
+        articles, error = fetch_rss_feed(
             source["url_rss"],
             max_items=max_articles_per_source,
             filter_noise=True
         )
+        
+        if error:
+            failed_sources.append({
+                "source_name": source["source_name"],
+                "url_rss": source["url_rss"],
+                "topic": source["topic"],
+                "tier": source["tier"],
+                "error": error
+            })
         
         if articles:
             success_count += 1
@@ -535,6 +593,8 @@ def fetch_all_sources(
     
     log.info(f"✅ Fetched {len(all_articles)} articles from {success_count}/{len(sources)} sources")
     
+    if return_errors:
+        return all_articles, failed_sources
     return all_articles
 
 
