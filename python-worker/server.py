@@ -2015,7 +2015,9 @@ def lab_pipeline_run():
                     "topic": a.get("topic", "unknown")
                 }
                 for a in articles[:50]
-            ]
+            ],
+            "failed_sources": fetch_result.get("failed_sources", []),
+            "failed_count": fetch_result.get("failed_count", 0)
         }
         
         for a in articles:
