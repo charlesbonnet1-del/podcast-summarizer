@@ -166,9 +166,9 @@ export default function LabPage() {
               <span className="ml-auto px-2 py-0.5 bg-primary/20 text-primary rounded text-sm">
                 {result.steps.fetch?.total_articles} articles
               </span>
-              {result.steps.fetch?.failed_count > 0 && (
+              {(result.steps.fetch?.failed_count ?? 0) > 0 && (
                 <span className="px-2 py-0.5 bg-red-500/20 text-red-500 rounded text-sm">
-                  {result.steps.fetch.failed_count} erreurs
+                  {result.steps.fetch?.failed_count} erreurs
                 </span>
               )}
               <span className="text-sm text-muted-foreground">{result.steps.fetch?.duration_ms}ms</span>
