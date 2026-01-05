@@ -60,9 +60,10 @@ interface ScoringData {
 interface PipelineResult {
   timestamp: string;
   steps: {
-    fetch?: { duration_ms: number; total_articles: number; by_topic: Record<string, number>; by_tier: Record<string, number>; articles: Article[] };
+    fetch?: { duration_ms: number; total_articles: number; by_topic: Record<string, number>; by_tier: Record<string, number>; articles: Article[]; failed_sources?: any[]; failed_count?: number };
+    embedding?: { duration_ms: number; embedded_count: number; total_articles: number };
     classify?: { duration_ms: number; general_articles: number; classified: number; results: Article[] };
-    cluster?: { duration_ms: number; total_clusters: number; clusters: Cluster[] };
+    cluster?: { duration_ms: number; total_clusters: number; clusters: Cluster[]; noise_count?: number };
     velocity?: { duration_ms: number; data: VelocityData[] };
     scoring?: { duration_ms: number; data: ScoringData[] };
     signals?: { generated: ScoringData[]; rejected: ScoringData[]; generated_count: number; rejected_count: number };
@@ -165,6 +166,11 @@ export default function LabPage() {
               <span className="ml-auto px-2 py-0.5 bg-primary/20 text-primary rounded text-sm">
                 {result.steps.fetch?.total_articles} articles
               </span>
+              {result.steps.fetch?.failed_count > 0 && (
+                <span className="px-2 py-0.5 bg-red-500/20 text-red-500 rounded text-sm">
+                  {result.steps.fetch.failed_count} erreurs
+                </span>
+              )}
               <span className="text-sm text-muted-foreground">{result.steps.fetch?.duration_ms}ms</span>
             </button>
             <AnimatePresence>
@@ -206,6 +212,26 @@ export default function LabPage() {
                         ))}
                       </div>
                     </div>
+                    
+                    {/* Failed sources */}
+                    {result.steps.fetch.failed_sources && result.steps.fetch.failed_sources.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2 text-red-500 flex items-center gap-2">
+                          <XCircle className="w-4 h-4" />
+                          Sources en erreur ({result.steps.fetch.failed_count})
+                        </h4>
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {result.steps.fetch.failed_sources.map((s: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 p-2 bg-red-500/10 border border-red-500/30 rounded text-sm">
+                              <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                              <span className="text-foreground font-medium">{s.source_name}</span>
+                              <span className={cn("px-1.5 py-0.5 rounded text-xs", TOPIC_COLORS[s.topic], "text-white")}>{s.topic}</span>
+                              <span className="text-red-500 text-xs ml-auto">{s.error}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
