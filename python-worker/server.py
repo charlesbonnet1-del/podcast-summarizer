@@ -1982,9 +1982,10 @@ def recalibrate():
 def lab_pipeline_run():
     """Run full pipeline and return all intermediate steps."""
     try:
-        from signal_detector import get_supabase, get_embedding, find_or_create_cluster, update_cluster_stats, calculate_velocity, score_signal
-        from prompt_lab_v2 import lab_fetch, lab_classify, lab_cluster
+        from prompt_lab_v2 import lab_fetch, lab_classify, lab_cluster, lab_score
         import time
+        import httpx
+        import os
         
         data = request.get_json() or {}
         topics = data.get("topics", ["ia", "macro", "asia"])
@@ -1998,76 +1999,131 @@ def lab_pipeline_run():
         # Step 1: Fetch
         step1_start = time.time()
         fetch_result = lab_fetch(topics=topics, max_age_days_generalist=max_age_days)
+        articles = fetch_result.get("articles", [])
+        
         pipeline_result["steps"]["fetch"] = {
             "duration_ms": int((time.time() - step1_start) * 1000),
-            "total_articles": len(fetch_result.get("articles", [])),
+            "total_articles": len(articles),
             "by_topic": {},
             "by_tier": {"authority": 0, "generalist": 0, "corporate": 0},
-            "articles": fetch_result.get("articles", [])[:50]  # Limit for display
+            "articles": [
+                {
+                    "title": a.get("title", "")[:80],
+                    "url": a.get("url", ""),
+                    "source_name": a.get("source_name", ""),
+                    "source_tier": a.get("source_tier", "generalist"),
+                    "topic": a.get("topic", "unknown")
+                }
+                for a in articles[:50]
+            ]
         }
         
-        for a in fetch_result.get("articles", []):
+        for a in articles:
             topic = a.get("topic", "unknown")
             tier = a.get("source_tier", "generalist")
             if topic not in pipeline_result["steps"]["fetch"]["by_topic"]:
                 pipeline_result["steps"]["fetch"]["by_topic"][topic] = 0
             pipeline_result["steps"]["fetch"]["by_topic"][topic] += 1
-            pipeline_result["steps"]["fetch"]["by_tier"][tier] += 1
+            if tier in pipeline_result["steps"]["fetch"]["by_tier"]:
+                pipeline_result["steps"]["fetch"]["by_tier"][tier] += 1
         
-        # Step 2: Classification (for general sources)
+        # Step 2: Embedding
         step2_start = time.time()
-        general_articles = [a for a in fetch_result.get("articles", []) if a.get("topic") == "general"]
-        classified = []
-        for a in general_articles[:10]:  # Limit LLM calls
-            try:
-                class_result = lab_classify(article=a)
-                a["classified_topic"] = class_result.get("topic", "discard")
-                classified.append(a)
-            except:
-                pass
+        openai_key = os.getenv("OPENAI_API_KEY")
+        embedded_count = 0
         
-        pipeline_result["steps"]["classify"] = {
+        if openai_key and articles:
+            # Batch embed (max 50 articles to save cost/time)
+            articles_to_embed = articles[:50]
+            texts_to_embed = []
+            
+            for a in articles_to_embed:
+                text = f"{a.get('title', '')}\n\n{a.get('description', '')}"
+                texts_to_embed.append(text[:2000])  # Limit text length
+            
+            try:
+                response = httpx.post(
+                    "https://api.openai.com/v1/embeddings",
+                    headers={
+                        "Authorization": f"Bearer {openai_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "text-embedding-3-small",
+                        "input": texts_to_embed
+                    },
+                    timeout=60
+                )
+                response.raise_for_status()
+                embeddings_data = response.json()
+                
+                for i, emb_data in enumerate(embeddings_data.get("data", [])):
+                    if i < len(articles_to_embed):
+                        articles_to_embed[i]["embedding"] = emb_data["embedding"]
+                        embedded_count += 1
+                
+            except Exception as e:
+                log.error(f"Embedding error: {e}")
+        
+        pipeline_result["steps"]["embedding"] = {
             "duration_ms": int((time.time() - step2_start) * 1000),
-            "general_articles": len(general_articles),
-            "classified": len(classified),
-            "results": classified
+            "embedded_count": embedded_count,
+            "total_articles": len(articles)
         }
         
         # Step 3: Clustering
         step3_start = time.time()
         cluster_result = lab_cluster(
-            articles=fetch_result.get("articles", []),
+            articles=articles,
             eps=data.get("dbscan_eps", 0.65),
             min_samples=data.get("dbscan_min_samples", 2)
         )
         
-        clusters = cluster_result.get("clusters", [])
+        # Extract cluster info for display
+        cluster_info = cluster_result.get("cluster_info", [])
+        clusters_dict = cluster_result.get("clusters", {})
+        
+        # Build displayable clusters
+        display_clusters = []
+        for info in cluster_info:
+            if info.get("cluster_id") != -1:  # Skip noise
+                cluster_articles = clusters_dict.get(info["cluster_id"], [])
+                display_clusters.append({
+                    "id": str(info["cluster_id"]),
+                    "name": info.get("name", f"Cluster {info['cluster_id']}"),
+                    "topic": cluster_articles[0].get("topic", "unknown") if cluster_articles else "unknown",
+                    "article_count": info.get("count", 0),
+                    "sources": info.get("sources", []),
+                    "articles": info.get("articles", [])[:5]  # Limit for display
+                })
+        
         pipeline_result["steps"]["cluster"] = {
             "duration_ms": int((time.time() - step3_start) * 1000),
-            "total_clusters": len(clusters),
-            "clusters": clusters
+            "total_clusters": cluster_result.get("cluster_count", 0),
+            "noise_count": cluster_result.get("noise_count", 0),
+            "clusters": display_clusters
         }
         
-        # Step 4: Velocity calculation
+        # Step 4: Velocity (simulated since no history yet)
         step4_start = time.time()
         velocity_data = []
-        for c in clusters:
-            # Simulate velocity (in real system, this comes from DB history)
-            article_count = c.get("article_count", 0)
-            baseline = max(0.5, article_count / 3)  # Simulated baseline
+        
+        for cluster in display_clusters:
+            article_count = cluster.get("article_count", 0)
+            # Simulate baseline as 1/3 of current (meaning 3x velocity)
+            baseline = max(0.5, article_count / 3)
             velocity = article_count / baseline
             
             velocity_data.append({
-                "cluster_id": c.get("id"),
-                "cluster_name": c.get("name", "Unknown"),
-                "topic": c.get("topic"),
+                "cluster_id": cluster.get("id"),
+                "cluster_name": cluster.get("name", "Unknown"),
+                "topic": cluster.get("topic", "unknown"),
                 "article_count": article_count,
                 "baseline": round(baseline, 2),
                 "current": article_count,
                 "velocity": round(velocity, 2)
             })
         
-        # Sort by velocity
         velocity_data.sort(key=lambda x: x["velocity"], reverse=True)
         
         pipeline_result["steps"]["velocity"] = {
@@ -2078,13 +2134,13 @@ def lab_pipeline_run():
         # Step 5: Scoring
         step5_start = time.time()
         
-        # Get thresholds
+        # Get thresholds from DB
         thresholds_result = supabase.table("signal_thresholds").select("*").execute()
         thresholds_by_topic = {t["topic"]: t for t in (thresholds_result.data or [])}
         
         scoring_data = []
-        for i, c in enumerate(clusters):
-            topic = c.get("topic", "ia")
+        for i, cluster in enumerate(display_clusters):
+            topic = cluster.get("topic", "ia")
             thresholds = thresholds_by_topic.get(topic, {
                 "min_velocity": 5.0,
                 "min_score": 60,
@@ -2092,32 +2148,38 @@ def lab_pipeline_run():
                 "min_total_sources": 3
             })
             
-            vel = velocity_data[i] if i < len(velocity_data) else {"velocity": 1}
+            vel_info = velocity_data[i] if i < len(velocity_data) else {"velocity": 1}
+            velocity = vel_info.get("velocity", 1)
+            
+            # Get articles for this cluster
+            cluster_id_int = int(cluster.get("id", -1))
+            cluster_articles = clusters_dict.get(cluster_id_int, [])
+            
+            # Count by tier
+            authority = len([a for a in cluster_articles if a.get("source_tier") == "authority"])
+            generalist = len([a for a in cluster_articles if a.get("source_tier") == "generalist"])
+            corporate = len([a for a in cluster_articles if a.get("source_tier") == "corporate"])
             
             # Calculate score components
-            velocity_points = min(30, vel.get("velocity", 1) * 6)
-            
-            authority = len([a for a in c.get("articles", []) if a.get("source_tier") == "authority"])
-            generalist = len([a for a in c.get("articles", []) if a.get("source_tier") == "generalist"])
-            corporate = len([a for a in c.get("articles", []) if a.get("source_tier") == "corporate"])
-            
+            velocity_points = min(30, velocity * 6)
             source_points = min(15, authority * 10) + min(10, generalist * 2)
             
-            sources = c.get("sources", [])
+            sources = cluster.get("sources", [])
             diversity_points = min(15, len(sources) * 3)
-            
-            # Novelty (new clusters score higher)
-            novelty_points = 15  # Default for lab
-            
-            volume_points = min(10, c.get("article_count", 0) * 2)
+            novelty_points = 15  # Default for new clusters
+            volume_points = min(10, cluster.get("article_count", 0) * 2)
             
             total = min(100, velocity_points + source_points + diversity_points + novelty_points + volume_points)
             
-            # Determine if valid signal
+            # Check validity
             is_valid = False
-            if authority >= thresholds.get("min_authority_sources", 1) and vel.get("velocity", 0) >= thresholds.get("min_velocity", 5) * 0.6:
+            min_auth = thresholds.get("min_authority_sources", 1)
+            min_vel = thresholds.get("min_velocity", 5.0)
+            min_total = thresholds.get("min_total_sources", 3)
+            
+            if authority >= min_auth and velocity >= min_vel * 0.6:
                 is_valid = True
-            elif len(sources) >= thresholds.get("min_total_sources", 3) and vel.get("velocity", 0) >= thresholds.get("min_velocity", 5):
+            elif len(sources) >= min_total and velocity >= min_vel:
                 is_valid = True
             
             passes_threshold = total >= thresholds.get("min_score", 60) and is_valid
@@ -2133,8 +2195,8 @@ def lab_pipeline_run():
                 severity = "log"
             
             scoring_data.append({
-                "cluster_id": c.get("id"),
-                "cluster_name": c.get("name", "Unknown"),
+                "cluster_id": cluster.get("id"),
+                "cluster_name": cluster.get("name", "Unknown"),
                 "topic": topic,
                 "breakdown": {
                     "velocity": round(velocity_points, 1),
@@ -2155,7 +2217,6 @@ def lab_pipeline_run():
                 "threshold_used": thresholds.get("min_score", 60)
             })
         
-        # Sort by score
         scoring_data.sort(key=lambda x: x["total_score"], reverse=True)
         
         pipeline_result["steps"]["scoring"] = {
@@ -2163,7 +2224,7 @@ def lab_pipeline_run():
             "data": scoring_data
         }
         
-        # Step 6: Signals generated vs rejected
+        # Step 6: Signals
         signals_generated = [s for s in scoring_data if s["passes_threshold"]]
         signals_rejected = [s for s in scoring_data if not s["passes_threshold"]]
         
