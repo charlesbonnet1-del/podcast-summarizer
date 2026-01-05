@@ -75,7 +75,7 @@ interface Stats {
 // CONSTANTS
 // ============================================
 
-const API_BASE = process.env.NEXT_PUBLIC_WORKER_URL || "https://keernel-worker.onrender.com";
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "https://podcast-summarizeredaily-bot.onrender.com";
 
 const SEVERITY_CONFIG = {
   breaking: {

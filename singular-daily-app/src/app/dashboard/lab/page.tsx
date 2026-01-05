@@ -74,7 +74,7 @@ interface PipelineResult {
 // CONSTANTS
 // ============================================
 
-const API_BASE = process.env.NEXT_PUBLIC_WORKER_URL || "https://keernel-worker.onrender.com";
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "https://podcast-summarizeredaily-bot.onrender.com";
 
 const TIER_COLORS: Record<string, string> = { authority: "bg-purple-500", generalist: "bg-blue-500", corporate: "bg-gray-500" };
 const TOPIC_COLORS: Record<string, string> = { ia: "bg-purple-500", macro: "bg-blue-500", asia: "bg-green-500", general: "bg-gray-500" };
