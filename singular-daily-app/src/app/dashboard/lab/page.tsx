@@ -60,7 +60,19 @@ interface ScoringData {
 interface PipelineResult {
   timestamp: string;
   steps: {
-    fetch?: { duration_ms: number; total_articles: number; by_topic: Record<string, number>; by_tier: Record<string, number>; articles: Article[]; failed_sources?: any[]; failed_count?: number };
+    fetch?: { 
+      duration_ms: number; 
+      total_articles: number; 
+      rss_articles?: number;
+      alternative_articles?: number;
+      alternative_stats?: Record<string, { count: number; error: string | null }>;
+      by_topic: Record<string, number>; 
+      by_tier: Record<string, number>; 
+      by_source_type?: Record<string, number>;
+      articles: Article[]; 
+      failed_sources?: any[]; 
+      failed_count?: number 
+    };
     embedding?: { duration_ms: number; embedded_count: number; total_articles: number };
     classify?: { duration_ms: number; general_articles: number; classified: number; results: Article[] };
     cluster?: { duration_ms: number; total_clusters: number; clusters: Cluster[]; noise_count?: number };
