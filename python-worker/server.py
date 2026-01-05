@@ -1997,7 +1997,7 @@ def lab_pipeline_run():
         
         # Step 1: Fetch
         step1_start = time.time()
-        fetch_result = lab_fetch(topics=topics, max_age_days=max_age_days)
+        fetch_result = lab_fetch(topics=topics, max_age_days_generalist=max_age_days)
         pipeline_result["steps"]["fetch"] = {
             "duration_ms": int((time.time() - step1_start) * 1000),
             "total_articles": len(fetch_result.get("articles", [])),
