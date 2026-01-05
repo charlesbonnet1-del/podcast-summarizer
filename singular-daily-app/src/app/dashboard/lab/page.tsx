@@ -212,7 +212,25 @@ export default function LabPage() {
             </AnimatePresence>
           </div>
 
-          {/* Step 2: Clustering */}
+          {/* Step 2: Embedding */}
+          {result.steps.embedding && (
+            <div>
+              <button
+                onClick={() => toggleStep("embedding")}
+                className="w-full flex items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary/50"
+              >
+                {expandedSteps.has("embedding") ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                <span className="font-medium">ÉTAPE 2: EMBEDDING</span>
+                <span className="ml-auto px-2 py-0.5 bg-primary/20 text-primary rounded text-sm">
+                  {result.steps.embedding.embedded_count} / {result.steps.embedding.total_articles}
+                </span>
+                <span className="text-sm text-muted-foreground">{result.steps.embedding.duration_ms}ms</span>
+              </button>
+            </div>
+          )}
+
+          {/* Step 3: Clustering */}
           <div>
             <button
               onClick={() => toggleStep("cluster")}
@@ -220,7 +238,7 @@ export default function LabPage() {
             >
               {expandedSteps.has("cluster") ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
               <CheckCircle className="w-5 h-5 text-green-500" />
-              <span className="font-medium">ÉTAPE 2: CLUSTERING</span>
+              <span className="font-medium">ÉTAPE 3: CLUSTERING</span>
               <span className="ml-auto px-2 py-0.5 bg-primary/20 text-primary rounded text-sm">
                 {result.steps.cluster?.total_clusters} clusters
               </span>
@@ -252,7 +270,7 @@ export default function LabPage() {
             >
               {expandedSteps.has("velocity") ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
               <TrendingUp className="w-5 h-5 text-green-500" />
-              <span className="font-medium">ÉTAPE 3: VELOCITY</span>
+              <span className="font-medium">ÉTAPE 4: VELOCITY</span>
               <span className="text-sm text-muted-foreground">{result.steps.velocity?.duration_ms}ms</span>
             </button>
             <AnimatePresence>
@@ -286,7 +304,7 @@ export default function LabPage() {
             >
               {expandedSteps.has("scoring") ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
               <CheckCircle className="w-5 h-5 text-green-500" />
-              <span className="font-medium">ÉTAPE 4: SCORING</span>
+              <span className="font-medium">ÉTAPE 5: SCORING</span>
               <span className="text-sm text-muted-foreground">{result.steps.scoring?.duration_ms}ms</span>
             </button>
             <AnimatePresence>
@@ -324,7 +342,7 @@ export default function LabPage() {
             >
               {expandedSteps.has("signals") ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
               <Zap className="w-5 h-5 text-primary" />
-              <span className="font-medium">ÉTAPE 5: SIGNAUX</span>
+              <span className="font-medium">ÉTAPE 6: SIGNAUX</span>
               <span className="ml-auto px-2 py-0.5 bg-green-500/20 text-green-500 rounded text-sm">
                 {result.steps.signals?.generated_count || 0} générés
               </span>
