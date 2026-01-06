@@ -13,7 +13,8 @@ import {
   ExternalLink,
   Zap,
   Settings,
-  TrendingUp
+  TrendingUp,
+  AlertTriangle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -99,6 +100,8 @@ const TOPIC_COLORS: Record<string, string> = { ia: "bg-purple-500", macro: "bg-b
 export default function LabPage() {
   const [result, setResult] = useState<PipelineResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [healthCheckLoading, setHealthCheckLoading] = useState(false);
+  const [healthCheckResult, setHealthCheckResult] = useState<{ ok: number; error: number; errors: any[] } | null>(null);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set(["fetch", "scoring", "signals"]));
 
   const toggleStep = (step: string) => {
@@ -125,6 +128,29 @@ export default function LabPage() {
     }
   };
 
+  const runHealthCheck = async () => {
+    setHealthCheckLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/health-check/rss`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ only_mvp: true, update_sheet: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHealthCheckResult({
+          ok: data.ok_count,
+          error: data.error_count,
+          errors: data.errors || []
+        });
+      }
+    } catch (error) {
+      console.error("Health check error:", error);
+    } finally {
+      setHealthCheckLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -136,15 +162,64 @@ export default function LabPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Observer la boîte noire : chaque étape de détection</p>
         </div>
-        <button
-          onClick={runPipeline}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
-        >
-          {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          {loading ? "Exécution..." : "Lancer le pipeline"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={runHealthCheck}
+            disabled={healthCheckLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600 disabled:opacity-50"
+            title="Vérifie toutes les sources RSS et colorie le GSheet en rouge/vert"
+          >
+            {healthCheckLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+            {healthCheckLoading ? "Vérification..." : "Health Check RSS"}
+          </button>
+          <button
+            onClick={runPipeline}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
+          >
+            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            {loading ? "Exécution..." : "Lancer le pipeline"}
+          </button>
+        </div>
       </div>
+
+      {/* Health Check Result */}
+      {healthCheckResult && (
+        <div className={cn(
+          "p-4 rounded-xl border",
+          healthCheckResult.error > 0 ? "bg-red-500/10 border-red-500/30" : "bg-green-500/10 border-green-500/30"
+        )}>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-medium flex items-center gap-2">
+              {healthCheckResult.error > 0 ? (
+                <><AlertTriangle className="w-5 h-5 text-red-500" />RSS Health Check - Problèmes détectés</>
+              ) : (
+                <><CheckCircle className="w-5 h-5 text-green-500" />RSS Health Check - Tout OK</>
+              )}
+            </h3>
+            <div className="flex gap-3 text-sm">
+              <span className="text-green-500">✅ {healthCheckResult.ok} OK</span>
+              <span className="text-red-500">❌ {healthCheckResult.error} erreurs</span>
+            </div>
+          </div>
+          {healthCheckResult.errors.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
+                Voir les {healthCheckResult.errors.length} sources en erreur (colorées en rouge dans GSheet)
+              </summary>
+              <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
+                {healthCheckResult.errors.map((err: any, i: number) => (
+                  <div key={i} className="text-xs flex items-center gap-2 p-1.5 bg-card rounded">
+                    <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
+                    <span className="font-medium">{err.name}</span>
+                    <span className="text-red-500">{err.error}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
 
       {/* No result yet */}
       {!result && !loading && (
@@ -306,12 +381,25 @@ export default function LabPage() {
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                   <div className="mt-2 p-4 bg-muted/50 rounded-xl space-y-2">
                     {result.steps.cluster.clusters.map((c, i) => (
-                      <div key={i} className="flex items-center gap-3 p-3 bg-card rounded-lg">
-                        <div className={cn("w-2 h-2 rounded-full", TOPIC_COLORS[c.topic])} />
-                        <span className="text-sm font-medium truncate flex-1">{c.name}</span>
-                        <span className="text-xs text-muted-foreground">{c.article_count} articles</span>
-                        <span className={cn("px-2 py-0.5 rounded text-xs text-white", TOPIC_COLORS[c.topic])}>{c.topic}</span>
-                      </div>
+                      <details key={i} className="group">
+                        <summary className="flex items-center gap-3 p-3 bg-card rounded-lg cursor-pointer hover:bg-card/80 list-none">
+                          <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
+                          <div className={cn("w-2 h-2 rounded-full", TOPIC_COLORS[c.topic])} />
+                          <span className="text-sm font-medium truncate flex-1">{c.name}</span>
+                          <span className="text-xs text-muted-foreground">{c.article_count} articles</span>
+                          <span className={cn("px-2 py-0.5 rounded text-xs text-white", TOPIC_COLORS[c.topic])}>{c.topic}</span>
+                        </summary>
+                        <div className="mt-1 ml-6 p-3 bg-card/50 rounded-lg space-y-1">
+                          {c.articles && c.articles.length > 0 ? c.articles.map((a: any, j: number) => (
+                            <div key={j} className="flex items-center gap-2 text-xs p-1.5 hover:bg-muted rounded">
+                              <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", TIER_COLORS[a.tier] || "bg-gray-400")} />
+                              <span className="text-muted-foreground flex-shrink-0">{a.source}</span>
+                              <a href={a.url} target="_blank" rel="noopener" className="truncate flex-1 text-foreground hover:text-primary">{a.title}</a>
+                              <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                            </div>
+                          )) : <p className="text-xs text-muted-foreground">Aucun article</p>}
+                        </div>
+                      </details>
                     ))}
                   </div>
                 </motion.div>
@@ -411,24 +499,70 @@ export default function LabPage() {
               {expandedSteps.has("signals") && result.steps.signals && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                   <div className="mt-2 space-y-4">
-                    {/* Generated */}
+                    {/* Severity legend */}
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <h5 className="text-xs font-medium text-muted-foreground mb-2">Niveaux de sévérité :</h5>
+                      <div className="flex flex-wrap gap-3 text-xs">
+                        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500"></span><span><strong>BREAKING</strong> (85+) : Agir immédiatement</span></div>
+                        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-500"></span><span><strong>ALERT</strong> (70-84) : À surveiller de près</span></div>
+                        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500"></span><span><strong>DIGEST</strong> (60-69) : Pour le résumé quotidien</span></div>
+                      </div>
+                    </div>
+
+                    {/* Generated signals */}
                     <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
-                      <h4 className="text-sm font-medium text-green-500 mb-2 flex items-center gap-2">
+                      <h4 className="text-sm font-medium text-green-500 mb-3 flex items-center gap-2">
                         <CheckCircle className="w-4 h-4" />Signaux générés ({result.steps.signals.generated_count})
                       </h4>
                       {result.steps.signals.generated.length > 0 ? (
                         <div className="space-y-2">
-                          {result.steps.signals.generated.map((s, i) => (
-                            <div key={i} className="flex items-center gap-3 p-2 bg-card rounded-lg">
-                              <Zap className="w-4 h-4 text-green-500" />
-                              <span className="text-sm flex-1">{s.cluster_name}</span>
-                              <span className="text-sm font-medium text-green-500">Score: {s.total_score}</span>
-                              <span className={cn("px-2 py-0.5 rounded text-xs text-white", s.severity === "breaking" ? "bg-red-500" : s.severity === "alert" ? "bg-orange-500" : "bg-yellow-500")}>{s.severity}</span>
-                            </div>
-                          ))}
+                          {result.steps.signals.generated.map((s, i) => {
+                            // Find matching cluster for articles
+                            const cluster = result.steps.cluster?.clusters.find(c => c.id === s.cluster_id || c.name === s.cluster_name);
+                            return (
+                              <details key={i} className="group">
+                                <summary className="flex items-center gap-3 p-3 bg-card rounded-lg cursor-pointer hover:bg-card/80 list-none">
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
+                                  <Zap className="w-4 h-4 text-green-500" />
+                                  <span className="text-sm flex-1 font-medium">{s.cluster_name}</span>
+                                  <span className="text-sm text-muted-foreground">
+                                    {s.source_mix?.authority || 0}A / {s.source_mix?.generalist || 0}G
+                                  </span>
+                                  <span className="text-sm font-bold text-green-500">Score: {s.total_score}</span>
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded text-xs text-white font-medium",
+                                    s.severity === "breaking" ? "bg-red-500" : s.severity === "alert" ? "bg-orange-500" : "bg-yellow-500"
+                                  )}>{s.severity?.toUpperCase()}</span>
+                                </summary>
+                                <div className="mt-1 ml-6 p-3 bg-card/50 rounded-lg">
+                                  <div className="grid grid-cols-5 gap-2 text-xs mb-3 p-2 bg-muted/50 rounded">
+                                    <div><span className="text-muted-foreground">Velocity:</span> <strong>{s.breakdown?.velocity?.toFixed(0) || 0}</strong></div>
+                                    <div><span className="text-muted-foreground">Sources:</span> <strong>{s.breakdown?.sources?.toFixed(0) || 0}</strong></div>
+                                    <div><span className="text-muted-foreground">Diversity:</span> <strong>{s.breakdown?.diversity?.toFixed(0) || 0}</strong></div>
+                                    <div><span className="text-muted-foreground">Novelty:</span> <strong>{s.breakdown?.novelty || 0}</strong></div>
+                                    <div><span className="text-muted-foreground">Volume:</span> <strong>{s.breakdown?.volume || 0}</strong></div>
+                                  </div>
+                                  <h5 className="text-xs font-medium text-muted-foreground mb-2">Articles concernés :</h5>
+                                  {cluster?.articles && cluster.articles.length > 0 ? (
+                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                      {cluster.articles.map((a: any, j: number) => (
+                                        <div key={j} className="flex items-center gap-2 text-xs p-1.5 hover:bg-muted rounded">
+                                          <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", TIER_COLORS[a.tier] || "bg-gray-400")} />
+                                          <span className="text-muted-foreground flex-shrink-0">{a.source}</span>
+                                          <a href={a.url} target="_blank" rel="noopener" className="truncate flex-1 text-foreground hover:text-primary">{a.title}</a>
+                                          <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : <p className="text-xs text-muted-foreground">Articles non disponibles (cluster_id: {s.cluster_id})</p>}
+                                </div>
+                              </details>
+                            );
+                          })}
                         </div>
                       ) : <p className="text-sm text-muted-foreground">Aucun signal généré</p>}
                     </div>
+
                     {/* Rejected */}
                     <div className="p-4 bg-muted/50 rounded-xl">
                       <h4 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
@@ -439,7 +573,9 @@ export default function LabPage() {
                           {result.steps.signals.rejected.map((s, i) => (
                             <div key={i} className="flex items-center gap-3 p-2 bg-card rounded text-sm">
                               <span className="text-muted-foreground truncate flex-1">{s.cluster_name}</span>
-                              <span className="text-muted-foreground text-xs">Score {s.total_score} &lt; {s.threshold_used}</span>
+                              <span className="text-xs text-muted-foreground">
+                                Score {s.total_score} (min: {s.threshold_used}) | {s.is_valid ? "✓ valid" : "✗ invalid"}
+                              </span>
                             </div>
                           ))}
                         </div>
