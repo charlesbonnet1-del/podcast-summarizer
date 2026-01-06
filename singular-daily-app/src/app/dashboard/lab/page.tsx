@@ -37,6 +37,7 @@ interface Cluster {
   topic: string;
   article_count: number;
   sources?: string[];
+  articles?: { title: string; url: string; source: string; tier?: string }[];
 }
 
 interface VelocityData {
