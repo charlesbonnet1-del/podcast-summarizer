@@ -49,11 +49,13 @@ interface VelocityData {
 }
 
 interface ScoringData {
+  cluster_id?: string;
   cluster_name: string;
   topic: string;
   breakdown: Record<string, number>;
   source_mix: { authority: number; generalist: number; corporate: number };
   total_score: number;
+  is_valid?: boolean;
   passes_threshold: boolean;
   severity: string;
   threshold_used: number;
