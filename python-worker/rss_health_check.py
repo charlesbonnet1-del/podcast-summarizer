@@ -2,11 +2,12 @@
 RSS Health Check - Vérifie toutes les sources et colorie en rouge celles qui échouent dans GSheet.
 
 Usage:
-    python rss_health_check.py
+    python rss_health_check.py          # Check MVP sources
+    python rss_health_check.py --all    # Check all sources
+    python rss_health_check.py --dry-run # Don't update GSheet
 
-Prérequis:
-    - Variables d'environnement Google (GOOGLE_PROJECT_ID, GOOGLE_PRIVATE_KEY, etc.)
-    - SOURCES_SPREADSHEET_ID
+API:
+    POST /api/health-check/rss  # Trigger from server
 """
 import os
 import time
@@ -26,10 +27,10 @@ log = structlog.get_logger()
 # CONFIGURATION
 # ============================================
 
-SPREADSHEET_ID = os.getenv("SOURCES_SPREADSHEET_ID")
+SPREADSHEET_ID = os.getenv("SOURCES_SPREADSHEET_ID") or os.getenv("GOOGLE_SPREADSHEET_ID")
 SHEET_NAME = "sources"  # Nom de l'onglet
 
-# Couleurs
+# Couleurs (Google Sheets format: 0-1 range)
 COLOR_RED = {"red": 1, "green": 0.8, "blue": 0.8}      # Rouge clair pour erreurs
 COLOR_ORANGE = {"red": 1, "green": 0.9, "blue": 0.7}   # Orange pour warnings
 COLOR_WHITE = {"red": 1, "green": 1, "blue": 1}        # Blanc (reset)

@@ -2122,7 +2122,7 @@ def lab_pipeline_run():
                     "topic": cluster_articles[0].get("topic", "unknown") if cluster_articles else "unknown",
                     "article_count": info.get("count", 0),
                     "sources": info.get("sources", []),
-                    "articles": info.get("articles", [])[:5]  # Limit for display
+                    "articles": info.get("articles", [])[:15]  # Show more articles
                 })
         
         pipeline_result["steps"]["cluster"] = {
@@ -2359,6 +2359,48 @@ def lab_force_signal():
         return jsonify({"success": True, "signal": result.data[0] if result.data else None})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============================================
+# RSS HEALTH CHECK API
+# ============================================
+
+@app.route("/api/health-check/rss", methods=["POST"])
+def api_rss_health_check():
+    """
+    Run RSS health check and update GSheet colors.
+    Red = error, Green = OK
+    """
+    try:
+        from rss_health_check import run_health_check
+        
+        data = request.get_json() or {}
+        only_mvp = data.get("only_mvp", True)
+        update_sheet = data.get("update_sheet", True)
+        
+        results = run_health_check(only_mvp=only_mvp, update_sheet=update_sheet)
+        
+        return jsonify({
+            "success": True,
+            "ok_count": len(results.get("ok", [])),
+            "error_count": len(results.get("error", [])),
+            "skipped_count": len(results.get("skipped", [])),
+            "errors": results.get("error", [])[:20]  # Limit to 20 for response size
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@app.route("/api/health-check/rss/status", methods=["GET"])
+def api_rss_health_status():
+    """Get last health check status (if stored)."""
+    # For now, just return that it needs to be run
+    return jsonify({
+        "success": True,
+        "message": "Use POST /api/health-check/rss to run a health check",
+        "last_run": None
+    })
 
 
 def run_server(port: int = 8080):

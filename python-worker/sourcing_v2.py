@@ -440,8 +440,9 @@ def fetch_rss_feed(
     """
     try:
         headers = {
-            "User-Agent": "Keernel/2.0 Intelligence Platform",
-            "Accept": "application/rss+xml, application/xml, text/xml, */*"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/rss+xml, application/xml, text/xml, application/atom+xml, */*",
+            "Accept-Language": "en-US,en;q=0.9",
         }
         
         response = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)

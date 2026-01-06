@@ -70,13 +70,19 @@ def fetch_arxiv(
     """
     categories = categories or ARXIV_CATEGORIES
     articles = []
+    errors = []
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; Keernel/2.0; +https://keernel.com)",
+        "Accept": "application/atom+xml, application/xml, text/xml, */*"
+    }
     
     for category in categories:
         try:
-            # ArXiv API
-            url = f"http://export.arxiv.org/api/query?search_query=cat:{category}&sortBy=submittedDate&sortOrder=descending&max_results={max_results // len(categories)}"
+            # ArXiv API - use HTTPS
+            url = f"https://export.arxiv.org/api/query?search_query=cat:{category}&sortBy=submittedDate&sortOrder=descending&max_results={max_results // len(categories)}"
             
-            response = httpx.get(url, timeout=30)
+            response = httpx.get(url, headers=headers, timeout=30, follow_redirects=True)
             response.raise_for_status()
             
             # Parse Atom feed
@@ -115,11 +121,19 @@ def fetch_arxiv(
             
             time.sleep(0.5)  # Rate limiting
             
+        except httpx.HTTPStatusError as e:
+            errors.append(f"{category}: HTTP {e.response.status_code}")
+            log.warning(f"ArXiv HTTP error for {category}: {e.response.status_code}")
         except Exception as e:
+            errors.append(f"{category}: {str(e)[:30]}")
             log.warning(f"ArXiv fetch error for {category}: {e}")
     
+    error_msg = None
+    if not articles:
+        error_msg = "; ".join(errors) if errors else "No papers found"
+    
     log.info(f"📚 ArXiv: Fetched {len(articles)} papers")
-    return articles, None if articles else "No papers found"
+    return articles, error_msg
 
 
 # ============================================
@@ -210,76 +224,112 @@ def fetch_github_trending(
     """
     Fetch trending GitHub repositories.
     
-    Note: GitHub doesn't have an official API for trending.
-    We use the unofficial github-trending-api or scrape.
+    Uses multiple fallback APIs since unofficial APIs often go down.
     
     Returns:
         (articles, error_message)
     """
     articles = []
     
-    try:
-        # Use unofficial trending API
-        url = f"https://api.gitterapp.com/repositories?since={since}&spoken_language_code=en"
-        
-        headers = {
-            "User-Agent": "Keernel/2.0",
-            "Accept": "application/json"
-        }
-        
-        response = httpx.get(url, headers=headers, timeout=30)
-        
-        if response.status_code != 200:
-            # Fallback: try alternative API
-            url = f"https://gh-trending-api.herokuapp.com/repositories?since={since}"
-            response = httpx.get(url, headers=headers, timeout=30)
-        
-        if response.status_code == 200:
-            repos = response.json()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; Keernel/2.0)",
+        "Accept": "application/json"
+    }
+    
+    # Try multiple APIs in order
+    apis = [
+        f"https://api.gitterapp.com/repositories?since={since}&spoken_language_code=en",
+        f"https://gh-trending-api.herokuapp.com/repositories?since={since}",
+        f"https://github-trending-api.de-f.ast.workers.dev/?since={since}",
+    ]
+    
+    repos = None
+    last_error = None
+    
+    for api_url in apis:
+        try:
+            response = httpx.get(api_url, headers=headers, timeout=15, follow_redirects=True)
+            if response.status_code == 200:
+                repos = response.json()
+                if repos:
+                    break
+        except Exception as e:
+            last_error = str(e)[:50]
+            continue
+    
+    if not repos:
+        # Final fallback: scrape GitHub directly (simplified)
+        try:
+            scrape_url = f"https://github.com/trending?since={since}"
+            response = httpx.get(scrape_url, headers=headers, timeout=15, follow_redirects=True)
+            if response.status_code == 200:
+                # Simple regex extraction
+                import re
+                pattern = r'href="/([^/]+/[^/]+)"[^>]*class="[^"]*Link[^"]*"'
+                matches = re.findall(pattern, response.text)
+                repos = []
+                seen = set()
+                for match in matches[:max_results * 2]:
+                    if '/' in match and match not in seen and not match.startswith('topics/'):
+                        parts = match.split('/')
+                        if len(parts) == 2:
+                            seen.add(match)
+                            repos.append({
+                                "author": parts[0],
+                                "name": parts[1],
+                                "url": f"https://github.com/{match}",
+                                "description": "",
+                                "language": "",
+                                "stars": 0,
+                                "currentPeriodStars": 0
+                            })
+        except Exception as e:
+            last_error = f"Scrape failed: {str(e)[:30]}"
+    
+    if repos:
+        for repo in repos[:max_results]:
+            description = repo.get("description", "") or ""
+            language = repo.get("language", "") or ""
+            name = repo.get("name", "") or repo.get("repo", "") or ""
+            author = repo.get("author", "") or repo.get("username", "") or ""
             
-            for repo in repos[:max_results]:
-                # Filter by relevant topics
-                description = repo.get("description", "") or ""
-                language = repo.get("language", "") or ""
-                name = repo.get("name", "") or ""
-                
-                # Check if AI/ML related
-                keywords = ["ai", "ml", "llm", "gpt", "transformer", "neural", "deep", "machine learning", "langchain", "llama", "model"]
-                is_relevant = any(kw in description.lower() or kw in name.lower() for kw in keywords)
-                
-                # Also check language
-                ml_languages = ["Python", "Jupyter Notebook", "C++", "Rust", "TypeScript"]
-                is_ml_language = language in ml_languages
-                
-                if is_relevant or is_ml_language:
-                    stars_today = repo.get("currentPeriodStars", 0) or repo.get("stars_today", 0)
-                    total_stars = repo.get("stars", 0) or repo.get("stargazers_count", 0)
-                    
-                    articles.append({
-                        "title": f"🔥 {repo.get('author', '')}/{name} (+{stars_today} ⭐ today)",
-                        "url": repo.get("url", f"https://github.com/{repo.get('author', '')}/{name}"),
-                        "description": f"{description[:300]} | Language: {language} | Total: {total_stars}⭐",
-                        "published_at": datetime.now(timezone.utc).isoformat(),
-                        "source_name": "GitHub Trending",
-                        "source_tier": "generalist",
-                        "topic": "ia",
-                        "language": "en",
-                        "stars_today": stars_today,
-                        "total_stars": total_stars,
-                        "repo_language": language,
-                        "source_type": "github",
-                    })
+            # Check if AI/ML related
+            keywords = ["ai", "ml", "llm", "gpt", "transformer", "neural", "deep", "machine learning", "langchain", "llama", "model", "agent"]
+            is_relevant = any(kw in description.lower() or kw in name.lower() for kw in keywords)
             
-            log.info(f"💻 GitHub: Fetched {len(articles)} trending repos")
-            return articles, None
-        else:
-            return [], f"HTTP {response.status_code}"
+            # Also check language
+            ml_languages = ["Python", "Jupyter Notebook", "C++", "Rust", "TypeScript", "Go"]
+            is_ml_language = language in ml_languages
             
-    except Exception as e:
-        log.warning(f"GitHub trending error: {e}")
+            if is_relevant or is_ml_language or not language:  # Include if no language filter possible
+                stars_today = repo.get("currentPeriodStars", 0) or repo.get("stars_today", 0) or 0
+                total_stars = repo.get("stars", 0) or repo.get("stargazers_count", 0) or 0
+                
+                title = f"🔥 {author}/{name}"
+                if stars_today:
+                    title += f" (+{stars_today} ⭐ today)"
+                
+                articles.append({
+                    "title": title,
+                    "url": repo.get("url", f"https://github.com/{author}/{name}"),
+                    "description": f"{description[:300]}" + (f" | {language}" if language else "") + (f" | {total_stars}⭐" if total_stars else ""),
+                    "published_at": datetime.now(timezone.utc).isoformat(),
+                    "source_name": "GitHub Trending",
+                    "source_tier": "generalist",
+                    "topic": "ia",
+                    "language": "en",
+                    "stars_today": stars_today,
+                    "total_stars": total_stars,
+                    "repo_language": language,
+                    "source_type": "github",
+                })
         
-        # Fallback: Just return empty with warning
-        return [], str(e)
+        log.info(f"💻 GitHub: Fetched {len(articles)} trending repos")
+        return articles, None
+    else:
+        error_msg = last_error or "All APIs failed"
+        log.warning(f"GitHub trending failed: {error_msg}")
+        return [], error_msg
 
 
 # ============================================
@@ -290,60 +340,47 @@ def fetch_reddit(
     subreddits: list[str] = None,
     sort: str = "hot",  # hot, new, top
     max_per_sub: int = 10,
-    min_score: int = 50
+    min_score: int = 20
 ) -> tuple[list[dict], str | None]:
     """
-    Fetch posts from Reddit subreddits via RSS.
+    Fetch posts from Reddit subreddits via JSON API (more reliable than RSS).
     
     Returns:
         (articles, error_message)
     """
     subreddits = subreddits or REDDIT_SUBREDDITS
     articles = []
+    errors = []
     
     headers = {
-        "User-Agent": "Keernel/2.0 Intelligence Platform"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     for subreddit in subreddits:
         try:
-            # Reddit RSS
-            url = f"https://www.reddit.com/r/{subreddit}/{sort}.rss?limit={max_per_sub}"
+            # Try JSON API first (more reliable than RSS)
+            url = f"https://www.reddit.com/r/{subreddit}/{sort}.json?limit={max_per_sub}"
             
             response = httpx.get(url, headers=headers, timeout=15, follow_redirects=True)
-            response.raise_for_status()
             
-            root = ET.fromstring(response.text)
-            ns = {"atom": "http://www.w3.org/2005/Atom"}
-            
-            entries = root.findall("atom:entry", ns)
-            
-            for entry in entries:
-                title = entry.find("atom:title", ns)
-                link = entry.find("atom:link", ns)
-                content = entry.find("atom:content", ns)
-                updated = entry.find("atom:updated", ns)
+            if response.status_code == 200:
+                data = response.json()
+                posts = data.get("data", {}).get("children", [])
                 
-                if title is not None and title.text:
-                    # Extract score from content if available
-                    score = 0
-                    if content is not None and content.text:
-                        score_match = re.search(r'(\d+)\s*points?', content.text)
-                        if score_match:
-                            score = int(score_match.group(1))
+                for post in posts:
+                    post_data = post.get("data", {})
+                    score = post_data.get("score", 0)
                     
                     # Filter by minimum score
                     if score >= min_score or sort == "new":
-                        # Clean up HTML content
-                        description = ""
-                        if content is not None and content.text:
-                            description = re.sub(r'<[^>]+>', '', content.text)[:400]
+                        title = post_data.get("title", "")
+                        selftext = post_data.get("selftext", "")[:300] if post_data.get("selftext") else ""
                         
                         articles.append({
-                            "title": f"[r/{subreddit}] {title.text.strip()}",
-                            "url": link.get("href") if link is not None else "",
-                            "description": description,
-                            "published_at": updated.text if updated is not None else None,
+                            "title": f"[r/{subreddit}] {title}",
+                            "url": f"https://reddit.com{post_data.get('permalink', '')}",
+                            "description": selftext or f"Score: {score} | Comments: {post_data.get('num_comments', 0)}",
+                            "published_at": datetime.fromtimestamp(post_data.get("created_utc", 0), tz=timezone.utc).isoformat(),
                             "source_name": f"Reddit r/{subreddit}",
                             "source_tier": "generalist",
                             "topic": "ia",
@@ -352,14 +389,23 @@ def fetch_reddit(
                             "subreddit": subreddit,
                             "source_type": "reddit",
                         })
+            elif response.status_code == 403:
+                errors.append(f"r/{subreddit}: Access denied")
+            else:
+                errors.append(f"r/{subreddit}: HTTP {response.status_code}")
             
-            time.sleep(0.5)  # Rate limiting
+            time.sleep(1.0)  # Reddit rate limiting is strict
             
         except Exception as e:
+            errors.append(f"r/{subreddit}: {str(e)[:30]}")
             log.warning(f"Reddit fetch error for r/{subreddit}: {e}")
     
+    error_msg = None
+    if not articles:
+        error_msg = "; ".join(errors) if errors else "No posts found"
+    
     log.info(f"🤖 Reddit: Fetched {len(articles)} posts")
-    return articles, None if articles else "No posts found"
+    return articles, error_msg
 
 
 # ============================================
