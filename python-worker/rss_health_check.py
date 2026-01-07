@@ -51,12 +51,11 @@ def get_gsheet_client():
         "GOOGLE_CLIENT_ID"
     ]
     
-    missing = [var for var in required_vars if not os.getenv(var)]
+    missing = [v for v in required_vars if not os.getenv(v)]
     if missing:
-        raise ValueError(f"Missing Google credentials: {', '.join(missing)}")
+        raise ValueError(f"Missing env vars: {missing}")
     
-    private_key = os.getenv("GOOGLE_PRIVATE_KEY", "")
-    private_key = private_key.replace("\\n", "\n")
+    private_key = os.getenv("GOOGLE_PRIVATE_KEY", "").replace("\\n", "\n")
     if private_key.startswith('"') and private_key.endswith('"'):
         private_key = private_key[1:-1]
     
@@ -121,10 +120,10 @@ def check_rss_feed(url: str, timeout: int = 15) -> tuple[bool, str]:
         return False, f"HTTP {e.response.status_code}"
     except httpx.TimeoutException:
         return False, "Timeout"
-    except ET.ParseError:
-        return False, "Parse error"
     except httpx.ConnectError:
         return False, "Connection failed"
+    except ET.ParseError as e:
+        return False, f"Parse error"
     except Exception as e:
         error = str(e)[:30]
         return False, error
@@ -134,13 +133,14 @@ def check_rss_feed(url: str, timeout: int = 15) -> tuple[bool, str]:
 # MAIN HEALTH CHECK
 # ============================================
 
-def run_health_check(only_mvp: bool = True, update_sheet: bool = True):
+def run_health_check(only_mvp: bool = True, update_sheet: bool = True, topics: list = None):
     """
     Run health check on all RSS feeds and update GSheet colors.
     
     Args:
         only_mvp: Only check sources with priority=1
         update_sheet: If True, update colors in GSheet
+        topics: Optional list of topics to filter (e.g., ["ia", "macro", "asia", "general"])
     """
     print("🔍 RSS Health Check")
     print("=" * 50)
@@ -152,22 +152,19 @@ def run_health_check(only_mvp: bool = True, update_sheet: bool = True):
     
     # Get all data
     all_data = worksheet.get_all_records()
-    print(f"📊 Found {len(all_data)} sources")
-    
-    # Find column indices (1-indexed for GSheet)
-    headers = worksheet.row_values(1)
-    url_col = headers.index("url_rss") + 1 if "url_rss" in headers else None
-    priority_col = headers.index("priority") + 1 if "priority" in headers else None
-    name_col = headers.index("source_name") + 1 if "source_name" in headers else None
-    
-    if not url_col:
-        raise ValueError("Column 'url_rss' not found in sheet")
+    print(f"📊 Found {len(all_data)} total sources in GSheet")
     
     # Track results
     results = {
         "ok": [],
         "error": [],
         "skipped": []
+    }
+    
+    # Stats by topic and tier
+    stats = {
+        "by_topic": {},
+        "by_tier": {}
     }
     
     # Batch updates for colors
@@ -179,29 +176,57 @@ def run_health_check(only_mvp: bool = True, update_sheet: bool = True):
         url = row.get("url_rss", "")
         priority = row.get("priority", 0)
         name = row.get("source_name", f"Row {row_num}")
+        topic = row.get("topic", "unknown")
+        tier = row.get("tier", "unknown")
+        
+        # Convert priority to int if it's a string
+        try:
+            priority = int(priority) if priority else 0
+        except (ValueError, TypeError):
+            priority = 0
         
         # Skip non-MVP if requested
         if only_mvp and priority != 1:
             results["skipped"].append(name)
             continue
         
+        # Skip if topic filter is set and doesn't match
+        if topics and topic.lower() not in [t.lower() for t in topics]:
+            results["skipped"].append(name)
+            continue
+        
+        # Skip empty URLs
+        if not url or not url.startswith("http"):
+            results["skipped"].append(name)
+            continue
+        
         # Check RSS
-        print(f"  Checking: {name[:40]}...", end=" ", flush=True)
+        print(f"  [{topic}/{tier}] {name[:35]}...", end=" ", flush=True)
         success, error = check_rss_feed(url)
+        
+        # Track stats
+        if topic not in stats["by_topic"]:
+            stats["by_topic"][topic] = {"ok": 0, "error": 0}
+        if tier not in stats["by_tier"]:
+            stats["by_tier"][tier] = {"ok": 0, "error": 0}
         
         if success:
             print("✅ OK")
-            results["ok"].append(name)
+            results["ok"].append({"name": name, "topic": topic, "tier": tier})
+            stats["by_topic"][topic]["ok"] += 1
+            stats["by_tier"][tier]["ok"] += 1
             color = COLOR_GREEN
         else:
             print(f"❌ {error}")
-            results["error"].append({"name": name, "error": error, "url": url})
+            results["error"].append({"name": name, "error": error, "url": url, "topic": topic, "tier": tier})
+            stats["by_topic"][topic]["error"] += 1
+            stats["by_tier"][tier]["error"] += 1
             color = COLOR_RED
         
         # Prepare color update for the entire row
         if update_sheet:
             color_updates.append({
-                "range": f"A{row_num}:Z{row_num}",
+                "row_num": row_num,
                 "color": color
             })
         
@@ -215,9 +240,8 @@ def run_health_check(only_mvp: bool = True, update_sheet: bool = True):
         # Use batch update for efficiency
         requests = []
         for update in color_updates:
-            # Parse range to get row
-            row_match = update["range"].split(":")[0]
-            row_num = int(''.join(filter(str.isdigit, row_match)))
+            row_num = update["row_num"]
+            color = update["color"]
             
             requests.append({
                 "repeatCell": {
@@ -226,11 +250,11 @@ def run_health_check(only_mvp: bool = True, update_sheet: bool = True):
                         "startRowIndex": row_num - 1,
                         "endRowIndex": row_num,
                         "startColumnIndex": 0,
-                        "endColumnIndex": len(headers)
+                        "endColumnIndex": 10
                     },
                     "cell": {
                         "userEnteredFormat": {
-                            "backgroundColor": update["color"]
+                            "backgroundColor": color
                         }
                     },
                     "fields": "userEnteredFormat.backgroundColor"
@@ -240,20 +264,37 @@ def run_health_check(only_mvp: bool = True, update_sheet: bool = True):
         # Execute batch update
         if requests:
             spreadsheet.batch_update({"requests": requests})
-            print("✅ Colors updated!")
+            print(f"  ✅ Updated {len(requests)} rows")
     
-    # Summary
+    # Print summary
     print("\n" + "=" * 50)
     print("📊 SUMMARY")
-    print(f"  ✅ OK: {len(results['ok'])}")
-    print(f"  ❌ Errors: {len(results['error'])}")
-    print(f"  ⏭️  Skipped: {len(results['skipped'])}")
+    print("=" * 50)
+    print(f"✅ OK: {len(results['ok'])}")
+    print(f"❌ Errors: {len(results['error'])}")
+    print(f"⏭️ Skipped: {len(results['skipped'])}")
     
+    # Stats by topic
+    print("\n📁 By Topic:")
+    for topic, counts in sorted(stats["by_topic"].items()):
+        total = counts["ok"] + counts["error"]
+        pct = (counts["ok"] / total * 100) if total > 0 else 0
+        print(f"  {topic}: {counts['ok']}/{total} OK ({pct:.0f}%)")
+    
+    # Stats by tier
+    print("\n🏷️ By Tier:")
+    for tier, counts in sorted(stats["by_tier"].items()):
+        total = counts["ok"] + counts["error"]
+        pct = (counts["ok"] / total * 100) if total > 0 else 0
+        print(f"  {tier}: {counts['ok']}/{total} OK ({pct:.0f}%)")
+    
+    # List errors
     if results["error"]:
-        print("\n❌ FAILED SOURCES:")
-        for err in results["error"]:
-            print(f"  • {err['name']}: {err['error']}")
-            print(f"    URL: {err['url'][:60]}...")
+        print("\n❌ Failed sources:")
+        for err in results["error"][:20]:
+            print(f"  • [{err['topic']}/{err['tier']}] {err['name']}: {err['error']}")
+        if len(results["error"]) > 20:
+            print(f"  ... and {len(results['error']) - 20} more")
     
     return results
 
@@ -263,15 +304,12 @@ def run_health_check(only_mvp: bool = True, update_sheet: bool = True):
 # ============================================
 
 if __name__ == "__main__":
-    import argparse
+    import sys
     
-    parser = argparse.ArgumentParser(description="RSS Health Check - Vérifie les sources et colorie le GSheet")
-    parser.add_argument("--all", action="store_true", help="Vérifier toutes les sources (pas seulement MVP)")
-    parser.add_argument("--dry-run", action="store_true", help="Ne pas modifier le GSheet")
+    only_mvp = "--all" not in sys.argv
+    dry_run = "--dry-run" in sys.argv
     
-    args = parser.parse_args()
+    print(f"Mode: {'MVP only' if only_mvp else 'All sources'}")
+    print(f"Update sheet: {not dry_run}")
     
-    run_health_check(
-        only_mvp=not args.all,
-        update_sheet=not args.dry_run
-    )
+    run_health_check(only_mvp=only_mvp, update_sheet=not dry_run)
