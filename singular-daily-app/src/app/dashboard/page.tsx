@@ -46,11 +46,19 @@ interface Signal {
   hook?: string;
   thesis?: string;
   antithesis?: string;
+  key_data?: string;
+  context?: string;
+  articles?: Array<{
+    title: string;
+    url: string;
+    source: string;
+  }>;
   clusters?: {
     name: string;
     article_count: number;
     source_names: string[];
   };
+  user_feedback?: string;
 }
 
 interface Stats {
@@ -243,6 +251,44 @@ function SignalCard({
                 </div>
               )}
               
+              {/* Context */}
+              {signal.context && (
+                <div>
+                  <h4 className="text-sm font-medium text-foreground">Contexte</h4>
+                  <p className="text-sm text-muted-foreground mt-1">{signal.context}</p>
+                </div>
+              )}
+              
+              {/* Key data */}
+              {signal.key_data && (
+                <div>
+                  <h4 className="text-sm font-medium text-foreground">Données clés</h4>
+                  <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{signal.key_data}</p>
+                </div>
+              )}
+              
+              {/* Articles sources */}
+              {signal.articles && signal.articles.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-foreground mb-2">Articles sources ({signal.articles.length})</h4>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {signal.articles.map((article, i) => (
+                      <a
+                        key={i}
+                        href={article.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs p-2 bg-muted rounded hover:bg-muted/80"
+                      >
+                        <span className="text-muted-foreground flex-shrink-0">{article.source}</span>
+                        <span className="truncate flex-1">{article.title}</span>
+                        <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               {/* Score breakdown */}
               <div>
                 <h4 className="text-sm font-medium text-foreground mb-2">Score breakdown</h4>
@@ -432,21 +478,26 @@ export default function SignalsDashboard() {
   const handleDetect = async () => {
     setDetecting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/signals/detect`, {
+      const res = await fetch(`${API_BASE}/api/lab/detect-and-save`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.NEXT_PUBLIC_WORKER_SECRET || ""}`
-        }
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ topics: ["ia", "macro", "asia"], max_age_days: 3 })
       });
       const data = await res.json();
       if (data.success) {
+        // Show detection result
+        alert(`✅ Détection terminée!\n\n${data.saved_count} signaux sauvegardés\n${data.rejected_count} clusters rejetés`);
         // Refresh signals
         await fetchSignals();
         await fetchStats();
+      } else {
+        alert(`❌ Erreur: ${data.error}`);
       }
     } catch (error) {
       console.error("Error detecting:", error);
+      alert("❌ Erreur de détection");
     } finally {
       setDetecting(false);
     }
