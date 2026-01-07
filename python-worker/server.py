@@ -2015,6 +2015,47 @@ def lab_pipeline_run():
             )
             articles.extend(alt_articles)
         
+        # Create diversified sample (max 3 articles per source)
+        def create_diverse_sample(articles_list: list, max_total: int = 50, max_per_source: int = 3) -> list:
+            """Create a diverse sample with articles from different sources."""
+            from collections import defaultdict
+            import random
+            
+            # Group by source
+            by_source = defaultdict(list)
+            for a in articles_list:
+                source = a.get("source_name", "Unknown")
+                by_source[source].append(a)
+            
+            # Shuffle within each source
+            for source in by_source:
+                random.shuffle(by_source[source])
+            
+            # Round-robin selection
+            sample = []
+            sources = list(by_source.keys())
+            random.shuffle(sources)  # Randomize source order
+            
+            source_counts = defaultdict(int)
+            round_num = 0
+            
+            while len(sample) < max_total and round_num < max_per_source:
+                added_this_round = False
+                for source in sources:
+                    if source_counts[source] < max_per_source and source_counts[source] < len(by_source[source]):
+                        sample.append(by_source[source][source_counts[source]])
+                        source_counts[source] += 1
+                        added_this_round = True
+                        if len(sample) >= max_total:
+                            break
+                if not added_this_round:
+                    break
+                round_num += 1
+            
+            return sample
+        
+        diverse_sample = create_diverse_sample(articles, max_total=50, max_per_source=3)
+        
         pipeline_result["steps"]["fetch"] = {
             "duration_ms": int((time.time() - step1_start) * 1000),
             "total_articles": len(articles),
@@ -2024,6 +2065,7 @@ def lab_pipeline_run():
             "by_topic": {},
             "by_tier": {"authority": 0, "generalist": 0, "corporate": 0},
             "by_source_type": {},
+            "sample_sources_count": len(set(a.get("source_name") for a in diverse_sample)),
             "articles": [
                 {
                     "title": a.get("title", "")[:80],
@@ -2033,7 +2075,7 @@ def lab_pipeline_run():
                     "topic": a.get("topic", "unknown"),
                     "source_type": a.get("source_type", "rss")
                 }
-                for a in articles[:50]
+                for a in diverse_sample
             ],
             "failed_sources": fetch_result.get("failed_sources", []),
             "failed_count": fetch_result.get("failed_count", 0)
