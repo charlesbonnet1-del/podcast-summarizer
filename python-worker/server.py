@@ -2273,6 +2273,241 @@ def lab_pipeline_run():
         return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
 
 
+@app.route("/api/lab/detect-and-save", methods=["POST"])
+def lab_detect_and_save():
+    """
+    Run full detection pipeline and save signals to DB with enrichment.
+    
+    This is the main "Détecter" button endpoint that:
+    1. Runs the pipeline (fetch, cluster, score)
+    2. Enriches each signal with Perplexity summary
+    3. Saves to signals table in Supabase
+    """
+    try:
+        from prompt_lab_v2 import lab_fetch, lab_cluster, lab_enrich
+        from alternative_sources import fetch_alternative_sources
+        import time
+        import httpx
+        
+        data = request.get_json() or {}
+        topics = data.get("topics", ["ia", "macro", "asia"])
+        max_age_days = data.get("max_age_days", 3)
+        
+        result = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "signals_saved": [],
+            "signals_rejected": [],
+            "errors": []
+        }
+        
+        # Step 1: Fetch articles
+        log.info("🔍 Step 1: Fetching articles...")
+        fetch_result = lab_fetch(topics=topics, max_age_days_generalist=max_age_days)
+        articles = fetch_result.get("articles", [])
+        
+        # Add alternative sources
+        alt_articles, _ = fetch_alternative_sources(
+            include_arxiv=True,
+            include_sec=True,
+            include_github=True,
+            include_reddit=True
+        )
+        articles.extend(alt_articles)
+        
+        log.info(f"📰 Fetched {len(articles)} articles")
+        
+        if len(articles) < 5:
+            return jsonify({
+                "success": False, 
+                "error": f"Not enough articles ({len(articles)}). Need at least 5."
+            }), 400
+        
+        # Step 2: Generate embeddings
+        log.info("🧠 Step 2: Generating embeddings...")
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            # Batch embed
+            for i in range(0, len(articles), 50):
+                batch = articles[i:i+50]
+                texts = [f"{a.get('title', '')} {a.get('description', '')[:200]}" for a in batch]
+                
+                try:
+                    response = httpx.post(
+                        "https://api.openai.com/v1/embeddings",
+                        headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
+                        json={"model": "text-embedding-3-small", "input": texts},
+                        timeout=60
+                    )
+                    if response.status_code == 200:
+                        emb_data = response.json()
+                        for j, emb in enumerate(emb_data.get("data", [])):
+                            if i + j < len(articles):
+                                articles[i + j]["embedding"] = emb["embedding"]
+                except Exception as e:
+                    log.warning(f"Embedding error: {e}")
+        
+        # Step 3: Cluster
+        log.info("📊 Step 3: Clustering...")
+        cluster_result = lab_cluster(articles=articles, eps=0.35, min_samples=2)
+        clusters = cluster_result.get("clusters", {})
+        cluster_info = cluster_result.get("cluster_info", [])
+        
+        log.info(f"🗂️ Found {len([c for c in cluster_info if c.get('cluster_id', -1) != -1])} clusters")
+        
+        # Step 4: Score each cluster
+        log.info("⚡ Step 4: Scoring clusters...")
+        
+        # Get thresholds
+        thresholds_result = supabase.table("signal_thresholds").select("*").execute()
+        thresholds_by_topic = {t["topic"]: t for t in (thresholds_result.data or [])}
+        default_thresholds = {"min_velocity": 2.0, "min_score": 60}
+        
+        for info in cluster_info:
+            cluster_id = info.get("cluster_id")
+            if cluster_id == -1:  # Skip noise
+                continue
+            
+            cluster_articles = clusters.get(cluster_id, [])
+            if len(cluster_articles) < 2:
+                continue
+            
+            # Calculate scores
+            topic = cluster_articles[0].get("topic", "ia")
+            thresholds = thresholds_by_topic.get(topic, default_thresholds)
+            
+            # Source mix
+            authority = len([a for a in cluster_articles if a.get("source_tier") == "authority"])
+            generalist = len([a for a in cluster_articles if a.get("source_tier") == "generalist"])
+            corporate = len([a for a in cluster_articles if a.get("source_tier") == "corporate"])
+            
+            # Scoring components (simplified)
+            velocity = min(len(cluster_articles) / 2, 10)  # Simulated velocity
+            sources_score = min((authority * 3 + generalist * 2 + corporate) * 3, 30)
+            diversity = min(len(set(a.get("source_name") for a in cluster_articles)) * 3, 20)
+            novelty = 15  # Placeholder
+            volume = min(len(cluster_articles) * 2, 10)
+            
+            total_score = velocity * 2.5 + sources_score + diversity + novelty + volume
+            total_score = min(round(total_score), 100)
+            
+            # Determine severity
+            severity = "digest"
+            if total_score >= 85:
+                severity = "breaking"
+            elif total_score >= 70:
+                severity = "alert"
+            
+            passes_threshold = total_score >= thresholds.get("min_score", 60)
+            
+            if not passes_threshold:
+                result["signals_rejected"].append({
+                    "cluster_name": info.get("name"),
+                    "score": total_score,
+                    "reason": f"Score {total_score} < threshold {thresholds.get('min_score', 60)}"
+                })
+                continue
+            
+            # Step 5: Enrich with Perplexity
+            log.info(f"✨ Enriching cluster: {info.get('name', 'Unknown')[:40]}...")
+            
+            enrich_input = {
+                "cluster_id": str(cluster_id),
+                "articles": [
+                    {
+                        "title": a.get("title", ""),
+                        "description": a.get("description", ""),
+                        "source_name": a.get("source_name", ""),
+                        "url": a.get("url", ""),
+                        "topic": a.get("topic", topic)
+                    }
+                    for a in cluster_articles[:10]
+                ]
+            }
+            
+            enrichment = lab_enrich(enrich_input)
+            
+            # Step 6: Save to DB
+            signal_data = {
+                "topic": topic,
+                "title": info.get("name", f"Cluster {cluster_id}"),
+                "slug": f"auto-{cluster_id}-{int(time.time())}",
+                "cluster_id": str(cluster_id),
+                "velocity_score": round(velocity * 10),
+                "velocity_details": {
+                    "baseline": 2,
+                    "current": len(cluster_articles),
+                    "velocity": velocity
+                },
+                "source_quality_score": sources_score,
+                "source_mix": {
+                    "authority": authority,
+                    "generalist": generalist,
+                    "corporate": corporate
+                },
+                "total_score": total_score,
+                "score_breakdown": {
+                    "velocity": round(velocity * 2.5),
+                    "sources": sources_score,
+                    "diversity": diversity,
+                    "novelty": novelty,
+                    "volume": volume
+                },
+                "status": "detected",
+                "severity": severity,
+                "detected_at": datetime.now(timezone.utc).isoformat(),
+                # Enrichment fields
+                "hook": enrichment.get("hook", ""),
+                "thesis": enrichment.get("thesis", ""),
+                "antithesis": enrichment.get("antithesis", ""),
+                "key_data": enrichment.get("key_data", ""),
+                "context": enrichment.get("context", ""),
+                # Articles for reference
+                "articles": [
+                    {
+                        "title": a.get("title", "")[:100],
+                        "url": a.get("url", ""),
+                        "source": a.get("source_name", "")
+                    }
+                    for a in cluster_articles[:10]
+                ]
+            }
+            
+            try:
+                db_result = supabase.table("signals").insert(signal_data).execute()
+                if db_result.data:
+                    saved_signal = db_result.data[0]
+                    result["signals_saved"].append({
+                        "id": saved_signal.get("id"),
+                        "title": signal_data["title"],
+                        "severity": severity,
+                        "score": total_score,
+                        "hook": signal_data["hook"][:100] if signal_data["hook"] else ""
+                    })
+                    log.info(f"✅ Saved signal: {signal_data['title'][:40]}")
+            except Exception as e:
+                result["errors"].append({
+                    "cluster": info.get("name"),
+                    "error": str(e)
+                })
+                log.error(f"Failed to save signal: {e}")
+        
+        log.info(f"🎯 Detection complete: {len(result['signals_saved'])} saved, {len(result['signals_rejected'])} rejected")
+        
+        return jsonify({
+            "success": True,
+            "saved_count": len(result["signals_saved"]),
+            "rejected_count": len(result["signals_rejected"]),
+            "signals": result["signals_saved"],
+            "rejected": result["signals_rejected"],
+            "errors": result["errors"]
+        })
+    
+    except Exception as e:
+        import traceback
+        log.error(f"Detection error: {e}")
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+
 @app.route("/api/lab/cluster/<cluster_id>", methods=["GET"])
 def lab_cluster_detail(cluster_id: str):
     """Get detailed info about a specific cluster."""
