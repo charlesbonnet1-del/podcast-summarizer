@@ -29,6 +29,7 @@ interface Article {
   source_name: string;
   source_tier: string;
   topic?: string;
+  source_type?: string;
 }
 
 interface Cluster {
