@@ -271,11 +271,13 @@ def lab_fetch(
     library = SourceLibrary()
     stats = library.get_stats()
     
-    articles = fetch_all_sources(
+    # Fetch with errors
+    articles, failed_sources = fetch_all_sources(
         library,
         topics=topics,
         mvp_only=True,
-        max_articles_per_source=max_per_source
+        max_articles_per_source=max_per_source,
+        return_errors=True
     )
     
     # Apply time filters based on tier
@@ -342,6 +344,8 @@ def lab_fetch(
         "filtered_out": filtered_count,
         "by_source": by_source,
         "source_count": len(by_source),
+        "failed_sources": failed_sources,
+        "failed_count": len(failed_sources),
         "library_stats": stats,
         "time_filters": {
             "generalist_max_days": max_age_days_generalist,
@@ -500,10 +504,10 @@ def lab_embed(articles: list[dict]) -> dict:
 
 def lab_cluster(
     articles: list[dict],
-    eps: float = 0.65,
+    eps: float = 0.35,  # Reduced from 0.65 - stricter clustering
     min_samples: int = 2
 ) -> dict:
-    """Cluster articles using DBSCAN."""
+    """Cluster articles using DBSCAN with cosine distance."""
     from sklearn.cluster import DBSCAN
     from sklearn.metrics.pairwise import cosine_distances
     
@@ -721,26 +725,57 @@ def lab_score(
 
 def generate_cluster_name(cluster_articles: list[dict]) -> str:
     """Generate a descriptive name for a cluster based on article titles."""
-    titles = [a.get("title", "") for a in cluster_articles[:3]]
-    # Find common words/themes
+    titles = [a.get("title", "") for a in cluster_articles[:5]]
+    
+    # Try to find the common theme using word frequency
     words = []
     for t in titles:
-        words.extend(t.lower().split())
+        # Clean and split
+        clean_title = t.lower().replace("'s", "").replace("'", "").replace('"', '')
+        words.extend(clean_title.split())
     
     # Filter out common words
-    stopwords = {"the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as", "et", "le", "la", "les", "de", "du", "des", "un", "une", "en", "est", "sont", "pour", "sur", "dans", "par", "au", "aux", "ce", "cette", "ces", "qui", "que", "dont", "où", "how", "why", "what", "when", "new", "will", "can", "could", "would", "should"}
-    meaningful = [w for w in words if len(w) > 3 and w not in stopwords]
+    stopwords = {
+        # English
+        "the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "for", "on", "with", 
+        "at", "by", "from", "as", "how", "why", "what", "when", "new", "will", "can", "could", 
+        "would", "should", "its", "it", "has", "have", "had", "been", "being", "be", "this", 
+        "that", "these", "those", "and", "or", "but", "not", "all", "more", "most", "some",
+        "just", "now", "than", "into", "out", "about", "after", "before", "over", "under",
+        "between", "through", "during", "says", "said", "like", "make", "makes", "made",
+        "get", "gets", "got", "going", "goes", "first", "latest", "best", "biggest",
+        # French
+        "et", "le", "la", "les", "de", "du", "des", "un", "une", "en", "est", "sont", 
+        "pour", "sur", "dans", "par", "au", "aux", "ce", "cette", "ces", "qui", "que", 
+        "dont", "où", "plus", "très", "bien", "fait", "faire", "avec", "sans", "tout",
+        # Numbers and misc
+        "2024", "2025", "2026", "2027"
+    }
+    
+    meaningful = [w for w in words if len(w) > 3 and w not in stopwords and not w.isdigit()]
     
     # Count frequencies
     from collections import Counter
     freq = Counter(meaningful)
-    top_words = [w for w, _ in freq.most_common(3)]
     
-    if top_words:
+    # Get top words that appear in multiple titles
+    top_words = []
+    for word, count in freq.most_common(10):
+        if count >= 2 or len(top_words) < 2:  # Prefer words in multiple titles
+            top_words.append(word)
+        if len(top_words) >= 3:
+            break
+    
+    if len(top_words) >= 2:
         return " ".join(top_words).title()
+    elif top_words:
+        # Add context from first title
+        first_words = [w for w in titles[0].split()[:3] if w.lower() not in stopwords]
+        return " ".join(first_words[:2] + top_words[:1]).title()
     else:
-        # Fallback: first 5 words of first title
-        return " ".join(titles[0].split()[:5]) if titles else "Cluster"
+        # Fallback: meaningful words from first title
+        first_title_words = [w for w in titles[0].split() if w.lower() not in stopwords]
+        return " ".join(first_title_words[:4]).title() if first_title_words else "Cluster"
 
 
 # ============================================
