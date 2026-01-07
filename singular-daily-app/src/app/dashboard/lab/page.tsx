@@ -137,7 +137,7 @@ export default function LabPage() {
       const res = await fetch(`${API_BASE}/api/health-check/rss`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ only_mvp: true, update_sheet: true })
+        body: JSON.stringify({ only_mvp: false, update_sheet: true })  // Check ALL sources
       });
       const data = await res.json();
       if (data.success) {
@@ -309,14 +309,22 @@ export default function LabPage() {
                       </div>
                     )}
                     <div>
-                      <h4 className="text-sm font-medium mb-2">Échantillon</h4>
-                      <div className="space-y-1 max-h-48 overflow-y-auto">
-                        {result.steps.fetch.articles.slice(0, 8).map((a, i) => (
-                          <div key={i} className="flex items-center gap-2 p-2 bg-card rounded text-sm">
-                            <div className={cn("w-2 h-2 rounded-full", TIER_COLORS[a.source_tier])} />
+                      <h4 className="text-sm font-medium mb-2">
+                        Échantillon diversifié 
+                        <span className="text-muted-foreground font-normal ml-2">
+                          ({result.steps.fetch.articles.length} articles de {new Set(result.steps.fetch.articles.map((a: any) => a.source_name)).size} sources)
+                        </span>
+                      </h4>
+                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                        {result.steps.fetch.articles.slice(0, 20).map((a, i) => (
+                          <div key={i} className="flex items-center gap-2 p-2 bg-card rounded text-sm hover:bg-card/80">
+                            <div className={cn("w-2 h-2 rounded-full flex-shrink-0", TIER_COLORS[a.source_tier])} />
+                            <span className="text-muted-foreground text-xs w-24 truncate flex-shrink-0">{a.source_name}</span>
                             <span className="truncate flex-1">{a.title}</span>
-                            <span className="text-muted-foreground text-xs">{a.source_name}</span>
-                            <a href={a.url} target="_blank" className="text-primary"><ExternalLink className="w-3 h-3" /></a>
+                            {a.source_type && a.source_type !== "rss" && (
+                              <span className="text-xs px-1.5 py-0.5 bg-primary/20 text-primary rounded">{a.source_type}</span>
+                            )}
+                            <a href={a.url} target="_blank" rel="noopener" className="text-primary flex-shrink-0"><ExternalLink className="w-3 h-3" /></a>
                           </div>
                         ))}
                       </div>
