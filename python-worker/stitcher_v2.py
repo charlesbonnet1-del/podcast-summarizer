@@ -3878,62 +3878,28 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
 
             log.info(f"🎤 Dialogue segments: {len(dialogue_combined)//1000}s")
 
-            # Get ambient track and mix under dialogue
-            ambient_path = get_random_ambient_track()
-            dialogue_final = None
-
-            if ambient_path:
-                try:
-                    ambient = AudioSegment.from_mp3(ambient_path)
-                    log.info(f"🎵 Ambient track: {len(ambient)//1000}s")
-
-                    # Process ambient: lower volume + trim to dialogue length
-                    dialogue_len = len(dialogue_combined)
-                    ambient = ambient + AMBIENT_VOLUME_DB
-
-                    if len(ambient) > dialogue_len:
-                        ambient = ambient[:dialogue_len]
-
-                    # Add fade out
-                    if len(ambient) > AMBIENT_FADE_OUT:
-                        ambient = ambient.fade_out(AMBIENT_FADE_OUT)
-
-                    # Pad if shorter than dialogue
-                    if len(ambient) < dialogue_len:
-                        ambient += AudioSegment.silent(duration=dialogue_len - len(ambient))
-
-                    # Mix ambient under dialogue (in-place to save memory)
-                    dialogue_final = ambient.overlay(dialogue_combined)
-                    del ambient
-                    del dialogue_combined
-                    gc.collect()
-                    log.info(f"✅ Mixed ambient under dialogue")
-
-                except Exception as e:
-                    log.warning(f"⚠️ Failed to mix ambient: {e}, using dialogue without ambient")
-                    dialogue_final = dialogue_combined
-                    del dialogue_combined
-                    gc.collect()
-            else:
-                # No ambient available, just use dialogue
-                dialogue_final = dialogue_combined
-                del dialogue_combined
-                gc.collect()
-
-            # === FILE-BASED CONCATENATION (prevents OOM) ===
-            # Export to temp files, then use FFmpeg to concatenate
+            # === FILE-BASED PROCESSING (prevents OOM) ===
+            import subprocess
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             intro_temp = os.path.join(tempfile.gettempdir(), f"intro_{timestamp}.mp3")
             dialogue_temp = os.path.join(tempfile.gettempdir(), f"dialogue_{timestamp}.mp3")
+            dialogue_mixed_temp = os.path.join(tempfile.gettempdir(), f"dialogue_mixed_{timestamp}.mp3")
             silence_temp = os.path.join(tempfile.gettempdir(), f"silence_{timestamp}.mp3")
             output_path = os.path.join(tempfile.gettempdir(), f"podcast_{timestamp}.mp3")
 
-            # Export intro block and free memory
+            # Export intro block and free memory FIRST
             intro_duration = len(intro_block_audio) // 1000
             intro_block_audio.export(intro_temp, format="mp3", bitrate="192k")
             del intro_block_audio
             gc.collect()
             log.info(f"💾 Exported intro to temp file: {intro_duration}s")
+
+            # Export dialogue and free memory
+            dialogue_duration = len(dialogue_combined) // 1000
+            dialogue_combined.export(dialogue_temp, format="mp3", bitrate="192k")
+            del dialogue_combined
+            gc.collect()
+            log.info(f"💾 Exported dialogue to temp file: {dialogue_duration}s")
 
             # Export silence (2s delay before dialogue)
             silence = AudioSegment.silent(duration=AMBIENT_START_DELAY)
@@ -3941,21 +3907,46 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
             del silence
             gc.collect()
 
-            # Export dialogue and free memory
-            dialogue_duration = len(dialogue_final) // 1000
-            dialogue_final.export(dialogue_temp, format="mp3", bitrate="192k")
-            del dialogue_final
-            gc.collect()
-            log.info(f"💾 Exported dialogue to temp file: {dialogue_duration}s")
+            # Get ambient track and mix with dialogue using FFmpeg
+            ambient_path = get_random_ambient_track()
+            final_dialogue_path = dialogue_temp  # Default: no ambient
 
-            # Use FFmpeg concat demuxer (memory efficient)
+            if ambient_path:
+                try:
+                    log.info(f"🎵 Mixing ambient track with FFmpeg: {ambient_path}")
+                    # FFmpeg command to mix ambient under dialogue:
+                    # - Lower ambient volume by AMBIENT_VOLUME_DB (-18dB)
+                    # - Trim ambient to dialogue length
+                    # - Fade out ambient at end
+                    # - Mix under dialogue
+                    ffmpeg_mix_cmd = [
+                        "ffmpeg", "-y",
+                        "-i", dialogue_temp,
+                        "-i", ambient_path,
+                        "-filter_complex",
+                        f"[1:a]volume={10**(AMBIENT_VOLUME_DB/20)},afade=t=out:st={dialogue_duration-3}:d=3[amb];[0:a][amb]amix=inputs=2:duration=first:dropout_transition=2[out]",
+                        "-map", "[out]",
+                        "-ac", "2",
+                        "-ar", "44100",
+                        "-b:a", "192k",
+                        dialogue_mixed_temp
+                    ]
+                    result = subprocess.run(ffmpeg_mix_cmd, capture_output=True, text=True)
+                    if result.returncode == 0:
+                        final_dialogue_path = dialogue_mixed_temp
+                        log.info(f"✅ Mixed ambient under dialogue with FFmpeg")
+                    else:
+                        log.warning(f"⚠️ FFmpeg ambient mix failed: {result.stderr[:200]}")
+                except Exception as e:
+                    log.warning(f"⚠️ Failed to mix ambient: {e}")
+
+            # Use FFmpeg concat demuxer for final assembly
             concat_list = os.path.join(tempfile.gettempdir(), f"concat_{timestamp}.txt")
             with open(concat_list, 'w') as f:
                 f.write(f"file '{intro_temp}'\n")
                 f.write(f"file '{silence_temp}'\n")
-                f.write(f"file '{dialogue_temp}'\n")
+                f.write(f"file '{final_dialogue_path}'\n")
 
-            import subprocess
             ffmpeg_cmd = [
                 "ffmpeg", "-y", "-f", "concat", "-safe", "0",
                 "-i", concat_list, "-c", "copy", output_path
@@ -3963,7 +3954,7 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
             result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
 
             # Cleanup temp files
-            for temp_file in [intro_temp, dialogue_temp, silence_temp, concat_list]:
+            for temp_file in [intro_temp, dialogue_temp, dialogue_mixed_temp, silence_temp, concat_list]:
                 try:
                     os.remove(temp_file)
                 except:
