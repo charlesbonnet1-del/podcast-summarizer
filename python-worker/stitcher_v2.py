@@ -2511,21 +2511,165 @@ def cluster_articles_by_theme(items: list[dict]) -> list[dict]:
 # ============================================
 
 def get_user_topic_weights(user_id: str) -> dict:
-    """Get user's topic weights from database or return defaults."""
+    """Get user's topic weights from database or return defaults.
+
+    DEPRECATED: Use get_user_selected_topics() instead.
+    Kept for backward compatibility during migration.
+    """
     try:
         result = supabase.table("users") \
             .select("topic_weights") \
             .eq("id", user_id) \
             .single() \
             .execute()
-        
+
         if result.data and result.data.get("topic_weights"):
             return result.data["topic_weights"]
     except:
         pass
-    
+
     # Default weights (all topics equal at 50%)
     return {topic: 50 for topic in VALID_TOPICS}
+
+
+def get_user_selected_topics(user_id: str) -> list[str]:
+    """
+    V19: Get user's selected topics (new simplified system).
+
+    New system: User picks 5-6 topics they want.
+    Selection is binary - either a topic is selected or not.
+    No more percentage-based weighting.
+
+    Returns:
+        List of topic slugs the user is interested in.
+        Falls back to converting old weights if selected_topics not set.
+    """
+    try:
+        result = supabase.table("users") \
+            .select("selected_topics, topic_weights") \
+            .eq("id", user_id) \
+            .single() \
+            .execute()
+
+        if result.data:
+            # New system: selected_topics array
+            if result.data.get("selected_topics"):
+                topics = result.data["selected_topics"]
+                # Handle both JSONB array and TEXT[] formats
+                if isinstance(topics, str):
+                    import json
+                    topics = json.loads(topics)
+                log.info(f"📋 User has {len(topics)} selected topics (V19 system)")
+                return topics
+
+            # Fallback: Convert old weights to topic list
+            # Take topics with weight >= 30% (old MEDIUM and HIGH)
+            if result.data.get("topic_weights"):
+                weights = result.data["topic_weights"]
+                topics = [t for t, w in weights.items() if w >= 30]
+                log.info(f"📋 Migrated {len(topics)} topics from old weights")
+                return topics
+    except Exception as e:
+        log.warning(f"⚠️ Could not fetch user topics: {e}")
+
+    # Default: All topics (until user picks their own)
+    log.info("📋 Using default topics (all)")
+    return list(VALID_TOPICS)
+
+
+def select_top_clusters_by_score(user_id: str, max_segments: int = 3) -> list[dict]:
+    """
+    V19: Simplified selection - Top N clusters by score for user's topics.
+
+    New algorithm:
+    1. Get user's selected topics (5-6 topics they care about)
+    2. Get today's clusters
+    3. Filter to only user's topics
+    4. Sort by cluster score (descending)
+    5. Take top N (default 3)
+
+    No more weighted scoring or priority tiers.
+    If a topic has no good content today, it's simply skipped.
+
+    Returns: List of selected clusters ready for podcast assembly
+    """
+    log.info(f"🎯 Running V19 TOP-BY-SCORE selection for user {user_id[:8]}...")
+
+    # 1. Get user's selected topics
+    user_topics = get_user_selected_topics(user_id)
+    log.info(f"📋 User topics: {user_topics}")
+
+    if not user_topics:
+        log.warning("⚠️ No topics selected, using all topics")
+        user_topics = list(VALID_TOPICS)
+
+    # 2. Get already-served segment hashes (no re-serve to same user)
+    served_hashes = get_user_history_hashes(user_id)
+    log.info(f"📚 User has {len(served_hashes)} segments in history")
+
+    # 3. Get today's clusters from audio_segments cache
+    try:
+        from datetime import timedelta
+        now = datetime.now()
+        cache_cutoff = (now - timedelta(days=1)).isoformat()  # Today only
+
+        result = supabase.table("audio_segments") \
+            .select("id, content_hash, topic_slug, source_title, source_url, audio_url, audio_duration, script_text, relevance_score, created_at") \
+            .gte("created_at", cache_cutoff) \
+            .order("created_at", desc=True) \
+            .limit(100) \
+            .execute()
+
+        if not result.data:
+            log.warning("❌ No segments in cache for today!")
+            return []
+
+        segments = result.data
+        log.info(f"📦 Found {len(segments)} segments in cache")
+
+    except Exception as e:
+        log.error(f"❌ Failed to query segment cache: {e}")
+        return []
+
+    # 4. Filter by user's topics and exclude already-served
+    eligible = []
+    for seg in segments:
+        topic = seg.get("topic_slug", "general")
+        content_hash = seg.get("content_hash", "")
+
+        # Skip if not in user's topics
+        if topic not in user_topics:
+            continue
+
+        # Skip if already served to this user
+        if content_hash and content_hash in served_hashes:
+            continue
+
+        # Add topic for consistency
+        seg["keyword"] = topic
+        eligible.append(seg)
+
+    log.info(f"✅ {len(eligible)} segments eligible (in user topics, not served)")
+
+    if not eligible:
+        log.warning("⚠️ No eligible segments, falling back to content_queue")
+        return []
+
+    # 5. Sort by relevance_score (cluster quality) - descending
+    eligible.sort(key=lambda x: x.get("relevance_score", 0.5), reverse=True)
+
+    # 6. Take top N
+    selected = eligible[:max_segments]
+
+    # Log selection
+    for i, seg in enumerate(selected, 1):
+        topic = seg.get("topic_slug", "?")
+        title = seg.get("source_title", "?")[:40]
+        score = seg.get("relevance_score", 0)
+        log.info(f"   {i}. [{topic}] {title}... (score: {score:.2f})")
+
+    log.info(f"✅ V19 SELECTION: {len(selected)} best clusters selected")
+    return selected
 
 
 def get_user_history_hashes(user_id: str, days_back: int = 30) -> set:
@@ -3181,17 +3325,22 @@ def assemble_lego_podcast(
     except Exception as e:
         log.debug(f"Premium injection skipped: {e}")
     
-    # V17: Selection cascade based on priority tiers
-    # 1. Try cluster-based selection
-    # 2. Try inventory-first (priority tiers)
-    # 3. Fallback to smart_content
-    
-    items = select_from_clusters(user_id, max_segments)
-    
+    # V19: Simplified selection - Top 3 by score for user's topics
+    # 1. Try V19 top-by-score selection (new simplified system)
+    # 2. Fallback to cluster-based selection
+    # 3. Fallback to inventory-first (old priority tiers)
+    # 4. Final fallback to smart_content
+
+    items = select_top_clusters_by_score(user_id, max_segments)
+
+    if len(items) < min_segments:
+        log.info(f"📦 Only {len(items)} from V19 selection, trying clusters...")
+        items = select_from_clusters(user_id, max_segments)
+
     if len(items) < min_segments:
         log.info(f"📦 Only {len(items)} from clusters, trying inventory cache...")
         items = select_inventory_first(user_id, max_segments)
-    
+
     if len(items) < min_segments:
         log.warning(f"⚠️ Only {len(items)} from inventory, using content_queue")
         items = select_smart_content(user_id, max_segments, min_articles=min_segments)

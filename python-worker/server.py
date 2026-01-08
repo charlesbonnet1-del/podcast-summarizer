@@ -216,12 +216,12 @@ def get_clusters(user_id: str):
     """
     if not verify_auth():
         return jsonify({"error": "Unauthorized"}), 401
-    
+
     try:
         from cluster_pipeline import get_daily_clusters
-        
+
         clusters = get_daily_clusters(user_id=user_id)
-        
+
         return jsonify({
             "success": True,
             "cluster_count": len(clusters),
@@ -231,6 +231,54 @@ def get_clusters(user_id: str):
         return jsonify({"error": "Cluster pipeline not available"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ============================================
+# V19: EMAIL DIGEST CRON
+# ============================================
+
+@app.route("/cron/digest", methods=["POST"])
+def cron_digest():
+    """
+    V19: Daily email digest job.
+    Sends email to all users with email_digest_enabled=true.
+    Call this after podcast generation (e.g., 8am daily).
+
+    Body params:
+    - date: Optional target date (YYYY-MM-DD), defaults to today
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json() or {}
+    target_date = data.get("date")
+
+    log.info("📧 Email digest cron job triggered", date=target_date or "today")
+
+    # Run digest sending in background thread
+    def run_digest():
+        try:
+            from email_digest import send_pending_digests
+            from datetime import date as date_type
+
+            target = None
+            if target_date:
+                target = date_type.fromisoformat(target_date)
+
+            stats = send_pending_digests(target_date=target)
+            log.info("📧 Digest job complete", **stats)
+
+        except Exception as e:
+            log.error(f"📧 Digest error: {e}")
+
+    thread = threading.Thread(target=run_digest)
+    thread.start()
+
+    return jsonify({
+        "success": True,
+        "message": "Digest job started",
+        "date": target_date or "today"
+    })
 
 
 # ============================================

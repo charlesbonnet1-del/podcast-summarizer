@@ -41,7 +41,7 @@ export async function updateSession(request: NextRequest) {
 
   // Protected routes
   const protectedPaths = ['/dashboard', '/settings']
-  const isProtectedPath = protectedPaths.some(path => 
+  const isProtectedPath = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   )
 
@@ -56,6 +56,37 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
+  }
+
+  // V19: Check onboarding completion for logged-in users on protected routes
+  if (isProtectedPath && user) {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('onboarding_completed')
+      .eq('id', user.id)
+      .single()
+
+    // Redirect to onboarding if not completed
+    if (!profile?.onboarding_completed) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/onboarding'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // Redirect away from onboarding if already completed
+  if (request.nextUrl.pathname === '/onboarding' && user) {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('onboarding_completed')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.onboarding_completed) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
