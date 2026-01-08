@@ -527,14 +527,50 @@ def get_prompt_from_db(prompt_name: str, default: str) -> str:
 
 
 # ============================================
-# DEPRECATED PROMPTS - REMOVED IN V14.5
+# SINGLE-ARTICLE SEGMENT PROMPT
 # ============================================
-# DIALOGUE_SEGMENT_PROMPT - Removed: Use dialogue_cluster instead (all content goes through Perplexity synthesis)
-# 
-# Only DIALOGUE_CLUSTER_PROMPT remains for dialogue generation
+# V19: Restored proper prompt for single-article segments (different variables than cluster prompt)
+DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast professionnel. Écris un DIALOGUE COMPLET de **MINIMUM {word_count} mots** entre deux hôtes.
+{topic_intention}
 
-# Fallback for code that still references removed prompts
-DIALOGUE_SEGMENT_PROMPT = DIALOGUE_CLUSTER_PROMPT  # Redirect to cluster prompt
+## ARTICLE À TRANSFORMER EN DIALOGUE
+**Titre**: {title}
+**Source**: {source_label}
+**Attribution**: {attribution_instruction}
+
+## CONTENU
+{content}
+
+{previous_segment_rule}
+{previous_segment_context}
+
+## LES HÔTES
+- [B] L'ANALYSTE (voix masculine) = Présente les faits clés avec données
+- [A] LA SCEPTIQUE (voix féminine) = Challenge et apporte des nuances
+
+## RÈGLES ABSOLUES
+⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
+⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
+⚠️ STYLE {style}: Chaque phrase apporte de l'information
+⚠️ **LONGUEUR OBLIGATOIRE: MINIMUM {word_count} MOTS** - Un script trop court sera rejeté
+
+## FORMAT
+[B]
+(expose les faits principaux - 3-4 phrases minimum)
+
+[A]
+(challenge ou demande précision - 3-4 phrases minimum)
+
+## STRUCTURE OBLIGATOIRE
+1. [B] ouvre avec l'info principale + données (40-60 mots)
+2. [A] challenge ou demande une précision (40-60 mots)
+3. [B] répond avec des données complémentaires (40-60 mots)
+4. [A] apporte une nuance finale ou perspective (40-60 mots)
+5. [B] CONCLUT avec une synthèse (40-60 mots)
+
+**Minimum 6 répliques substantielles.** Cite la source naturellement.
+
+## GÉNÈRE LE DIALOGUE COMPLET (MINIMUM {word_count} mots):"""
 
 # Multi-source prompt - kept because it uses different variables than cluster
 # V18: Strengthened word count requirements
