@@ -38,11 +38,11 @@ interface DashboardNavProps {
 // ============================================
 
 const NAV_ITEMS = [
-  { 
-    href: "/dashboard", 
-    label: "Signals", 
+  {
+    href: "/dashboard",
+    label: "Podcast",
     icon: Zap,
-    description: "Alertes détectées"
+    description: "Votre briefing audio"
   },
   { 
     href: "/dashboard/lab", 

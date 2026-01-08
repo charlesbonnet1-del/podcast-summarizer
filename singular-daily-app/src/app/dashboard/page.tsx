@@ -504,38 +504,37 @@ export default function PodcastDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto p-6 space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Zap className="w-6 h-6 text-primary" />
-              Keernel
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Votre briefing quotidien en audio
-            </p>
-          </div>
-
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-all"
-          >
-            {generating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Génération...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4" />
-                Générer
-              </>
-            )}
-          </button>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Headphones className="w-6 h-6 text-primary" />
+            Podcast
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Votre briefing quotidien en audio
+          </p>
         </div>
+
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-all"
+        >
+          {generating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Génération...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="w-4 h-4" />
+              Générer
+            </>
+          )}
+        </button>
+      </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -719,7 +718,6 @@ export default function PodcastDashboard() {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }
