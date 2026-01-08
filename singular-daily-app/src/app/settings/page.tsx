@@ -2,9 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Settings, User, Rss, Sliders, Clock, Bell } from "lucide-react";
+import { Settings, User, Rss, Sparkles, Clock, Bell } from "lucide-react";
 import { ProfileForm } from "@/components/settings/profile-form";
-import SignalMixer from "@/components/settings/signal-mixer";
+import TopicSelector from "@/components/onboarding/topic-selector";
 import { FormatToggle } from "@/components/settings/format-toggle";
 import { DangerZone } from "@/components/settings/danger-zone";
 import { RssFeedLink } from "@/components/dashboard/rss-feed-link";
@@ -21,18 +21,11 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  // Fetch user profile
+  // Fetch user profile with selected topics
   const { data: profile } = await supabase
     .from("users")
     .select("*")
     .eq("id", user.id)
-    .single();
-
-  // Fetch signal weights
-  const { data: signalWeightsData } = await supabase
-    .from("user_signal_weights")
-    .select("weights")
-    .eq("user_id", user.id)
     .single();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://singular.daily";
@@ -110,25 +103,27 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Signal Mixer - Topic Weights */}
+      {/* Topic Selection - V19 */}
       <Card className="bg-card/60 backdrop-blur-xl border-border/30 shadow-xl">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div 
+            <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
               style={{ background: 'rgba(0, 240, 255, 0.1)' }}
             >
-              <Sliders className="w-5 h-5 text-[#00F0FF]" />
+              <Sparkles className="w-5 h-5 text-[#00F0FF]" />
             </div>
             <div>
-              <CardTitle className="text-lg font-display">Signal Mixer</CardTitle>
-              <CardDescription>Ajustez l'intensité de chaque thématique</CardDescription>
+              <CardTitle className="text-lg font-display">Mes Sujets</CardTitle>
+              <CardDescription>Choisissez les sujets pour votre podcast quotidien</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <SignalMixer 
-            initialWeights={signalWeightsData?.weights || {}}
+          <TopicSelector
+            initialTopics={profile?.selected_topics || []}
+            minTopics={5}
+            isOnboarding={false}
           />
         </CardContent>
       </Card>

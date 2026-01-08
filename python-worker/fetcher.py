@@ -412,32 +412,13 @@ def run_fetcher(edition: str = "morning"):
             articles.append(article)
     
     log.info(f"📰 Level 1 (GSheet): {len(articles)} articles")
-    
+
     # ============================================
-    # LEVEL 2: Bing News (Backup)
+    # LEVEL 2: Bing News - REMOVED
     # ============================================
-    # Count articles per topic to find gaps
-    topic_counts = {}
-    for article in articles:
-        topic = article.get("topic", "general")
-        topic_counts[topic] = topic_counts.get(topic, 0) + 1
-    
-    # Find topics with insufficient content (< 5 articles)
-    MIN_ARTICLES_PER_TOPIC = 5
-    sparse_topics = [t for t in all_topics if topic_counts.get(t, 0) < MIN_ARTICLES_PER_TOPIC]
-    
-    if sparse_topics:
-        log.info(f"📰 Topics needing Bing backup: {sparse_topics}")
-        
-        bing_articles = fetch_bing_for_topics(sparse_topics, max_articles=len(sparse_topics) * 3)
-        
-        for article in bing_articles:
-            if article["url"] not in seen_urls:
-                seen_urls.add(article["url"])
-                articles.append(article)
-        
-        log.info(f"📰 After Bing backup: {len(articles)} total articles")
-    
+    # Bing backup removed - provides low-quality sources
+    # GSheet RSS Library is the only source now
+
     # ============================================
     # ADD TO GLOBAL CONTENT QUEUE
     # ============================================

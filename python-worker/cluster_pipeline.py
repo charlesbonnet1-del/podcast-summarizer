@@ -102,7 +102,15 @@ TOPICS = {
     "info": "Désinformation, fake news, guerre de l'information, fact-checking, propagande",
     "attention": "Réseaux sociaux, algorithmes, attention economy, plateformes, TikTok, engagement",
     "persuasion": "Marketing, influence, psychologie, nudge, communication, rhétorique",
+
+    # V19 GENERAL (grand public - validation required)
+    "general": "Actualités généralistes, sources grand public, validation croisée",
 }
+
+# V19: General topic validation
+# "general" sources can ONLY be used if clustered with authority sources
+GENERAL_TOPIC_MIN_AUTHORITY_SCORE = 70  # Minimum score for an "authority" source
+GENERAL_REQUIRES_AUTHORITY = True  # Enforce authority co-clustering for general
 
 # Pre-computed topic embeddings (will be populated on first run)
 _topic_embeddings_cache: dict = {}
@@ -369,6 +377,82 @@ def check_cluster_diversity(articles: list[dict]) -> dict:
         "max_domain_count": max_domain_count,
         "dominant_domain": dominant_domain
     }
+
+
+def validate_general_topic_cluster(articles: list[dict]) -> dict:
+    """
+    V19: Validate clusters containing "general" topic articles.
+
+    General sources (grand public) can ONLY be included if the cluster
+    also contains at least one authority/corporate source (score >= 70).
+
+    Args:
+        articles: List of articles in the cluster
+
+    Returns:
+        Dict with:
+        - is_valid: True if general articles have authority backing
+        - general_count: Number of general topic articles
+        - authority_count: Number of authority sources (score >= 70)
+        - filtered_articles: Articles to keep (general removed if no authority)
+    """
+    if not articles:
+        return {"is_valid": True, "general_count": 0, "authority_count": 0, "filtered_articles": []}
+
+    general_articles = []
+    authority_articles = []
+    other_articles = []
+
+    for article in articles:
+        topic = article.get("keyword", article.get("topic", ""))
+        score = article.get("source_score", article.get("score", 50))
+
+        if topic == "general":
+            general_articles.append(article)
+        elif score >= GENERAL_TOPIC_MIN_AUTHORITY_SCORE:
+            authority_articles.append(article)
+            other_articles.append(article)
+        else:
+            other_articles.append(article)
+
+    # If no general articles, cluster is valid as-is
+    if not general_articles:
+        return {
+            "is_valid": True,
+            "general_count": 0,
+            "authority_count": len(authority_articles),
+            "filtered_articles": articles
+        }
+
+    # General articles found - check if there's authority backing
+    has_authority = len(authority_articles) > 0
+
+    if has_authority and GENERAL_REQUIRES_AUTHORITY:
+        # Include general articles - they have authority backing
+        log.info(f"✅ General articles validated: {len(general_articles)} general + {len(authority_articles)} authority sources")
+        return {
+            "is_valid": True,
+            "general_count": len(general_articles),
+            "authority_count": len(authority_articles),
+            "filtered_articles": articles  # Keep all
+        }
+    elif not GENERAL_REQUIRES_AUTHORITY:
+        # Authority not required, keep all
+        return {
+            "is_valid": True,
+            "general_count": len(general_articles),
+            "authority_count": len(authority_articles),
+            "filtered_articles": articles
+        }
+    else:
+        # No authority backing - remove general articles
+        log.warning(f"⚠️ Removing {len(general_articles)} general articles (no authority source in cluster)")
+        return {
+            "is_valid": len(other_articles) > 0,  # Valid only if non-general articles remain
+            "general_count": len(general_articles),
+            "authority_count": 0,
+            "filtered_articles": other_articles  # Only non-general
+        }
 
 
 # ============================================
@@ -907,6 +991,17 @@ def select_best_clusters(
         if len(cluster_articles) < MIN_CLUSTER_SIZE:
             log.debug(f"🌐 Cluster {cluster_id} rejected: Too small after diversity filter ({len(cluster_articles)} articles)")
             continue
+
+        # V19: Validate general topic articles (need authority backing)
+        general_validation = validate_general_topic_cluster(cluster_articles)
+        if general_validation["general_count"] > 0:
+            cluster_articles = general_validation["filtered_articles"]
+            # Update filtered_indices to match filtered articles
+            filtered_indices = [i for i, a in zip(filtered_indices, [articles[j] for j in filtered_indices])
+                              if a in cluster_articles]
+            if not general_validation["is_valid"] or len(cluster_articles) < MIN_CLUSTER_SIZE:
+                log.debug(f"🌐 Cluster {cluster_id} rejected: General articles without authority backing")
+                continue
 
         # Compute centroid (mean of all embeddings in cluster)
         embeddings = np.array([a["embedding"] for a in cluster_articles if a.get("embedding")])
