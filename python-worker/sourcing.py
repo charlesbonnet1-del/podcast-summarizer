@@ -25,6 +25,91 @@ load_dotenv()
 log = structlog.get_logger()
 
 # ============================================
+# NOISE FILTERS V1
+# ============================================
+
+# Words in titles that indicate navigation/non-article pages
+NOISE_TITLE_WORDS = {
+    "home", "subscribe", "subscription", "contact", "about", "login", "careers",
+    "consultant", "sign up", "sign in", "register", "newsletter", "cookie",
+    "privacy policy", "terms of service", "404", "page not found",
+    "accueil", "inscription", "connexion", "contact", "à propos", "carrières",
+    "mentions légales", "politique de confidentialité"
+}
+
+# URL patterns that indicate non-article pages
+NOISE_URL_PATTERNS = [
+    "/home", "/about", "/subscribe", "/contact", "/careers", "/login",
+    "/signin", "/signup", "/register", "/newsletter", "/privacy", "/terms",
+    "/cookie", "/404", "/search", "/tag/", "/category/", "/author/",
+    "/page/", "/feed/", "/rss/", "/sitemap", "/wp-admin", "/wp-login"
+]
+
+# Minimum title length (number of words)
+MIN_TITLE_WORDS = 4
+
+
+def is_noise_article(article: dict) -> bool:
+    """
+    Check if an article is likely noise (navigation page, etc.)
+
+    Criteria:
+    - Title too short (< 4 words)
+    - Title contains navigation words
+    - URL matches non-article patterns
+
+    Returns:
+        True if article should be filtered out
+    """
+    title = article.get("title", "").lower().strip()
+    url = article.get("url", "").lower()
+
+    # Empty title = noise
+    if not title:
+        return True
+
+    # Title too short
+    word_count = len(title.split())
+    if word_count < MIN_TITLE_WORDS:
+        log.debug(f"🗑️ Noise filter: Title too short ({word_count} words): {title[:50]}")
+        return True
+
+    # Navigation words in title
+    for noise_word in NOISE_TITLE_WORDS:
+        if noise_word in title:
+            log.debug(f"🗑️ Noise filter: Navigation word '{noise_word}' in title: {title[:50]}")
+            return True
+
+    # URL patterns for non-article pages
+    for pattern in NOISE_URL_PATTERNS:
+        if pattern in url:
+            log.debug(f"🗑️ Noise filter: URL pattern '{pattern}' in: {url[:80]}")
+            return True
+
+    return False
+
+
+def filter_noise_articles(articles: list[dict]) -> list[dict]:
+    """
+    Filter out noise articles from a list.
+
+    Returns:
+        Filtered list of articles
+    """
+    if not articles:
+        return []
+
+    original_count = len(articles)
+    filtered = [a for a in articles if not is_noise_article(a)]
+    filtered_count = original_count - len(filtered)
+
+    if filtered_count > 0:
+        log.info(f"🗑️ Noise filter: Removed {filtered_count}/{original_count} articles")
+
+    return filtered
+
+
+# ============================================
 # GOOGLE SHEETS CLIENT
 # ============================================
 
@@ -1022,10 +1107,13 @@ def fetch_all_sources(user_id: str = None) -> list[dict]:
                 continue
         
         log.info(f"✅ Fetched {len(all_articles)} raw articles from {len(sampled_sources)} sources")
-        
+
+        # Apply noise filter
+        all_articles = filter_noise_articles(all_articles)
+
     except Exception as e:
         log.error(f"fetch_all_sources failed: {e}")
-    
+
     return all_articles
 
 
@@ -1120,12 +1208,16 @@ def fetch_content_for_user(
     
     # Ephemeride (historical fact)
     result["ephemeride"] = get_best_ephemeride_fact()
-    
-    log.info("Sourcing complete", 
+
+    # Apply noise filter to both levels
+    result["level1_library"] = filter_noise_articles(result["level1_library"])
+    result["level2_backup"] = filter_noise_articles(result["level2_backup"])
+
+    log.info("Sourcing complete",
              level1=len(result["level1_library"]),
              level2=len(result["level2_backup"]),
              has_ephemeride=result["ephemeride"] is not None)
-    
+
     return result
 
 

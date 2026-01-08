@@ -1845,6 +1845,40 @@ def signal_feedback(signal_id: str):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# ============================================
+# V18: SEGMENT FEEDBACK (for podcast dashboard)
+# ============================================
+
+@app.route("/api/segments/<segment_id>/feedback", methods=["POST"])
+def segment_feedback(segment_id: str):
+    """
+    V18: Record feedback on a podcast segment.
+    Used by the new podcast dashboard.
+    """
+    try:
+        data = request.get_json() or {}
+        feedback = data.get("feedback")  # "up" or "down"
+
+        if feedback not in ["up", "down"]:
+            return jsonify({"success": False, "error": "Invalid feedback. Use 'up' or 'down'"}), 400
+
+        # Save to segment_feedback table
+        try:
+            supabase.table("segment_feedback").insert({
+                "segment_id": segment_id,
+                "feedback": feedback
+            }).execute()
+        except Exception as db_error:
+            # Table might not exist yet, log but don't fail
+            log.warning(f"Could not save segment feedback: {db_error}")
+
+        return jsonify({"success": True, "segment_id": segment_id, "feedback": feedback})
+
+    except Exception as e:
+        log.error(f"Segment feedback error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/signals/stats", methods=["GET"])
 def signal_stats():
     """Get signal statistics."""
