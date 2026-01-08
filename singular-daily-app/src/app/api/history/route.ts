@@ -41,10 +41,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Failed to fetch history" }, { status: 500 });
     }
 
-    // Format response
-    const history = episodes?.map(ep => ({
+    // Format response - return both formats for compatibility
+    const formattedEpisodes = episodes?.map(ep => ({
       id: ep.id,
       title: ep.title,
+      audio_url: ep.audio_url,
+      audio_duration: ep.audio_duration,
+      sources_data: ep.sources_data || [],
+      created_at: ep.created_at,
+      // Legacy format
       audioUrl: ep.audio_url,
       duration: ep.audio_duration,
       sourcesCount: ep.sources_data?.length || 0,
@@ -57,7 +62,10 @@ export async function GET(request: Request) {
       })
     })) || [];
 
-    return NextResponse.json({ history });
+    return NextResponse.json({
+      episodes: formattedEpisodes,
+      history: formattedEpisodes // Legacy compatibility
+    });
 
   } catch (error) {
     console.error("History API error:", error);

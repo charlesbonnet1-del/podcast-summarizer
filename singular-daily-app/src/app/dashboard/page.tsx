@@ -1,232 +1,190 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Zap,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  RefreshCw,
+  Loader2,
+  Headphones,
   ThumbsUp,
   ThumbsDown,
-  Target,
-  RefreshCw,
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  TrendingUp,
-  AlertCircle,
-  Bell,
-  FileText,
-  BarChart3
+  Clock,
+  Calendar,
+  Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 // ============================================
 // TYPES
 // ============================================
 
-interface Signal {
+interface Segment {
   id: string;
   topic: string;
   title: string;
-  severity: "breaking" | "alert" | "digest" | "log";
-  total_score: number;
-  velocity_score: number;
-  velocity_details: {
-    baseline: number;
-    current: number;
-    velocity: number;
-  };
-  source_mix: {
-    authority: number;
-    generalist: number;
-    corporate: number;
-  };
-  score_breakdown: Record<string, number>;
-  status: string;
-  detected_at: string;
-  hook?: string;
-  thesis?: string;
-  antithesis?: string;
-  key_data?: string;
-  context?: string;
-  articles?: Array<{
-    title: string;
-    url: string;
-    source: string;
-  }>;
-  clusters?: {
-    name: string;
-    article_count: number;
-    source_names: string[];
-  };
-  user_feedback?: string;
+  summary: string;
+  script?: string;
+  sources: { title: string; url: string; domain: string }[];
+  start_time?: number;
+  end_time?: number;
+  user_feedback?: "up" | "down" | null;
 }
 
-interface Stats {
-  total_signals: number;
-  by_topic: Record<string, number>;
-  by_severity: Record<string, number>;
-  feedback: {
-    useful: number;
-    not_useful: number;
-    acted_on: number;
-    no_feedback: number;
-  };
-  precision: number;
-  thresholds: Array<{
-    topic: string;
-    min_velocity: number;
-    min_score: number;
-  }>;
+interface Episode {
+  id: string;
+  title: string;
+  audio_url: string;
+  audio_duration: number | null;
+  summary_text?: string;
+  sources_data?: { title: string; url: string; domain: string }[];
+  segments?: Segment[];
+  created_at: string;
 }
 
 // ============================================
 // CONSTANTS
 // ============================================
 
-const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "https://podcast-summarizeredaily-bot.onrender.com";
-
-const SEVERITY_CONFIG = {
-  breaking: {
-    color: "text-red-500",
-    bg: "bg-red-500/10",
-    border: "border-red-500/30",
-    icon: AlertCircle,
-    label: "BREAKING"
-  },
-  alert: {
-    color: "text-orange-500",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/30",
-    icon: Bell,
-    label: "ALERT"
-  },
-  digest: {
-    color: "text-yellow-500",
-    bg: "bg-yellow-500/10",
-    border: "border-yellow-500/30",
-    icon: FileText,
-    label: "DIGEST"
-  },
-  log: {
-    color: "text-gray-500",
-    bg: "bg-gray-500/10",
-    border: "border-gray-500/30",
-    icon: FileText,
-    label: "LOG"
-  }
-};
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
 const TOPIC_COLORS: Record<string, string> = {
   ia: "bg-purple-500",
   macro: "bg-blue-500",
   asia: "bg-green-500",
+  crypto: "bg-orange-500",
+  cyber: "bg-red-500",
+  space: "bg-indigo-500",
+  health: "bg-pink-500",
+  energy: "bg-yellow-500",
+  deals: "bg-emerald-500",
   general: "bg-gray-500"
 };
 
 // ============================================
-// SIGNAL CARD COMPONENT
+// FORMAT HELPERS
 // ============================================
 
-function SignalCard({ 
-  signal, 
-  onFeedback 
-}: { 
-  signal: Signal; 
-  onFeedback: (id: string, rating: string) => void;
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("fr-FR", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+// ============================================
+// SEGMENT CARD COMPONENT
+// ============================================
+
+function SegmentCard({
+  segment,
+  isActive,
+  onFeedback,
+  onSeek
+}: {
+  segment: Segment;
+  isActive: boolean;
+  onFeedback: (id: string, feedback: "up" | "down") => void;
+  onSeek?: (time: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [feedbackGiven, setFeedbackGiven] = useState<string | null>(null);
-  
-  const severity = SEVERITY_CONFIG[signal.severity];
-  const SeverityIcon = severity.icon;
-  
-  const timeAgo = getTimeAgo(signal.detected_at);
-  
-  const handleFeedback = (rating: string) => {
-    setFeedbackGiven(rating);
-    onFeedback(signal.id, rating);
+  const [feedbackGiven, setFeedbackGiven] = useState<"up" | "down" | null>(
+    segment.user_feedback || null
+  );
+
+  const handleFeedback = (feedback: "up" | "down") => {
+    setFeedbackGiven(feedback);
+    onFeedback(segment.id, feedback);
   };
-  
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
         "rounded-xl border p-4 transition-all",
-        severity.bg,
-        severity.border
+        isActive
+          ? "border-primary bg-primary/5"
+          : "border-border bg-card hover:border-primary/30"
       )}
     >
       {/* Header */}
       <div className="flex items-start gap-3">
-        {/* Severity badge */}
-        <div className={cn(
-          "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium",
-          severity.bg,
-          severity.color
-        )}>
-          <SeverityIcon className="w-3.5 h-3.5" />
-          {severity.label}
-        </div>
-        
         {/* Topic badge */}
-        <div className={cn(
-          "px-2 py-1 rounded-lg text-xs font-medium text-white",
-          TOPIC_COLORS[signal.topic] || "bg-gray-500"
-        )}>
-          {signal.topic.toUpperCase()}
+        <div
+          className={cn(
+            "px-2 py-1 rounded-lg text-xs font-medium text-white",
+            TOPIC_COLORS[segment.topic] || TOPIC_COLORS.general
+          )}
+        >
+          {segment.topic.toUpperCase()}
         </div>
-        
-        {/* Score */}
-        <div className="ml-auto flex items-center gap-1 text-sm font-medium">
-          <BarChart3 className="w-4 h-4" />
-          {signal.total_score}
-        </div>
+
+        {/* Seek button */}
+        {segment.start_time !== undefined && onSeek && (
+          <button
+            onClick={() => onSeek(segment.start_time!)}
+            className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
+          >
+            <Clock className="w-3 h-3" />
+            {formatDuration(segment.start_time)}
+          </button>
+        )}
+
+        {/* Active indicator */}
+        {isActive && (
+          <div className="ml-auto flex items-center gap-1 text-xs text-primary">
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            En cours
+          </div>
+        )}
       </div>
-      
+
       {/* Title */}
-      <h3 className="text-lg font-semibold mt-3 text-foreground">
-        {signal.title}
-      </h3>
-      
-      {/* Meta */}
-      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <TrendingUp className="w-4 h-4" />
-          {signal.velocity_score?.toFixed(1)}x velocity
-        </span>
-        <span>
-          {signal.source_mix?.authority || 0} auth + {signal.source_mix?.generalist || 0} gen
-        </span>
-        <span>{timeAgo}</span>
-      </div>
-      
-      {/* Hook/Summary */}
-      {signal.hook && (
-        <p className="mt-3 text-sm text-muted-foreground italic">
-          "{signal.hook}"
-        </p>
-      )}
-      
+      <h4 className="font-medium mt-2 text-foreground">{segment.title}</h4>
+
+      {/* Summary */}
+      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+        {segment.summary}
+      </p>
+
       {/* Expand toggle */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 mt-3 text-sm text-primary hover:underline"
+        className="flex items-center gap-1 mt-2 text-xs text-primary hover:underline"
       >
         {expanded ? (
           <>
-            <ChevronUp className="w-4 h-4" />
-            Masquer les détails
+            <ChevronUp className="w-3 h-3" />
+            Masquer
           </>
         ) : (
           <>
-            <ChevronDown className="w-4 h-4" />
-            Voir les détails
+            <ChevronDown className="w-3 h-3" />
+            Voir les sources
           </>
         )}
       </button>
-      
-      {/* Expanded details */}
+
+      {/* Expanded content */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -235,141 +193,61 @@ function SignalCard({
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="mt-4 pt-4 border-t border-border space-y-4">
-              {/* Thesis/Antithesis */}
-              {signal.thesis && (
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">Thèse</h4>
-                  <p className="text-sm text-muted-foreground mt-1">{signal.thesis}</p>
-                </div>
-              )}
-              
-              {signal.antithesis && (
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">Antithèse</h4>
-                  <p className="text-sm text-muted-foreground mt-1">{signal.antithesis}</p>
-                </div>
-              )}
-              
-              {/* Context */}
-              {signal.context && (
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">Contexte</h4>
-                  <p className="text-sm text-muted-foreground mt-1">{signal.context}</p>
-                </div>
-              )}
-              
-              {/* Key data */}
-              {signal.key_data && (
-                <div>
-                  <h4 className="text-sm font-medium text-foreground">Données clés</h4>
-                  <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">{signal.key_data}</p>
-                </div>
-              )}
-              
-              {/* Articles sources */}
-              {signal.articles && signal.articles.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-foreground mb-2">Articles sources ({signal.articles.length})</h4>
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {signal.articles.map((article, i) => (
-                      <a
-                        key={i}
-                        href={article.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs p-2 bg-muted rounded hover:bg-muted/80"
-                      >
-                        <span className="text-muted-foreground flex-shrink-0">{article.source}</span>
-                        <span className="truncate flex-1">{article.title}</span>
-                        <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Score breakdown */}
-              <div>
-                <h4 className="text-sm font-medium text-foreground mb-2">Score breakdown</h4>
-                <div className="grid grid-cols-5 gap-2">
-                  {Object.entries(signal.score_breakdown || {}).map(([key, value]) => (
-                    <div key={key} className="text-center p-2 bg-muted rounded-lg">
-                      <div className="text-lg font-semibold">{Math.round(value as number)}</div>
-                      <div className="text-xs text-muted-foreground capitalize">{key}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Sources */}
-              {signal.clusters?.source_names && (
-                <div>
-                  <h4 className="text-sm font-medium text-foreground mb-2">Sources ({signal.clusters.article_count} articles)</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {signal.clusters.source_names.map((source: string) => (
-                      <span key={source} className="px-2 py-1 bg-muted rounded text-xs">
-                        {source}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="mt-3 pt-3 border-t border-border space-y-2">
+              {segment.sources.map((source, i) => (
+                <a
+                  key={i}
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-xs p-2 bg-muted rounded hover:bg-muted/80"
+                >
+                  <span className="text-muted-foreground flex-shrink-0">
+                    {source.domain}
+                  </span>
+                  <span className="truncate flex-1">{source.title}</span>
+                  <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                </a>
+              ))}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       {/* Feedback buttons */}
-      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
-        <span className="text-sm text-muted-foreground mr-2">Ce signal est-il utile ?</span>
-        
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+        <span className="text-xs text-muted-foreground mr-auto">
+          Ce segment est-il utile ?
+        </span>
+
         <button
-          onClick={() => handleFeedback("useful")}
+          onClick={() => handleFeedback("up")}
           disabled={feedbackGiven !== null}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all",
-            feedbackGiven === "useful"
+            "flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all",
+            feedbackGiven === "up"
               ? "bg-green-500 text-white"
               : feedbackGiven !== null
               ? "bg-muted text-muted-foreground opacity-50"
               : "bg-muted hover:bg-green-500/20 hover:text-green-500"
           )}
         >
-          <ThumbsUp className="w-4 h-4" />
-          Utile
+          <ThumbsUp className="w-3 h-3" />
         </button>
-        
+
         <button
-          onClick={() => handleFeedback("not_useful")}
+          onClick={() => handleFeedback("down")}
           disabled={feedbackGiven !== null}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all",
-            feedbackGiven === "not_useful"
+            "flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all",
+            feedbackGiven === "down"
               ? "bg-red-500 text-white"
               : feedbackGiven !== null
               ? "bg-muted text-muted-foreground opacity-50"
               : "bg-muted hover:bg-red-500/20 hover:text-red-500"
           )}
         >
-          <ThumbsDown className="w-4 h-4" />
-          Pas pertinent
-        </button>
-        
-        <button
-          onClick={() => handleFeedback("acted_on")}
-          disabled={feedbackGiven !== null}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all",
-            feedbackGiven === "acted_on"
-              ? "bg-primary text-white"
-              : feedbackGiven !== null
-              ? "bg-muted text-muted-foreground opacity-50"
-              : "bg-muted hover:bg-primary/20 hover:text-primary"
-          )}
-        >
-          <Target className="w-4 h-4" />
-          J'ai agi
+          <ThumbsDown className="w-3 h-3" />
         </button>
       </div>
     </motion.div>
@@ -377,220 +255,471 @@ function SignalCard({
 }
 
 // ============================================
-// STATS CARD COMPONENT
+// EPISODE CARD COMPONENT
 // ============================================
 
-function StatsCard({ stats }: { stats: Stats | null }) {
-  if (!stats) return null;
-  
+function EpisodeCard({
+  episode,
+  isSelected,
+  onClick
+}: {
+  episode: Episode;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <div className="p-4 rounded-xl bg-card border border-border">
-        <div className="text-2xl font-bold text-foreground">{stats.total_signals}</div>
-        <div className="text-sm text-muted-foreground">Signaux (30j)</div>
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left",
+        isSelected
+          ? "border-primary bg-primary/5"
+          : "border-border bg-card hover:border-primary/30"
+      )}
+    >
+      <div
+        className={cn(
+          "w-12 h-12 rounded-lg flex items-center justify-center shrink-0",
+          isSelected ? "bg-primary text-primary-foreground" : "bg-muted"
+        )}
+      >
+        <Play className="w-5 h-5" />
       </div>
-      
-      <div className="p-4 rounded-xl bg-card border border-border">
-        <div className="text-2xl font-bold text-foreground">{stats.precision}%</div>
-        <div className="text-sm text-muted-foreground">Précision</div>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-foreground truncate">{episode.title}</p>
+        <p className="text-xs text-muted-foreground flex items-center gap-2">
+          <Calendar className="w-3 h-3" />
+          {formatDate(episode.created_at)}
+          {episode.audio_duration && (
+            <>
+              <Clock className="w-3 h-3 ml-2" />
+              {formatDuration(episode.audio_duration)}
+            </>
+          )}
+        </p>
       </div>
-      
-      <div className="p-4 rounded-xl bg-card border border-border">
-        <div className="text-2xl font-bold text-green-500">{stats.feedback.acted_on}</div>
-        <div className="text-sm text-muted-foreground">Actions prises</div>
-      </div>
-      
-      <div className="p-4 rounded-xl bg-card border border-border">
-        <div className="text-2xl font-bold text-foreground">
-          {stats.feedback.useful + stats.feedback.acted_on}
-        </div>
-        <div className="text-sm text-muted-foreground">Signaux utiles</div>
-      </div>
-    </div>
+    </button>
   );
 }
 
 // ============================================
-// HELPER FUNCTIONS
+// MAIN DASHBOARD COMPONENT
 // ============================================
 
-function getTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  
-  if (diffMins < 60) return `il y a ${diffMins}min`;
-  if (diffHours < 24) return `il y a ${diffHours}h`;
-  return `il y a ${diffDays}j`;
-}
-
-// ============================================
-// MAIN PAGE COMPONENT
-// ============================================
-
-export default function SignalsDashboard() {
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+export default function PodcastDashboard() {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
   const [loading, setLoading] = useState(true);
-  const [detecting, setDetecting] = useState(false);
-  const [filter, setFilter] = useState<string>("all");
-  
-  // Fetch signals
-  const fetchSignals = async () => {
+  const [generating, setGenerating] = useState(false);
+
+  // Audio state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState<number>(-1);
+
+  // Fetch episodes
+  const fetchEpisodes = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/signals?limit=50`);
+      const res = await fetch("/api/history");
       const data = await res.json();
-      if (data.success) {
-        setSignals(data.signals || []);
+      if (data.episodes) {
+        setEpisodes(data.episodes);
+        if (data.episodes.length > 0 && !currentEpisode) {
+          setCurrentEpisode(data.episodes[0]);
+        }
       }
     } catch (error) {
-      console.error("Error fetching signals:", error);
+      console.error("Error fetching episodes:", error);
+    } finally {
+      setLoading(false);
     }
   };
-  
-  // Fetch stats
-  const fetchStats = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/signals/stats`);
-      const data = await res.json();
-      if (data.success) {
-        setStats(data.stats);
-      }
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    }
-  };
-  
+
   // Initial load
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      await Promise.all([fetchSignals(), fetchStats()]);
-      setLoading(false);
-    };
-    load();
+    fetchEpisodes();
   }, []);
-  
-  // Trigger detection
-  const handleDetect = async () => {
-    setDetecting(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/lab/detect-and-save`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ topics: ["ia", "macro", "asia"], max_age_days: 3 })
-      });
-      const data = await res.json();
-      if (data.success) {
-        // Show detection result
-        alert(`✅ Détection terminée!\n\n${data.saved_count} signaux sauvegardés\n${data.rejected_count} clusters rejetés`);
-        // Refresh signals
-        await fetchSignals();
-        await fetchStats();
-      } else {
-        alert(`❌ Erreur: ${data.error}`);
+
+  // Audio event handlers
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+
+      // Update active segment based on time
+      if (currentEpisode?.segments) {
+        const idx = currentEpisode.segments.findIndex(
+          (seg) =>
+            seg.start_time !== undefined &&
+            seg.end_time !== undefined &&
+            audio.currentTime >= seg.start_time &&
+            audio.currentTime < seg.end_time
+        );
+        setActiveSegmentIndex(idx);
       }
-    } catch (error) {
-      console.error("Error detecting:", error);
-      alert("❌ Erreur de détection");
+    };
+
+    const handleLoadedMetadata = () => setDuration(audio.duration);
+    const handleEnded = () => setIsPlaying(false);
+
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("ended", handleEnded);
+
+    return () => {
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("ended", handleEnded);
+    };
+  }, [currentEpisode]);
+
+  // Controls
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const seek = (seconds: number) => {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = Math.max(
+      0,
+      Math.min(audioRef.current.currentTime + seconds, duration)
+    );
+  };
+
+  const seekTo = (time: number) => {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = time;
+  };
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = (e.clientX - rect.left) / rect.width;
+    audioRef.current.currentTime = percent * duration;
+  };
+
+  const toggleMute = () => {
+    if (!audioRef.current) return;
+    audioRef.current.muted = !isMuted;
+    setIsMuted(!isMuted);
+  };
+
+  // Generate podcast
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/generate", { method: "POST" });
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success(
+          "Génération lancée ! Votre podcast sera prêt dans quelques minutes."
+        );
+        // Poll for completion
+        setTimeout(() => fetchEpisodes(), 30000);
+      } else {
+        toast.error(data.error || "Erreur lors de la génération");
+      }
+    } catch {
+      toast.error("Erreur de connexion");
     } finally {
-      setDetecting(false);
+      setGenerating(false);
     }
   };
-  
-  // Send feedback
-  const handleFeedback = async (signalId: string, rating: string) => {
+
+  // Segment feedback
+  const handleSegmentFeedback = async (
+    segmentId: string,
+    feedback: "up" | "down"
+  ) => {
     try {
-      await fetch(`${API_BASE}/api/signals/${signalId}/feedback`, {
+      await fetch(`${API_BASE}/api/segments/${segmentId}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating })
+        body: JSON.stringify({ feedback })
       });
-    } catch (error) {
-      console.error("Error sending feedback:", error);
+      toast.success("Merci pour votre retour !");
+    } catch {
+      console.error("Error sending feedback");
     }
   };
-  
-  // Filter signals
-  const filteredSignals = signals.filter(s => {
-    if (filter === "all") return true;
-    return s.severity === filter;
-  });
-  
+
+  // Select episode
+  const selectEpisode = (episode: Episode) => {
+    setCurrentEpisode(episode);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setActiveSegmentIndex(-1);
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Mock segments if not present (for demo)
+  const segments: Segment[] = currentEpisode?.segments || [
+    {
+      id: "1",
+      topic: "ia",
+      title: "OpenAI lance GPT-5",
+      summary:
+        "La nouvelle version du modèle phare d'OpenAI promet des avancées majeures en raisonnement et multimodalité.",
+      sources: [
+        { title: "OpenAI announces GPT-5", url: "#", domain: "techcrunch.com" }
+      ]
+    },
+    {
+      id: "2",
+      topic: "macro",
+      title: "La Fed maintient ses taux",
+      summary:
+        "Jerome Powell annonce une pause dans le cycle de hausse, les marchés réagissent positivement.",
+      sources: [
+        {
+          title: "Fed holds rates steady",
+          url: "#",
+          domain: "bloomberg.com"
+        }
+      ]
+    },
+    {
+      id: "3",
+      topic: "asia",
+      title: "Alibaba se restructure",
+      summary:
+        "Le géant chinois annonce une scission en 6 entités indépendantes pour favoriser l'innovation.",
+      sources: [
+        { title: "Alibaba splits into 6 units", url: "#", domain: "scmp.com" }
+      ]
+    }
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Zap className="w-6 h-6 text-primary" />
-            Signals
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Détection automatique d'anomalies et tendances
-          </p>
-        </div>
-        
-        <button
-          onClick={handleDetect}
-          disabled={detecting}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-all"
-        >
-          <RefreshCw className={cn("w-4 h-4", detecting && "animate-spin")} />
-          {detecting ? "Détection..." : "Détecter"}
-        </button>
-      </div>
-      
-      {/* Stats */}
-      <StatsCard stats={stats} />
-      
-      {/* Filters */}
-      <div className="flex items-center gap-2">
-        {["all", "breaking", "alert", "digest"].map((f) => (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-6xl mx-auto p-6 space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <Zap className="w-6 h-6 text-primary" />
+              Keernel
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Votre briefing quotidien en audio
+            </p>
+          </div>
+
           <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              "px-3 py-1.5 rounded-lg text-sm transition-all",
-              filter === f
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            )}
+            onClick={handleGenerate}
+            disabled={generating}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-all"
           >
-            {f === "all" ? "Tous" : f.charAt(0).toUpperCase() + f.slice(1)}
+            {generating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Génération...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" />
+                Générer
+              </>
+            )}
           </button>
-        ))}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main Player Column */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Player Card */}
+              <div className="bg-card rounded-2xl border border-border p-6 space-y-6">
+                {currentEpisode ? (
+                  <>
+                    {/* Audio element */}
+                    <audio
+                      ref={audioRef}
+                      src={currentEpisode.audio_url}
+                      preload="metadata"
+                    />
+
+                    {/* Episode info */}
+                    <div className="flex items-start gap-4">
+                      <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
+                        <Headphones className="w-10 h-10 text-primary-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-xl font-semibold text-foreground">
+                          {currentEpisode.title}
+                        </h2>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {formatDate(currentEpisode.created_at)}
+                          {currentEpisode.audio_duration && (
+                            <span className="ml-2">
+                              • {formatDuration(currentEpisode.audio_duration)}
+                            </span>
+                          )}
+                        </p>
+                        {currentEpisode.summary_text && (
+                          <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                            {currentEpisode.summary_text}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="space-y-2">
+                      <div
+                        className="h-2 bg-muted rounded-full cursor-pointer overflow-hidden"
+                        onClick={handleProgressClick}
+                      >
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{formatDuration(currentTime)}</span>
+                        <span>{formatDuration(duration)}</span>
+                      </div>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="flex items-center justify-center gap-4">
+                      <button
+                        onClick={() => seek(-15)}
+                        className="p-3 rounded-full hover:bg-muted transition-colors"
+                      >
+                        <SkipBack className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        onClick={togglePlay}
+                        className="p-4 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                      >
+                        {isPlaying ? (
+                          <Pause className="w-6 h-6" />
+                        ) : (
+                          <Play className="w-6 h-6 ml-0.5" />
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => seek(30)}
+                        className="p-3 rounded-full hover:bg-muted transition-colors"
+                      >
+                        <SkipForward className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        onClick={toggleMute}
+                        className="p-3 rounded-full hover:bg-muted transition-colors ml-4"
+                      >
+                        {isMuted ? (
+                          <VolumeX className="w-5 h-5" />
+                        ) : (
+                          <Volume2 className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  /* No episode state */
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                      <Headphones className="w-10 h-10 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-medium text-foreground mb-2">
+                      Pas encore de podcast
+                    </h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Générez votre premier briefing audio personnalisé
+                    </p>
+                    <button
+                      onClick={handleGenerate}
+                      disabled={generating}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-full font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    >
+                      {generating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Génération...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          Générer un podcast
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Segments */}
+              {currentEpisode && segments.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Segments ({segments.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {segments.map((segment, idx) => (
+                      <SegmentCard
+                        key={segment.id}
+                        segment={segment}
+                        isActive={idx === activeSegmentIndex}
+                        onFeedback={handleSegmentFeedback}
+                        onSeek={seekTo}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sidebar - Episode History */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Épisodes
+              </h3>
+
+              {episodes.length === 0 ? (
+                <div className="text-center py-8 bg-card rounded-xl border border-border">
+                  <Headphones className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Aucun épisode
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {episodes.map((episode) => (
+                    <EpisodeCard
+                      key={episode.id}
+                      episode={episode}
+                      isSelected={currentEpisode?.id === episode.id}
+                      onClick={() => selectEpisode(episode)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-      
-      {/* Signals list */}
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : filteredSignals.length === 0 ? (
-        <div className="text-center py-12">
-          <Zap className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-foreground">Aucun signal</h3>
-          <p className="text-muted-foreground mt-1">
-            Cliquez sur "Détecter" pour lancer une analyse
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredSignals.map((signal) => (
-            <SignalCard
-              key={signal.id}
-              signal={signal}
-              onFeedback={handleFeedback}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
