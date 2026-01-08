@@ -129,29 +129,32 @@ REPORT_RETENTION_DAYS = 365
 
 # Format configurations - OPTIMIZED FOR DENSITY
 # V17: Added segment duration constraints (no article limits)
+# V18: Increased word counts - scripts were too short
 FORMAT_CONFIG = {
     "flash": {
         "duration_minutes": 4,
-        "total_words": 1000,           # Target ~4-5 min with segments
+        "total_words": 1200,           # Target ~4-5 min with segments
         "max_segments": 4,             # V17: 3-4 segments
         "min_segments": 3,
-        # V17: Segment duration control (replaces article limits)
-        "segment_target_seconds": 45,  # Target ~45s per segment
-        "segment_max_seconds": 60,     # Hard max 60s (can stretch for major events)
-        "segment_target_words": 110,   # ~45s at 150 WPM
-        "segment_max_words": 150,      # ~60s at 150 WPM
-        "style": "ultra-concis et percutant"
+        # V18: Increased segment duration - was too short
+        "segment_target_seconds": 60,  # Target ~60s per segment
+        "segment_max_seconds": 90,     # Hard max 90s (can stretch for major events)
+        "segment_target_words": 180,   # ~60s at 180 WPM (dialogue pace)
+        "segment_max_words": 250,      # ~90s at 180 WPM
+        "segment_min_words": 150,      # V18: Minimum to prevent too-short scripts
+        "style": "concis mais informatif"
     },
     "digest": {
         "duration_minutes": 15,
-        "total_words": 2800,
+        "total_words": 3500,
         "max_segments": 8,             # V17: 6-8 segments
         "min_segments": 6,
-        # V17: Segment duration control (replaces article limits)
-        "segment_target_seconds": 90,  # Target ~90s per segment
-        "segment_max_seconds": 120,    # Hard max 120s (can stretch for major events)
-        "segment_target_words": 225,   # ~90s at 150 WPM
-        "segment_max_words": 300,      # ~120s at 150 WPM
+        # V18: Increased segment duration - was too short
+        "segment_target_seconds": 120, # Target ~120s per segment
+        "segment_max_seconds": 150,    # Hard max 150s (can stretch for major events)
+        "segment_target_words": 350,   # ~120s at 180 WPM (dialogue pace)
+        "segment_max_words": 450,      # ~150s at 180 WPM
+        "segment_min_words": 300,      # V18: Minimum to prevent too-short scripts
         "style": "approfondi et analytique"
     }
 }
@@ -162,6 +165,43 @@ def get_podcast_config(format_type: str = "flash") -> dict:
     config = FORMAT_CONFIG.get(format_type, FORMAT_CONFIG["flash"]).copy()
     config["target_minutes"] = config.get("duration_minutes", 4)
     return config
+
+
+def validate_script_length(script: str, min_words: int = 100, target_words: int = 200) -> dict:
+    """
+    V18: Validate script meets minimum word count requirements.
+
+    Args:
+        script: The generated script text
+        min_words: Absolute minimum word count
+        target_words: Target word count (for logging)
+
+    Returns:
+        dict with:
+        - is_valid: True if meets minimum
+        - word_count: Actual word count
+        - meets_target: True if >= target
+        - shortfall: How many words short of target (0 if meets target)
+    """
+    if not script:
+        return {
+            "is_valid": False,
+            "word_count": 0,
+            "meets_target": False,
+            "shortfall": target_words
+        }
+
+    word_count = len(script.split())
+    is_valid = word_count >= min_words
+    meets_target = word_count >= target_words
+    shortfall = max(0, target_words - word_count)
+
+    return {
+        "is_valid": is_valid,
+        "word_count": word_count,
+        "meets_target": meets_target,
+        "shortfall": shortfall
+    }
 
 # ============================================
 # TRANSITIONS BETWEEN SEGMENTS (Cached)
@@ -420,8 +460,10 @@ def get_or_create_transition(topic: str, vertical: str = None) -> Optional[dict]
 # ============================================
 
 # V14: Optimized prompt for pre-synthesized clusters (with thesis/antithesis)
-DIALOGUE_CLUSTER_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
+# V18: Strengthened word count requirements
+DIALOGUE_CLUSTER_PROMPT = """Tu es scripteur de podcast professionnel. Écris un DIALOGUE COMPLET de **MINIMUM {word_count} mots** entre deux hôtes.
 {topic_intention}
+
 ## SYNTHÈSE À TRANSFORMER EN DIALOGUE
 **Sujet**: {theme}
 **Accroche**: {hook}
@@ -438,24 +480,25 @@ DIALOGUE_CLUSTER_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {
 ⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
 ⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
 ⚠️ STYLE DENSE: Chaque phrase apporte de l'information
+⚠️ **LONGUEUR OBLIGATOIRE: MINIMUM {word_count} MOTS** - Un script trop court sera rejeté
 
 ## FORMAT
 [B]
-(expose la thèse avec données)
+(expose la thèse avec données - 3-4 phrases minimum)
 
 [A]
-(apporte l'antithèse ou nuance)
+(apporte l'antithèse ou nuance - 3-4 phrases minimum)
 
 ## STRUCTURE OBLIGATOIRE
-1. [B] ouvre avec l'accroche et la thèse principale + données
-2. [A] challenge avec l'antithèse ou demande une précision
-3. [B] répond avec des données complémentaires
-4. [A] apporte une nuance finale ou perspective
-5. [B] CONCLUT avec une synthèse
+1. [B] ouvre avec l'accroche et la thèse principale + données (40-60 mots)
+2. [A] challenge avec l'antithèse ou demande une précision (40-60 mots)
+3. [B] répond avec des données complémentaires (40-60 mots)
+4. [A] apporte une nuance finale ou perspective (40-60 mots)
+5. [B] CONCLUT avec une synthèse (40-60 mots)
 
-Minimum 6 répliques. Cite les sources naturellement.
+**Minimum 6 répliques substantielles.** Cite les sources naturellement.
 
-## GÉNÈRE LE DIALOGUE ({word_count} mots):"""
+## GÉNÈRE LE DIALOGUE COMPLET (MINIMUM {word_count} mots):"""
 
 
 def get_prompt_from_db(prompt_name: str, default: str) -> str:
@@ -494,7 +537,8 @@ def get_prompt_from_db(prompt_name: str, default: str) -> str:
 DIALOGUE_SEGMENT_PROMPT = DIALOGUE_CLUSTER_PROMPT  # Redirect to cluster prompt
 
 # Multi-source prompt - kept because it uses different variables than cluster
-DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE de {word_count} mots entre deux hôtes.
+# V18: Strengthened word count requirements
+DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast professionnel. Écris un DIALOGUE COMPLET de **MINIMUM {word_count} mots** entre deux hôtes.
 {topic_intention}
 
 ## SOURCES ({source_count} articles sur ce sujet)
@@ -509,25 +553,26 @@ DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast. Écris un DIALOGUE
 ⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
 ⚠️ STYLE DENSE: Chaque phrase apporte de l'information
 ⚠️ CITE LES SOURCES: "Selon [source]...", "D'après [source]..."
+⚠️ **LONGUEUR OBLIGATOIRE: MINIMUM {word_count} MOTS** - Un script trop court sera rejeté
 
 ## FORMAT
 [B]
-(synthétise les sources avec données)
+(synthétise les sources avec données - 3-4 phrases minimum)
 
 [A]
-(challenge ou met en perspective)
+(challenge ou met en perspective - 3-4 phrases minimum)
 
 ## STRUCTURE OBLIGATOIRE
-1. [B] ouvre en synthétisant les faits clés des sources
-2. [A] challenge ou demande une précision
-3. [B] répond avec des données complémentaires
-4. [A] apporte une nuance finale
-5. [B] CONCLUT avec une synthèse
+1. [B] ouvre en synthétisant les faits clés des sources (40-60 mots)
+2. [A] challenge ou demande une précision (40-60 mots)
+3. [B] répond avec des données complémentaires (40-60 mots)
+4. [A] apporte une nuance finale (40-60 mots)
+5. [B] CONCLUT avec une synthèse (40-60 mots)
 
-Minimum 6 répliques. {previous_segment_rule}
+**Minimum 6 répliques substantielles.** {previous_segment_rule}
 {previous_segment_context}
 
-## GÉNÈRE LE DIALOGUE ({word_count} mots, style {style}):"""
+## GÉNÈRE LE DIALOGUE COMPLET (MINIMUM {word_count} mots, style {style}):"""
 
 # Rule to add when there's a previous segment (still used)
 PREVIOUS_SEGMENT_RULE = """⚠️ NON-RÉPÉTITION: Un segment récent sur ce sujet existe. NE RÉPÈTE PAS les informations déjà couvertes. Apporte des NOUVELLES informations ou un nouvel angle."""
@@ -1191,24 +1236,35 @@ def generate_cluster_dialogue_script(
         
         log.info(f"🎯 Generating cluster dialogue: {theme[:50]}...")
         
+        # V18: Get minimum word count from config
+        min_words = FORMAT_CONFIG["digest"].get("segment_min_words", 200)
+
         for attempt in range(3):
             response = groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=word_count * 3
+                max_tokens=word_count * 4  # V18: Increased from 3x to 4x for longer scripts
             )
-            
+
             script = response.choices[0].message.content.strip()
-            
+
             # Validate dialogue format
             has_tags = '[A]' in script or '[B]' in script
-            if has_tags:
-                script = ensure_bob_conclusion(script)
-                log.info(f"✅ Cluster dialogue generated ({len(script)} chars)")
-                return script
-            
-            log.warning(f"⚠️ Cluster dialogue attempt {attempt+1} missing tags, retrying...")
+            if not has_tags:
+                log.warning(f"⚠️ Cluster dialogue attempt {attempt+1} missing tags, retrying...")
+                continue
+
+            # V18: Validate script length
+            length_check = validate_script_length(script, min_words=min_words, target_words=word_count)
+            if not length_check["is_valid"]:
+                log.warning(f"⚠️ Cluster dialogue attempt {attempt+1} too short "
+                           f"({length_check['word_count']} words, need {min_words}), retrying...")
+                continue
+
+            script = ensure_bob_conclusion(script)
+            log.info(f"✅ Cluster dialogue generated ({length_check['word_count']} words, {len(script)} chars)")
+            return script
         
         log.error("❌ Failed to generate valid cluster dialogue after 3 attempts")
         return None
@@ -1322,7 +1378,7 @@ CONTEXTE ENRICHI (sources additionnelles):
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=word_count * 3
+                max_tokens=word_count * 4  # V18: Increased from 3x to 4x for longer scripts
             )
             
             script = response.choices[0].message.content.strip()

@@ -17,7 +17,8 @@ import hashlib
 import numpy as np
 from datetime import datetime, date, timedelta
 from typing import Optional
-from collections import defaultdict
+from collections import defaultdict, Counter
+from urllib.parse import urlparse
 
 import structlog
 from dotenv import load_dotenv
@@ -55,6 +56,11 @@ DISCOVERY_DISTANCE_THRESHOLD = 0.7  # Min distance from dominant clusters
 # V17: Content queue sources stay eligible for 3 days
 MATURATION_WINDOW_HOURS = 72  # 3 days = 72h for content queue clustering
 MERGE_SIMILARITY_THRESHOLD = 0.85  # Cosine similarity for cluster merge
+
+# V18: SOURCE DIVERSITY FILTER
+# Maximum articles from the same domain in a single cluster
+# Prevents "fake clusters" where 3+ articles come from the same site
+MAX_ARTICLES_PER_DOMAIN = 2
 
 # Initialize clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY) if SUPABASE_URL else None
@@ -256,13 +262,113 @@ def cluster_articles(articles: list[dict], min_cluster_size: int = MIN_CLUSTER_S
 def fallback_cluster_by_topic(articles: list[dict]) -> dict:
     """Fallback clustering by topic when HDBSCAN is unavailable."""
     log.warning("⚠️ Using fallback topic-based clustering")
-    
+
     clusters = defaultdict(list)
     for idx, article in enumerate(articles):
         topic = article.get("keyword", article.get("topic", "general"))
         clusters[f"topic_{topic}"].append(idx)
-    
+
     return dict(clusters)
+
+
+# ============================================
+# V18: SOURCE DIVERSITY FILTER
+# ============================================
+
+def get_domain_from_url(url: str) -> str:
+    """Extract domain from URL for diversity checks."""
+    if not url:
+        return "unknown"
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        # Remove 'www.' prefix for consistency
+        if domain.startswith("www."):
+            domain = domain[4:]
+        return domain
+    except Exception:
+        return "unknown"
+
+
+def filter_cluster_by_source_diversity(
+    articles: list[dict],
+    max_per_domain: int = MAX_ARTICLES_PER_DOMAIN
+) -> list[dict]:
+    """
+    V18: Filter articles in a cluster to ensure source diversity.
+
+    Prevents "fake clusters" where 3+ articles from the same site
+    inflate cluster size artificially.
+
+    Args:
+        articles: List of articles in the cluster
+        max_per_domain: Maximum articles allowed from same domain (default 2)
+
+    Returns:
+        Filtered list respecting diversity constraint
+    """
+    if not articles:
+        return []
+
+    domain_counts: Counter = Counter()
+    filtered = []
+
+    # Sort by source_score descending to keep highest quality articles
+    sorted_articles = sorted(
+        articles,
+        key=lambda a: a.get("source_score", a.get("score", 50)),
+        reverse=True
+    )
+
+    for article in sorted_articles:
+        url = article.get("url", "")
+        domain = get_domain_from_url(url)
+
+        if domain_counts[domain] < max_per_domain:
+            filtered.append(article)
+            domain_counts[domain] += 1
+
+    removed_count = len(articles) - len(filtered)
+    if removed_count > 0:
+        log.debug(f"🌐 Diversity filter: Removed {removed_count} duplicate-domain articles")
+
+    return filtered
+
+
+def check_cluster_diversity(articles: list[dict]) -> dict:
+    """
+    V18: Analyze domain diversity in a cluster.
+
+    Returns:
+        Dict with diversity metrics:
+        - is_valid: True if cluster passes diversity check
+        - unique_domains: Number of unique domains
+        - max_domain_count: Max articles from single domain
+        - dominant_domain: The most represented domain
+    """
+    if not articles:
+        return {"is_valid": False, "unique_domains": 0, "max_domain_count": 0}
+
+    domain_counts: Counter = Counter()
+
+    for article in articles:
+        url = article.get("url", "")
+        domain = get_domain_from_url(url)
+        domain_counts[domain] += 1
+
+    unique_domains = len(domain_counts)
+    max_domain_count = max(domain_counts.values()) if domain_counts else 0
+    dominant_domain = domain_counts.most_common(1)[0][0] if domain_counts else "unknown"
+
+    # A cluster is valid if no single domain has > MAX_ARTICLES_PER_DOMAIN
+    is_valid = max_domain_count <= MAX_ARTICLES_PER_DOMAIN
+
+    return {
+        "is_valid": is_valid,
+        "unique_domains": unique_domains,
+        "max_domain_count": max_domain_count,
+        "dominant_domain": dominant_domain
+    }
 
 
 # ============================================
@@ -778,24 +884,39 @@ def select_best_clusters(
     for cluster_id, indices in clusters.items():
         if not indices:
             continue
-        
+
         # Skip articles already in master clusters
         filtered_indices = [i for i in indices if i not in master_indices]
         if not filtered_indices:
             continue
-        
+
         # Get cluster articles
         cluster_articles = [articles[i] for i in filtered_indices]
-        
+
+        # V18: Apply source diversity filter (max 2 articles per domain)
+        diversity_check = check_cluster_diversity(cluster_articles)
+        if not diversity_check["is_valid"]:
+            log.debug(f"🌐 Cluster {cluster_id}: Filtering for diversity "
+                     f"(dominant: {diversity_check['dominant_domain']} with {diversity_check['max_domain_count']} articles)")
+            cluster_articles = filter_cluster_by_source_diversity(cluster_articles)
+            # Update filtered_indices to match filtered articles
+            filtered_indices = [i for i, a in zip(filtered_indices, [articles[j] for j in filtered_indices])
+                              if a in cluster_articles]
+
+        # Skip if cluster is now too small after diversity filter
+        if len(cluster_articles) < MIN_CLUSTER_SIZE:
+            log.debug(f"🌐 Cluster {cluster_id} rejected: Too small after diversity filter ({len(cluster_articles)} articles)")
+            continue
+
         # Compute centroid (mean of all embeddings in cluster)
         embeddings = np.array([a["embedding"] for a in cluster_articles if a.get("embedding")])
         if len(embeddings) == 0:
             continue
         centroid = np.mean(embeddings, axis=0)
-        
+
         # Compute density score (size * avg source authority)
         source_scores = [a.get("source_score", 50) for a in cluster_articles]
-        density = len(filtered_indices) * np.mean(source_scores) / 100
+        density = len(cluster_articles) * np.mean(source_scores) / 100
         
         # Find best matching topic
         best_topic = None
@@ -825,7 +946,7 @@ def select_best_clusters(
         scored_clusters.append({
             "cluster_id": cluster_id,
             "indices": filtered_indices,
-            "article_count": len(filtered_indices),
+            "article_count": len(cluster_articles),  # Use filtered count
             "centroid": centroid,
             "topic": best_topic,
             "topic_similarity": best_similarity,
@@ -834,7 +955,8 @@ def select_best_clusters(
             "representative": representative,
             "articles": cluster_articles,
             "is_master_source": False,
-            "source_score": representative.get("source_score", 50)
+            "source_score": representative.get("source_score", 50),
+            "diversity_metrics": diversity_check  # V18: Include diversity info
         })
     
     # === V14.2: DISCOVERY SCORE ===
