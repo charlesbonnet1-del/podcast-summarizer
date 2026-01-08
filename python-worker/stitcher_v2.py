@@ -1925,7 +1925,8 @@ def create_intro_block(voice_intro_audio, ephemeride_audio, first_dialogue_audio
         (combined_audio, total_duration_seconds)
     """
     from pydub import AudioSegment
-    
+    import gc
+
     VOICE_START = 2000          # Voice intro starts at 2s
     DUCK_DB = -15               # Music volume when voice is playing
     FADE_OUT_DURATION = 2000    # 2s fade out at end of music
@@ -1995,8 +1996,10 @@ def create_intro_block(voice_intro_audio, ephemeride_audio, first_dialogue_audio
     
     # Combine music track
     processed_music = music_solo + ducked_transition + music_ducked + music_fadeout
+    del music, music_solo, ducked_transition, music_ducked, music_fadeout, duck_section
+    gc.collect()
     log.info(f"🎵 Processed music: {len(processed_music)//1000}s")
-    
+
     # === BUILD VOICE TRACK ===
     
     # 2s silence, then voice intro, then ephemeride, then dialogue (back-to-back, no gaps)
@@ -2021,13 +2024,15 @@ def create_intro_block(voice_intro_audio, ephemeride_audio, first_dialogue_audio
         processed_music += AudioSegment.silent(duration=len(voice_track) - len(processed_music))
     
     combined = processed_music.overlay(voice_track)
-    
+    del processed_music, voice_track
+    gc.collect()
+
     # Gentle fade in at start
     combined = combined.fade_in(200)
-    
+
     total_duration = len(combined) // 1000
     log.info(f"✅ Intro block ready: {total_duration}s (music underneath until it ends)")
-    
+
     return combined, total_duration
 
 
@@ -3842,74 +3847,91 @@ def stitch_segments(segments: list, user_id: str, target_date: date) -> Optional
         if intro_block_audio is None:
             log.error("❌ No intro block found")
             return None
-        
-        combined = intro_block_audio
+
+        import gc
+
         log.info(f"🎵 Intro block: {len(intro_block_audio)//1000}s")
-        
+
         # Concatenate dialogue segments
         if not dialogue_audios:
             log.info("📝 No additional dialogue segments (all in intro block)")
+            combined = intro_block_audio
         else:
             transition = AudioSegment.silent(duration=300)
             dialogue_combined = AudioSegment.empty()
-            
+
             for i, audio in enumerate(dialogue_audios):
                 dialogue_combined += audio
                 if i < len(dialogue_audios) - 1:
                     dialogue_combined += transition
-            
+
+            # Free memory from individual audios
+            dialogue_audios.clear()
+            gc.collect()
+
             log.info(f"🎤 Dialogue segments: {len(dialogue_combined)//1000}s")
-            
+
             # Get ambient track and mix under dialogue
             ambient_path = get_random_ambient_track()
-            
+            dialogue_final = None
+
             if ambient_path:
                 try:
                     ambient = AudioSegment.from_mp3(ambient_path)
                     log.info(f"🎵 Ambient track: {len(ambient)//1000}s")
-                    
-                    # Process ambient: lower volume
-                    ambient_processed = ambient + AMBIENT_VOLUME_DB
-                    
-                    # Trim or pad ambient to match dialogue
-                    if len(ambient_processed) > len(dialogue_combined):
-                        ambient_processed = ambient_processed[:len(dialogue_combined)]
-                    
+
+                    # Process ambient: lower volume + trim to dialogue length
+                    dialogue_len = len(dialogue_combined)
+                    ambient = ambient + AMBIENT_VOLUME_DB
+
+                    if len(ambient) > dialogue_len:
+                        ambient = ambient[:dialogue_len]
+
                     # Add fade out
-                    if len(ambient_processed) > AMBIENT_FADE_OUT:
-                        ambient_processed = ambient_processed.fade_out(AMBIENT_FADE_OUT)
-                    
+                    if len(ambient) > AMBIENT_FADE_OUT:
+                        ambient = ambient.fade_out(AMBIENT_FADE_OUT)
+
                     # Pad if shorter than dialogue
-                    if len(ambient_processed) < len(dialogue_combined):
-                        ambient_processed += AudioSegment.silent(
-                            duration=len(dialogue_combined) - len(ambient_processed)
-                        )
-                    
-                    # Mix ambient under dialogue
-                    dialogue_with_ambient = ambient_processed.overlay(dialogue_combined)
+                    if len(ambient) < dialogue_len:
+                        ambient += AudioSegment.silent(duration=dialogue_len - len(ambient))
+
+                    # Mix ambient under dialogue (in-place to save memory)
+                    dialogue_final = ambient.overlay(dialogue_combined)
+                    del ambient
+                    del dialogue_combined
+                    gc.collect()
                     log.info(f"✅ Mixed ambient under dialogue")
-                    
-                    # Add 2s silence then dialogue with ambient
-                    combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
-                    combined += dialogue_with_ambient
-                    
+
                 except Exception as e:
                     log.warning(f"⚠️ Failed to mix ambient: {e}, using dialogue without ambient")
-                    combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
-                    combined += dialogue_combined
+                    dialogue_final = dialogue_combined
+                    del dialogue_combined
+                    gc.collect()
             else:
-                # No ambient available, just add dialogue
-                combined += AudioSegment.silent(duration=AMBIENT_START_DELAY)
-                combined += dialogue_combined
-        
+                # No ambient available, just use dialogue
+                dialogue_final = dialogue_combined
+                del dialogue_combined
+                gc.collect()
+
+            # Combine intro + silence + dialogue
+            combined = intro_block_audio + AudioSegment.silent(duration=AMBIENT_START_DELAY) + dialogue_final
+            del intro_block_audio
+            del dialogue_final
+            gc.collect()
+
         if len(combined) == 0:
             return None
-        
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join(tempfile.gettempdir(), f"podcast_{timestamp}.mp3")
+
+        # Export and free memory immediately
+        final_duration = len(combined) // 1000
         combined.export(output_path, format="mp3", bitrate="192k")
-        
-        log.info(f"✅ Final podcast: {len(combined)//1000}s")
+        del combined
+        gc.collect()
+
+        log.info(f"✅ Final podcast: {final_duration}s")
         
         remote_path = f"{user_id}/keernel_{target_date.isoformat()}_{timestamp}.mp3"
         
