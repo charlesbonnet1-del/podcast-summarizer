@@ -1776,7 +1776,7 @@ def get_or_create_multi_source_segment(
     
     # 3. Generate dialogue with multi-source prompt
     # More words for richer multi-source content
-    word_count = int(format_config["words_per_article"] * 1.5)
+    word_count = int(format_config.get("segment_target_words", 180) * 1.5)
     
     prompt = DIALOGUE_MULTI_SOURCE_PROMPT.format(
         word_count=word_count,
