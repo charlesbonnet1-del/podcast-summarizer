@@ -4,10 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { 
+import {
   Zap,
-  FlaskConical,
-  Archive, 
+  Archive,
   Settings,
   Menu,
   X,
@@ -44,21 +43,15 @@ const NAV_ITEMS = [
     icon: Zap,
     description: "Votre briefing audio"
   },
-  { 
-    href: "/dashboard/lab", 
-    label: "Lab", 
-    icon: FlaskConical,
-    description: "Observer le pipeline"
-  },
-  { 
-    href: "/dashboard/archive", 
-    label: "Archive", 
+  {
+    href: "/dashboard/archive",
+    label: "Archive",
     icon: Archive,
     description: "Historique"
   },
-  { 
-    href: "/dashboard/settings", 
-    label: "Paramètres", 
+  {
+    href: "/dashboard/settings",
+    label: "Paramètres",
     icon: Settings,
     description: "Configurer"
   },
