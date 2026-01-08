@@ -32,7 +32,7 @@ interface Vertical {
 }
 
 // ============================================
-// VERTICALS WITH TOPICS (V19 - 16 Topics)
+// VERTICALS WITH TOPICS (V19 - 15 User-Selectable Topics)
 // ============================================
 
 const VERTICALS: Vertical[] = [
@@ -85,15 +85,8 @@ const VERTICALS: Vertical[] = [
       { id: "attention", label: "Marchés de l'Attention", description: "Algorithmes et plateformes" },
       { id: "persuasion", label: "Stratégies de Persuasion", description: "Nudges et design cognitif" },
     ]
-  },
-  {
-    id: "general",
-    name: "Général",
-    emoji: "📰",
-    topics: [
-      { id: "general", label: "Actualités", description: "Sujets grand public validés" },
-    ]
   }
+  // Note: "general" topic is internal only (for authority source enrichment)
 ];
 
 // ============================================
