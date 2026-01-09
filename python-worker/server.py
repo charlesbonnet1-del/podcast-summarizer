@@ -509,7 +509,6 @@ def cron_fill_queue():
                     "source_name": art.get("source_name", "Unknown"),
                     "source": art.get("source_name", "Unknown"),
                     "keyword": art.get("keyword", art.get("topic_slug", "general")),
-                    "source_score": art.get("score", 50),
                     "status": "pending"
                 }).execute()
                 inserted += 1
@@ -951,7 +950,6 @@ def prompt_lab_add_source():
             "source_name": source_name,
             "source": source_name,
             "keyword": topic,
-            "source_score": 50,
             "status": "pending"
         }).execute()
 
