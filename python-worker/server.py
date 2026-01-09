@@ -1161,6 +1161,144 @@ def prompt_lab_save_prompts():
         return jsonify({"error": str(e)}), 500
 
 
+# ============================================
+# HISTORICAL CONTEXT ENRICHMENT
+# ============================================
+
+def get_historical_context(articles: list, days_back: int = 30) -> dict:
+    """
+    Find related historical articles for trend analysis and enrichment.
+
+    Returns:
+        {
+            "related_articles": [...],  # Top 5 most relevant past articles
+            "trend": "emerging" | "ongoing" | "declining" | "new",
+            "coverage_count": int,       # Total past articles on this topic
+            "first_coverage_date": str,  # When we first covered this
+            "trend_data": [...]          # Weekly article counts
+        }
+    """
+    import requests
+
+    try:
+        if not articles:
+            return {"related_articles": [], "trend": "new", "coverage_count": 0}
+
+        # 1. Build text from current articles for embedding
+        combined_text = ""
+        for art in articles[:3]:  # Use top 3 articles to build query
+            title = art.get("title") or ""
+            desc = art.get("description") or art.get("content") or ""
+            combined_text += f"{title}. {desc[:500]} "
+
+        combined_text = combined_text.strip()[:2000]
+
+        if not combined_text:
+            log.warning("⚠️ No text available for historical context")
+            return {"related_articles": [], "trend": "new", "coverage_count": 0}
+
+        # 2. Get embedding for current cluster
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            log.warning("⚠️ OpenAI API key not configured for historical context")
+            return {"related_articles": [], "trend": "new", "coverage_count": 0}
+
+        response = requests.post(
+            "https://api.openai.com/v1/embeddings",
+            headers={
+                "Authorization": f"Bearer {openai_api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "text-embedding-3-small",
+                "input": combined_text
+            },
+            timeout=10
+        )
+
+        if response.status_code != 200:
+            log.error(f"❌ OpenAI embedding failed: {response.status_code}")
+            return {"related_articles": [], "trend": "new", "coverage_count": 0}
+
+        embedding = response.json()["data"][0]["embedding"]
+
+        # 3. Search for historical similar articles using SQL function
+        # Exclude today's articles
+        current_urls = [art.get("url") for art in articles if art.get("url")]
+
+        result = supabase.rpc("find_historical_context", {
+            "query_embedding": embedding,
+            "days_back": days_back,
+            "match_threshold": 0.65,  # Lower threshold for broader matches
+            "match_count": 20
+        }).execute()
+
+        historical_articles = result.data or []
+
+        # Filter out current articles
+        historical_articles = [
+            art for art in historical_articles
+            if art.get("url") not in current_urls
+        ]
+
+        # 4. Get trend data (weekly counts)
+        trend_result = supabase.rpc("get_topic_trend", {
+            "query_embedding": embedding,
+            "days_back": days_back,
+            "match_threshold": 0.65
+        }).execute()
+
+        trend_data = trend_result.data or []
+
+        # 5. Analyze trend
+        coverage_count = len(historical_articles)
+        trend = "new"
+        first_coverage_date = None
+
+        if historical_articles:
+            # Sort by date to get first coverage
+            sorted_articles = sorted(
+                historical_articles,
+                key=lambda x: x.get("created_at") or ""
+            )
+            first_coverage_date = sorted_articles[0].get("created_at", "")[:10] if sorted_articles else None
+
+            # Determine trend based on weekly counts
+            if len(trend_data) >= 2:
+                recent_weeks = trend_data[-2:]
+                older_weeks = trend_data[:-2] if len(trend_data) > 2 else []
+
+                recent_avg = sum(w.get("article_count", 0) for w in recent_weeks) / len(recent_weeks)
+
+                if older_weeks:
+                    older_avg = sum(w.get("article_count", 0) for w in older_weeks) / len(older_weeks)
+
+                    if recent_avg > older_avg * 1.5:
+                        trend = "emerging"  # Growing significantly
+                    elif recent_avg < older_avg * 0.5:
+                        trend = "declining"  # Dropping significantly
+                    else:
+                        trend = "ongoing"   # Stable coverage
+                else:
+                    trend = "emerging" if recent_avg > 3 else "ongoing"
+            elif coverage_count > 0:
+                trend = "ongoing"
+
+        log.info(f"📚 Historical context: {coverage_count} related articles, trend={trend}")
+
+        return {
+            "related_articles": historical_articles[:5],  # Top 5
+            "trend": trend,
+            "coverage_count": coverage_count,
+            "first_coverage_date": first_coverage_date,
+            "trend_data": trend_data
+        }
+
+    except Exception as e:
+        log.error(f"❌ Historical context error: {e}")
+        return {"related_articles": [], "trend": "new", "coverage_count": 0}
+
+
 @app.route("/prompt-lab/generate", methods=["POST"])
 def prompt_lab_generate():
     """
@@ -1281,21 +1419,65 @@ def prompt_lab_generate():
             enriched_context = enrichment_result.get("context")
             perplexity_articles = enrichment_result.get("related_articles", [])
 
-        # Build full content for LLM
-        if enriched_context:
-            full_content = f"""ARTICLE PRINCIPAL:
-{combined_content[:3000]}
+        # Historical context - ALWAYS fetch for continuity and trend detection
+        historical_context = get_historical_context(articles, days_back=30)
+        log.info(f"📚 Historical: trend={historical_context.get('trend')}, count={historical_context.get('coverage_count')}")
 
-CONTEXTE ENRICHI (sources additionnelles):
-{enriched_context}"""
-        else:
-            full_content = combined_content[:4000]
+        # Build historical context section for prompt
+        historical_section = ""
+        if historical_context.get("coverage_count", 0) > 0:
+            trend = historical_context.get("trend", "new")
+            count = historical_context.get("coverage_count", 0)
+            first_date = historical_context.get("first_coverage_date", "")
+
+            trend_labels = {
+                "emerging": "📈 SUJET MONTANT - Volume en forte hausse",
+                "ongoing": "📊 SUJET RÉCURRENT - Couverture stable",
+                "declining": "📉 SUJET EN BAISSE - Moins d'actualités récemment",
+                "new": "🆕 NOUVEAU SUJET"
+            }
+
+            historical_section = f"""
+--- CONTEXTE HISTORIQUE ---
+{trend_labels.get(trend, '')}
+• {count} articles similaires ces 30 derniers jours
+• Première couverture: {first_date if first_date else 'N/A'}
+"""
+            # Add summaries of past related articles
+            related = historical_context.get("related_articles", [])
+            if related:
+                historical_section += "\nArticles passés pertinents:\n"
+                for art in related[:3]:
+                    art_date = (art.get("created_at") or "")[:10]
+                    art_title = art.get("title", "Sans titre")[:80]
+                    historical_section += f"• [{art_date}] {art_title}\n"
+
+        # Build full content for LLM
+        content_parts = [f"ARTICLES PRINCIPAUX:\n{combined_content[:3000]}"]
+
+        if historical_section:
+            content_parts.append(historical_section)
+
+        if enriched_context:
+            content_parts.append(f"CONTEXTE ENRICHI (Perplexity):\n{enriched_context}")
+
+        full_content = "\n\n".join(content_parts)
         
         # Get prompt template
         # Use higher word count for full script (not just one segment)
         config = FORMAT_CONFIG["flash"]
         target_word_count = 300  # Full script, not just one segment
         
+        # Build historical instruction for LLM
+        historical_instruction = ""
+        trend = historical_context.get("trend", "new")
+        if trend == "emerging":
+            historical_instruction = "Ce sujet prend de l'ampleur ces derniers jours. Mentionne cette tendance montante."
+        elif trend == "ongoing":
+            historical_instruction = "Ce sujet revient régulièrement dans l'actualité. Tu peux faire référence à notre couverture précédente."
+        elif trend == "declining":
+            historical_instruction = "Ce sujet était plus présent récemment. C'est peut-être une mise à jour finale."
+
         # Common template variables
         template_vars = {
             "word_count": target_word_count,
@@ -1311,6 +1493,11 @@ CONTEXTE ENRICHI (sources additionnelles):
             "source_label": f"Source: {source_names[0]}" if source_names else "Source inconnue",
             "content": full_content,
             "attribution_instruction": f'"Selon {source_names[0]}..."' if source_names else '"Selon les sources..."',
+            # Historical context variables
+            "historical_context": historical_section,
+            "historical_instruction": historical_instruction,
+            "trend": trend,
+            "coverage_count": historical_context.get("coverage_count", 0),
         }
         
         if len(articles) > 1:
@@ -1357,6 +1544,16 @@ CONTEXTE ENRICHI (sources additionnelles):
             "script": script,
             "enriched_context": enriched_context,
             "perplexity_articles": perplexity_articles,
+            # Historical context
+            "historical_context": {
+                "trend": historical_context.get("trend", "new"),
+                "coverage_count": historical_context.get("coverage_count", 0),
+                "first_coverage_date": historical_context.get("first_coverage_date"),
+                "related_articles": [
+                    {"title": a.get("title"), "date": (a.get("created_at") or "")[:10]}
+                    for a in historical_context.get("related_articles", [])[:5]
+                ]
+            },
             "word_count": word_count,
             "generation_time_ms": generation_time_ms,
             "topic": topic,

@@ -542,6 +542,9 @@ DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast professionnel. Écris un
 ## CONTENU
 {content}
 
+{historical_context}
+{historical_instruction}
+
 {previous_segment_rule}
 {previous_segment_context}
 
@@ -580,6 +583,9 @@ DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast professionnel. Écr
 
 ## SOURCES ({source_count} articles sur ce sujet)
 {sources_content}
+
+{historical_context}
+{historical_instruction}
 
 ## LES HÔTES
 - [B] L'ANALYSTE (voix masculine) = Synthétise les informations des différentes sources

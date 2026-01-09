@@ -24,7 +24,8 @@ import {
   XCircle,
   Download,
   Trash2,
-  Plus
+  Plus,
+  History
 } from "lucide-react";
 
 // ============================================
@@ -111,10 +112,18 @@ interface TopicIntentions {
   [topic: string]: string;
 }
 
+interface HistoricalContext {
+  trend: "emerging" | "ongoing" | "declining" | "new";
+  coverage_count: number;
+  first_coverage_date: string | null;
+  related_articles: Array<{ title: string; date: string }>;
+}
+
 interface GenerationResult {
   script: string;
   enriched_context: string | null;
   perplexity_articles: Array<{ title: string; url: string; source: string }>;
+  historical_context?: HistoricalContext;
   word_count: number;
   generation_time_ms: number;
   topic: string;
@@ -1151,6 +1160,42 @@ export default function PromptLabPage() {
                         </a>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {result.historical_context && result.historical_context.coverage_count > 0 && (
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                    <h3 className="text-xs font-semibold text-blue-400 mb-2 flex items-center gap-2">
+                      <History className="w-3 h-3" />
+                      Contexte Historique
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        result.historical_context.trend === "emerging" ? "bg-green-500/20 text-green-400" :
+                        result.historical_context.trend === "declining" ? "bg-red-500/20 text-red-400" :
+                        result.historical_context.trend === "ongoing" ? "bg-yellow-500/20 text-yellow-400" :
+                        "bg-gray-500/20 text-gray-400"
+                      }`}>
+                        {result.historical_context.trend === "emerging" ? "📈 Montant" :
+                         result.historical_context.trend === "declining" ? "📉 En baisse" :
+                         result.historical_context.trend === "ongoing" ? "📊 Récurrent" :
+                         "🆕 Nouveau"}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-foreground/80 mb-2">
+                      {result.historical_context.coverage_count} articles similaires ces 30 derniers jours
+                      {result.historical_context.first_coverage_date && (
+                        <span className="text-muted-foreground"> • Première couverture: {result.historical_context.first_coverage_date}</span>
+                      )}
+                    </p>
+                    {result.historical_context.related_articles && result.historical_context.related_articles.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-medium">Articles passés:</p>
+                        {result.historical_context.related_articles.slice(0, 3).map((art, i) => (
+                          <div key={i} className="text-[10px] p-1.5 bg-background/30 rounded">
+                            <span className="text-blue-300">[{art.date}]</span> {art.title}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
