@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
       payload = {};
     }
 
+    console.log(`[prompt-lab] POST ${endpoint} to ${WORKER_URL}`);
+
     const res = await fetch(`${WORKER_URL}${endpoint}`, {
       method: "POST",
       headers: {
@@ -70,10 +72,19 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(payload),
     });
 
+    console.log(`[prompt-lab] Response status: ${res.status}`);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`[prompt-lab] Error response: ${errorText}`);
+      return NextResponse.json({ error: `Backend error: ${res.status}` }, { status: res.status });
+    }
+
     const data = await res.json();
+    console.log(`[prompt-lab] Response data:`, data);
     return NextResponse.json(data);
   } catch (error) {
     console.error("Prompt lab POST error:", error);
-    return NextResponse.json({ error: "Failed to process" }, { status: 500 });
+    return NextResponse.json({ error: `Failed to process: ${error}` }, { status: 500 });
   }
 }
