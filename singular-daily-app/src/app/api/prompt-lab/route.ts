@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
         custom_prompt: body.custom_prompt,
         custom_intention: body.custom_intention,
         use_enrichment: body.use_enrichment,
+        model: body.model,
       };
     } else if (action === "fill-queue") {
       endpoint = "/cron/fill-queue";

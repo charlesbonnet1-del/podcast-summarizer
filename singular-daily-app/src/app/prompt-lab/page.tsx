@@ -147,6 +147,13 @@ const DEFAULT_PARAMS: PipelineParams = {
   }
 };
 
+const GROQ_MODELS = [
+  { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B" },
+  { id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B" },
+  { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B (Fast)" },
+  { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
+];
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
@@ -192,7 +199,8 @@ export default function PromptLabPage() {
   const [editedPrompt, setEditedPrompt] = useState<string>("");
   const [editedIntention, setEditedIntention] = useState<string>("");
   const [useEnrichment, setUseEnrichment] = useState(false);
-  
+  const [selectedModel, setSelectedModel] = useState<string>("llama-3.3-70b-versatile");
+
   // Results
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -576,7 +584,8 @@ export default function PromptLabPage() {
           topic: selectedTopic,
           custom_prompt: editedPrompt !== savedPrompts.dialogue_segment ? editedPrompt : undefined,
           custom_intention: editedIntention !== savedIntentions[selectedTopic] ? editedIntention : undefined,
-          use_enrichment: useEnrichment
+          use_enrichment: useEnrichment,
+          model: selectedModel
         })
       });
       const data = await res.json();
@@ -906,8 +915,8 @@ export default function PromptLabPage() {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto p-6 space-y-4">
             
-            {/* 1. FETCH PARAMETERS */}
-            <AccordionSection title="1. Fetch Parameters" icon={<Filter className="w-4 h-4 text-blue-400" />} expanded={expandedSections.has("fetch-params")} onToggle={() => toggleSection("fetch-params")} badge={hasParamChanges ? "Modified" : undefined}>
+            {/* 1. PIPELINE PARAMETERS */}
+            <AccordionSection title="1. Pipeline Parameters" icon={<Filter className="w-4 h-4 text-blue-400" />} expanded={expandedSections.has("fetch-params")} onToggle={() => toggleSection("fetch-params")} badge={hasParamChanges ? "Modified" : undefined}>
               <div className="space-y-4">
                 <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                   <span className="text-sm font-medium text-blue-400">Format: Flash (5 min)</span>
@@ -928,14 +937,10 @@ export default function PromptLabPage() {
                     ))}
                   </div>
                 </div>
-                <div className="flex gap-2 pt-2">
-                  <button onClick={runFetch} disabled={pipelineLoading} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 disabled:opacity-50 transition-all font-medium text-sm">
-                    {pipelineLoading && currentStep === "fetch" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4" />}
-                    Fetch
-                  </button>
-                  <button onClick={runFullPipeline} disabled={pipelineLoading} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-all">
+                <div className="pt-2">
+                  <button onClick={runFullPipeline} disabled={pipelineLoading} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-all">
                     {pipelineLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                    Run All
+                    Run Pipeline
                   </button>
                 </div>
               </div>
@@ -1032,6 +1037,14 @@ export default function PromptLabPage() {
             {/* 6. GENERATE */}
             <AccordionSection title="6. Generate Script" icon={<Sparkles className="w-4 h-4 text-purple-400" />} expanded={expandedSections.has("generate")} onToggle={() => toggleSection("generate")}>
               <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">LLM Model</label>
+                  <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    {GROQ_MODELS.map(model => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </select>
+                </div>
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={useEnrichment} onChange={(e) => setUseEnrichment(e.target.checked)} className="w-4 h-4 rounded border-border/50 bg-background/50 text-primary focus:ring-primary/50" />
                   <span className="text-sm">Use Perplexity enrichment</span>

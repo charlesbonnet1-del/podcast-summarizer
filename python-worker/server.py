@@ -1177,6 +1177,7 @@ def prompt_lab_generate():
         custom_prompt = data.get("custom_prompt")
         custom_intention = data.get("custom_intention")
         use_enrichment = data.get("use_enrichment", False)
+        model = data.get("model", "llama-3.3-70b-versatile")
         
         # NEW: Accept articles directly from frontend (from pipeline results)
         articles_data = data.get("articles", [])
@@ -1335,8 +1336,9 @@ CONTEXTE ENRICHI (sources additionnelles):
                 prompt = prompt.replace("{" + key + "}", str(value))
         
         # Call Groq for script generation
+        log.info(f"🤖 Using model: {model}")
         response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=model,
             messages=[
                 {"role": "system", "content": "Tu es un scripteur de podcast expert. Tu écris des dialogues naturels et informatifs."},
                 {"role": "user", "content": prompt}
