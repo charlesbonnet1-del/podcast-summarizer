@@ -896,6 +896,81 @@ def prompt_lab_clear_queue():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/prompt-lab/add-source", methods=["POST"])
+def prompt_lab_add_source():
+    """
+    Manually add a source URL to the content queue.
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        data = request.get_json() or {}
+        url = data.get("url", "").strip()
+        title = data.get("title", "").strip()
+        source_name = data.get("source_name", "").strip()
+        topic = data.get("topic", "general").strip()
+
+        if not url:
+            return jsonify({"error": "URL is required"}), 400
+
+        # Ensure URL has protocol
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        # Check for duplicates
+        existing = supabase.table("content_queue") \
+            .select("id") \
+            .eq("url", url) \
+            .execute()
+
+        if existing.data:
+            return jsonify({"error": "URL already exists in queue"}), 400
+
+        # Extract title from URL if not provided
+        if not title:
+            try:
+                import requests as req
+                from bs4 import BeautifulSoup
+                response = req.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                soup = BeautifulSoup(response.text, "html.parser")
+                title = soup.title.string if soup.title else url
+            except Exception:
+                title = url
+
+        # Extract source name from domain if not provided
+        if not source_name:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            source_name = parsed.netloc.replace("www.", "")
+
+        # Insert into queue
+        result = supabase.table("content_queue").insert({
+            "url": url,
+            "title": title[:500] if title else url[:500],
+            "source_name": source_name,
+            "source": source_name,
+            "keyword": topic,
+            "source_score": 50,
+            "status": "pending"
+        }).execute()
+
+        log.info("Manual source added", url=url, topic=topic)
+
+        return jsonify({
+            "success": True,
+            "article": {
+                "url": url,
+                "title": title,
+                "source_name": source_name,
+                "topic": topic
+            }
+        })
+    except Exception as e:
+        log.error("Add source error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/prompt-lab/prompts", methods=["GET"])
 def prompt_lab_get_prompts():
     """
