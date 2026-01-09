@@ -157,10 +157,15 @@ const DEFAULT_PARAMS: PipelineParams = {
 };
 
 const GROQ_MODELS = [
+  // Llama 4 (newest - Jan 2025)
+  { id: "meta-llama/llama-4-maverick-17b-128e-instruct", name: "Llama 4 Maverick (128 experts)" },
+  { id: "meta-llama/llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout (16 experts)" },
+  // Llama 3.x
   { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B" },
-  { id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B" },
   { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B (Fast)" },
-  { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
+  // Reasoning models
+  { id: "deepseek-r1-distill-llama-70b", name: "DeepSeek R1 70B (Reasoning)" },
+  { id: "qwen-qwq-32b", name: "Qwen QwQ 32B (Reasoning)" },
 ];
 
 // ============================================
