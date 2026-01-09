@@ -855,6 +855,30 @@ def prompt_lab_queue():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/prompt-lab/clear-queue", methods=["POST"])
+def prompt_lab_clear_queue():
+    """
+    Clear all pending articles from the queue.
+    """
+    try:
+        # Delete all pending articles from queue
+        result = supabase.table("content_queue") \
+            .delete() \
+            .eq("status", "pending") \
+            .execute()
+
+        deleted_count = len(result.data or [])
+        log.info("Queue cleared", deleted_count=deleted_count)
+
+        return jsonify({
+            "success": True,
+            "deleted_count": deleted_count
+        })
+    except Exception as e:
+        log.error("Clear queue error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/prompt-lab/prompts", methods=["GET"])
 def prompt_lab_get_prompts():
     """

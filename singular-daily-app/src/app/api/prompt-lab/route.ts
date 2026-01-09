@@ -56,6 +56,9 @@ export async function POST(request: NextRequest) {
     } else if (action === "fill-queue") {
       endpoint = "/cron/fill-queue";
       payload = {};
+    } else if (action === "clear-queue") {
+      endpoint = "/prompt-lab/clear-queue";
+      payload = {};
     }
 
     const res = await fetch(`${WORKER_URL}${endpoint}`, {
