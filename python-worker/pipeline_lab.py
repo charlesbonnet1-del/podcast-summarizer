@@ -39,9 +39,10 @@ DEFAULT_PARAMS = {
     "flash_segment_count": 5,
     "digest_segment_count": 5,  # deprecated - same as flash
 
-    # Clustering
-    "min_cluster_size": 3,
+    # Clustering - V20: HAC with lower min_cluster_size for small volumes
+    "min_cluster_size": 2,  # Lowered from 3 for small article volumes
     "min_articles_fallback": 5,  # If no cluster, need at least this many articles
+    "hac_distance_threshold": 0.45,  # Cosine distance threshold for HAC (= similarity > 0.55)
 
     # Time windows
     "content_queue_days": 3,
@@ -330,20 +331,108 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
 
 
 # ============================================
+# TOPIC DESCRIPTIONS FOR INFERENCE (Option B)
+# ============================================
+
+# These descriptions are used to generate embeddings for topic inference
+# when a cluster only contains "general" source articles
+TOPIC_DESCRIPTIONS = {
+    "ia": "Intelligence artificielle, machine learning, deep learning, LLM, ChatGPT, GPT-4, Claude, neural networks, AI models, artificial intelligence, OpenAI, Anthropic, Google AI, Microsoft AI, AI startups, generative AI, computer vision, NLP",
+    "cyber": "Cybersécurité, hacking, cyberattaques, ransomware, malware, data breach, phishing, security vulnerabilities, zero-day, encryption, privacy, CISO, SOC, penetration testing, threat intelligence, cybercrime",
+    "health": "Santé, médecine, biotech, pharmaceutique, clinical trials, FDA approval, drug discovery, healthcare, medical devices, hospitals, epidemiology, cancer research, vaccines, gene therapy, CRISPR, medical AI",
+    "deep_tech": "Deep tech, quantum computing, semiconductors, chips, nanotechnology, advanced materials, robotics, fusion energy, space tech, hard science, R&D, patents, scientific breakthroughs, physics, chemistry",
+    "space": "Espace, astronomie, satellites, SpaceX, NASA, ESA, rockets, Mars, Moon, space exploration, orbital, astronauts, telescope, cosmic, universe, asteroid, launch",
+    "energy": "Énergie, climat, renewable energy, solar, wind, nuclear, oil, gas, electricity, grid, batteries, EV, electric vehicles, carbon, emissions, sustainability, clean energy, fossil fuels",
+    "crypto": "Crypto, Bitcoin, Ethereum, blockchain, DeFi, NFT, Web3, cryptocurrency, tokens, mining, exchanges, Binance, Coinbase, stablecoins, smart contracts, decentralized",
+    "macro": "Macroéconomie, finance, markets, stocks, bonds, interest rates, inflation, GDP, central banks, Federal Reserve, ECB, economy, recession, growth, unemployment, fiscal policy, monetary policy",
+    "deals": "M&A, venture capital, startups, funding, IPO, acquisitions, mergers, private equity, Series A, Series B, unicorn, valuation, investment, fundraising, exit, portfolio",
+    "asia": "Asie, Chine, Japan, Korea, India, Southeast Asia, geopolitics, trade, Belt and Road, ASEAN, Pacific, Taiwan, Hong Kong, Singapore, Vietnam, Indonesia, Xi Jinping",
+    "regulation": "Régulation, law, legislation, compliance, antitrust, GDPR, EU regulation, FTC, SEC, government policy, legal, courts, lawsuits, enforcement, regulatory framework",
+    "resources": "Ressources naturelles, mining, commodities, oil, gas, metals, rare earth, agriculture, water, land, forests, minerals, extraction, supply chain, raw materials",
+    "info": "Information, media, journalism, news, press, broadcasting, social media, content, misinformation, fact-checking, editorial, publishing, newspapers, digital media",
+    "attention": "Entertainment, media, streaming, Netflix, gaming, movies, music, celebrities, culture, viral, trends, TikTok, YouTube, influencers, content creators",
+    "persuasion": "Marketing, advertising, branding, PR, communications, consumer behavior, lifestyle, trends, fashion, luxury, retail, e-commerce, customer experience"
+}
+
+# Cache for topic embeddings (computed once)
+_topic_embeddings_cache = {}
+
+
+def get_topic_embeddings() -> dict:
+    """
+    Get or compute embeddings for all topic descriptions.
+    Results are cached for efficiency.
+    """
+    global _topic_embeddings_cache
+
+    if _topic_embeddings_cache:
+        return _topic_embeddings_cache
+
+    log.info("🔤 Computing topic embeddings for inference...")
+
+    topics = list(TOPIC_DESCRIPTIONS.keys())
+    descriptions = [TOPIC_DESCRIPTIONS[t] for t in topics]
+
+    embeddings = get_embeddings_batch(descriptions)
+
+    _topic_embeddings_cache = {
+        topic: embedding
+        for topic, embedding in zip(topics, embeddings)
+    }
+
+    log.info(f"✅ Computed {len(_topic_embeddings_cache)} topic embeddings")
+    return _topic_embeddings_cache
+
+
+def infer_topic_from_embeddings(cluster_embeddings: list, topic_embeddings: dict) -> tuple[str, float]:
+    """
+    Infer the best matching topic for a cluster based on embedding similarity.
+
+    Args:
+        cluster_embeddings: List of embeddings for articles in the cluster
+        topic_embeddings: Dict of {topic: embedding} for all topics
+
+    Returns:
+        (best_topic, similarity_score)
+    """
+    import numpy as np
+    from sklearn.preprocessing import normalize
+
+    # Compute cluster centroid (mean of all article embeddings)
+    cluster_array = np.array(cluster_embeddings)
+    centroid = np.mean(cluster_array, axis=0)
+    centroid_normalized = normalize([centroid])[0]
+
+    # Compare with each topic embedding
+    best_topic = None
+    best_similarity = -1
+
+    for topic, topic_emb in topic_embeddings.items():
+        topic_normalized = normalize([topic_emb])[0]
+        similarity = float(np.dot(centroid_normalized, topic_normalized))
+
+        if similarity > best_similarity:
+            best_similarity = similarity
+            best_topic = topic
+
+    return best_topic, best_similarity
+
+
+# ============================================
 # SANDBOX CLUSTER
 # ============================================
 
 def sandbox_cluster(articles: list[dict], params: dict) -> dict:
     """
-    Cluster articles using OpenAI embeddings + DBSCAN.
-    
-    Uses the same embedding approach as production (cluster_pipeline.py)
-    for high-quality semantic clustering.
-    
+    Cluster articles using OpenAI embeddings + HAC (Hierarchical Agglomerative Clustering).
+
+    V20: Replaced DBSCAN with HAC to avoid chain-linking problem.
+    HAC provides better control with distance threshold and works well with small volumes.
+
     Args:
         articles: List of articles from fetch step
         params: Custom parameters
-    
+
     Returns:
         {
             "clusters": [...],
@@ -351,10 +440,11 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
             "stats": {...}
         }
     """
-    from sklearn.cluster import DBSCAN
+    from scipy.cluster.hierarchy import linkage, fcluster
+    from scipy.spatial.distance import pdist
     from sklearn.preprocessing import normalize
     import numpy as np
-    
+
     start_time = datetime.now()
     clusters = []
     exclusions = []
@@ -364,11 +454,12 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         "articles_clustered": 0,
         "articles_excluded": 0,
         "embedding_model": EMBEDDING_MODEL,
-        "method": "OpenAI embeddings + DBSCAN"
+        "method": "OpenAI embeddings + HAC (Hierarchical Agglomerative Clustering)"
     }
-    
-    min_cluster_size = params.get("min_cluster_size", 3)
-    
+
+    min_cluster_size = params.get("min_cluster_size", 2)
+    distance_threshold = params.get("hac_distance_threshold", 0.45)
+
     try:
         if len(articles) < min_cluster_size:
             log.warning(f"⚠️ Too few articles ({len(articles)}) for clustering")
@@ -381,145 +472,166 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
             stats["articles_excluded"] = len(articles)
             stats["duration_seconds"] = (datetime.now() - start_time).total_seconds()
             return {"clusters": [], "exclusions": exclusions, "stats": stats}
-        
+
         # ========== STEP 1: EMBED ARTICLES ==========
         log.info(f"📊 Embedding {len(articles)} articles with OpenAI...")
-        
+
         # Build text for embedding: description + content (NO title, NO source name)
-        # IMPORTANT: Use `or ""` to handle None values from database (not just missing keys)
         texts = []
         for article in articles:
             description = article.get("description") or ""
             content = article.get("content") or article.get("processed_content") or ""
-            # Use description + content, limited to 1000 chars
             text = f"{description} {content}".strip()[:1000]
             if not text:
-                # Fallback to title if no content
                 text = article.get("title") or "No content"
             texts.append(text)
-        
+
         embeddings = get_embeddings_batch(texts)
-        
+
         # Attach embeddings to articles
         for article, embedding in zip(articles, embeddings):
             article["embedding"] = embedding
-        
+
         stats["embeddings_generated"] = len(embeddings)
         log.info(f"✅ Generated {len(embeddings)} embeddings")
-        
-        # ========== STEP 2: CLUSTER WITH DBSCAN ==========
-        log.info(f"🔬 Clustering with DBSCAN (min_cluster_size={min_cluster_size})...")
-        
+
+        # ========== STEP 2: COMPUTE DISTANCE MATRIX ==========
         embeddings_array = np.array(embeddings)
         embeddings_normalized = normalize(embeddings_array)
-        
+
+        # Compute pairwise cosine distances
+        # cosine_distance = 1 - cosine_similarity
+        distances = pdist(embeddings_normalized, metric='cosine')
+
         # ========== DIAGNOSTIC: Similarity distribution ==========
-        from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine
-        
-        # Calculate pairwise similarities (only upper triangle to save memory)
         n_articles = len(embeddings_normalized)
-        similarities = []
-        top_pairs = []  # Store top similar pairs for inspection
-        
+        similarities = 1 - distances  # Convert back to similarities for logging
+
+        log.info(f"📊 SIMILARITY DISTRIBUTION ({len(similarities)} pairs):")
+        log.info(f"   Min: {similarities.min():.3f}")
+        log.info(f"   Max: {similarities.max():.3f}")
+        log.info(f"   Mean: {similarities.mean():.3f}")
+        log.info(f"   Median: {np.median(similarities):.3f}")
+        log.info(f"   Std: {similarities.std():.3f}")
+
+        # Count pairs above different thresholds
+        thresholds = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+        for thresh in thresholds:
+            count = np.sum(similarities >= thresh)
+            pct = 100 * count / len(similarities)
+            log.info(f"   Pairs with similarity >= {thresh}: {count} ({pct:.1f}%)")
+
+        # Store in stats for frontend display
+        stats["similarity_distribution"] = {
+            "min": round(float(similarities.min()), 3),
+            "max": round(float(similarities.max()), 3),
+            "mean": round(float(similarities.mean()), 3),
+            "median": round(float(np.median(similarities)), 3),
+            "std": round(float(similarities.std()), 3),
+            "pairs_above_0.5": int(np.sum(similarities >= 0.5)),
+            "pairs_above_0.6": int(np.sum(similarities >= 0.6)),
+            "pairs_above_0.7": int(np.sum(similarities >= 0.7)),
+            "total_pairs": len(similarities)
+        }
+
+        # Find top similar pairs for logging
+        from scipy.spatial.distance import squareform
+        sim_matrix = squareform(similarities)
+        top_pairs = []
         for i in range(n_articles):
             for j in range(i + 1, n_articles):
-                sim = float(np.dot(embeddings_normalized[i], embeddings_normalized[j]))
-                similarities.append(sim)
-                if sim > 0.5:  # Track high similarity pairs
+                sim = sim_matrix[i, j]
+                if sim > 0.5:
                     top_pairs.append({
                         "similarity": round(sim, 3),
                         "article_1": articles[i].get("title", "")[:50],
                         "article_2": articles[j].get("title", "")[:50]
                     })
-        
-        # Log distribution stats
-        similarities_arr = np.array(similarities)
-        log.info(f"📊 SIMILARITY DISTRIBUTION ({len(similarities)} pairs):")
-        log.info(f"   Min: {similarities_arr.min():.3f}")
-        log.info(f"   Max: {similarities_arr.max():.3f}")
-        log.info(f"   Mean: {similarities_arr.mean():.3f}")
-        log.info(f"   Median: {np.median(similarities_arr):.3f}")
-        log.info(f"   Std: {similarities_arr.std():.3f}")
-        
-        # Count pairs above different thresholds
-        thresholds = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-        for thresh in thresholds:
-            count = np.sum(similarities_arr >= thresh)
-            pct = 100 * count / len(similarities_arr)
-            log.info(f"   Pairs with similarity >= {thresh}: {count} ({pct:.1f}%)")
-        
-        # Log top similar pairs
         top_pairs.sort(key=lambda x: x["similarity"], reverse=True)
+        stats["top_similar_pairs"] = top_pairs[:10]
+
         if top_pairs:
             log.info(f"🔝 TOP {min(5, len(top_pairs))} SIMILAR PAIRS:")
             for pair in top_pairs[:5]:
                 log.info(f"   {pair['similarity']}: '{pair['article_1']}' <-> '{pair['article_2']}'")
-        else:
-            log.info("⚠️ NO PAIRS with similarity > 0.5 found!")
-        
-        # Store in stats for frontend display
-        stats["similarity_distribution"] = {
-            "min": round(float(similarities_arr.min()), 3),
-            "max": round(float(similarities_arr.max()), 3),
-            "mean": round(float(similarities_arr.mean()), 3),
-            "median": round(float(np.median(similarities_arr)), 3),
-            "std": round(float(similarities_arr.std()), 3),
-            "pairs_above_0.5": int(np.sum(similarities_arr >= 0.5)),
-            "pairs_above_0.6": int(np.sum(similarities_arr >= 0.6)),
-            "pairs_above_0.7": int(np.sum(similarities_arr >= 0.7)),
-            "total_pairs": len(similarities)
-        }
-        stats["top_similar_pairs"] = top_pairs[:10]
-        # ========== END DIAGNOSTIC ==========
-        
-        # DBSCAN clustering
-        # eps=0.5 means distance < 0.5, i.e. cosine similarity > 0.875 on normalized vectors
-        # Note: euclidean distance on normalized vectors: d = sqrt(2 - 2*cos_sim)
-        # So eps=0.5 -> cos_sim > 1 - 0.5²/2 = 0.875 (very strict!)
-        # eps=0.65 -> cos_sim > 1 - 0.65²/2 = 0.79
-        # eps=0.7 -> cos_sim > 1 - 0.7²/2 = 0.755
-        # eps=1.0 -> cos_sim > 1 - 1.0²/2 = 0.5
-        clusterer = DBSCAN(
-            eps=1.0,  # Requires cosine similarity > 0.5 (less strict, more clusters)
-            min_samples=min_cluster_size,
-            metric='euclidean',
-            n_jobs=-1
-        )
-        
-        labels = clusterer.fit_predict(embeddings_normalized)
-        
-        # ========== STEP 3: GROUP BY CLUSTER ==========
+
+        # ========== STEP 3: HAC CLUSTERING ==========
+        log.info(f"🔬 Clustering with HAC (distance_threshold={distance_threshold}, min_size={min_cluster_size})...")
+
+        # Hierarchical clustering with average linkage (less sensitive to outliers)
+        Z = linkage(distances, method='average')
+
+        # Cut the dendrogram at the distance threshold
+        # distance_threshold=0.45 means cosine_similarity > 0.55
+        labels = fcluster(Z, t=distance_threshold, criterion='distance')
+
+        # Labels are 1-indexed, convert to 0-indexed
+        labels = labels - 1
+
+        stats["hac_distance_threshold"] = distance_threshold
+        stats["hac_linkage_method"] = "average"
+
+        # ========== STEP 4: GROUP BY CLUSTER ==========
         cluster_groups = {}
-        noise_articles = []
-        
+
         for idx, label in enumerate(labels):
-            if label == -1:
-                noise_articles.append(articles[idx])
-            else:
-                if label not in cluster_groups:
-                    cluster_groups[label] = []
-                cluster_groups[label].append(articles[idx])
-        
-        # Build cluster objects
+            if label not in cluster_groups:
+                cluster_groups[label] = []
+            cluster_groups[label].append(articles[idx])
+
+        # Filter clusters by minimum size and collect singletons
+        valid_cluster_groups = {}
+        singleton_articles = []
+
         for label, cluster_articles in cluster_groups.items():
-            # Determine dominant topic (ignore "general" - it's a source type, not a topic)
+            if len(cluster_articles) >= min_cluster_size:
+                valid_cluster_groups[label] = cluster_articles
+            else:
+                singleton_articles.extend(cluster_articles)
+
+        log.info(f"📊 HAC produced {len(cluster_groups)} raw clusters, {len(valid_cluster_groups)} valid (>= {min_cluster_size} articles)")
+
+        # ========== STEP 5: BUILD CLUSTER OBJECTS WITH TOPIC INFERENCE ==========
+        # Get topic embeddings for inference (cached)
+        topic_embeddings = get_topic_embeddings()
+
+        for label, cluster_articles in valid_cluster_groups.items():
+            # Determine dominant topic (ignore "general")
             topic_counts = {}
             for art in cluster_articles:
                 topic = art.get("topic", art.get("keyword", "unknown"))
-                # Skip "general" when counting - these are generalist sources
                 if topic != "general":
                     topic_counts[topic] = topic_counts.get(topic, 0) + 1
 
-            # Use dominant non-general topic, fallback to "mixed" if all are general
+            # Use dominant non-general topic
             if topic_counts:
                 dominant_topic = max(topic_counts, key=topic_counts.get)
+                topic_confidence = topic_counts[dominant_topic] / len(cluster_articles)
             else:
-                # All articles are "general" - label based on content (use first article's description)
-                dominant_topic = "mixed"
-            
+                # All articles are "general" - use embedding similarity to infer topic
+                cluster_embeddings = [art["embedding"] for art in cluster_articles]
+                inferred_topic, similarity_score = infer_topic_from_embeddings(
+                    cluster_embeddings, topic_embeddings
+                )
+                dominant_topic = inferred_topic
+                topic_confidence = similarity_score
+                log.info(f"🎯 Inferred topic '{inferred_topic}' for general-only cluster (similarity: {similarity_score:.3f})")
+
             # Get unique sources
             sources = list(set(a.get("source_name", "Unknown") for a in cluster_articles))
-            
+
+            # Compute cluster coherence (average pairwise similarity within cluster)
+            if len(cluster_articles) > 1:
+                cluster_embs = np.array([art["embedding"] for art in cluster_articles])
+                cluster_embs_norm = normalize(cluster_embs)
+                cluster_sims = []
+                for i in range(len(cluster_embs_norm)):
+                    for j in range(i + 1, len(cluster_embs_norm)):
+                        cluster_sims.append(float(np.dot(cluster_embs_norm[i], cluster_embs_norm[j])))
+                coherence = np.mean(cluster_sims) if cluster_sims else 1.0
+            else:
+                coherence = 1.0
+
             clusters.append({
                 "topic": dominant_topic,
                 "cluster_id": f"cluster_{label}",
@@ -527,36 +639,40 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
                 "articles": cluster_articles,
                 "representative_title": cluster_articles[0].get("title", ""),
                 "sources": sources,
-                "source_diversity": len(sources)
+                "source_diversity": len(sources),
+                "coherence": round(coherence, 3),
+                "topic_confidence": round(topic_confidence, 3)
             })
             stats["clusters_formed"] += 1
             stats["articles_clustered"] += len(cluster_articles)
-        
-        # Handle noise articles
-        for art in noise_articles:
+
+        # Handle singleton/excluded articles
+        for art in singleton_articles:
             exclusions.append({
-                "type": "no_cluster",
+                "type": "cluster_too_small",
                 "article": art.get("title", "")[:50],
                 "topic": art.get("topic", "unknown"),
-                "reason": "Article did not fit any cluster (too unique or isolated)"
+                "reason": f"Cluster had fewer than {min_cluster_size} articles"
             })
             stats["articles_excluded"] += 1
-        
+
         # Sort clusters by size (largest first)
         clusters.sort(key=lambda c: c["size"], reverse=True)
-        
+
         stats["duration_seconds"] = (datetime.now() - start_time).total_seconds()
-        stats["noise_articles"] = len(noise_articles)
-        
-        log.info(f"✅ Clustering complete: {len(clusters)} clusters, {len(noise_articles)} noise articles")
-        
+        stats["singleton_articles"] = len(singleton_articles)
+
+        log.info(f"✅ HAC Clustering complete: {len(clusters)} clusters, {len(singleton_articles)} singletons excluded")
+
     except Exception as e:
         log.error("Sandbox cluster error", error=str(e))
+        import traceback
+        traceback.print_exc()
         exclusions.append({
             "type": "fatal_error",
             "reason": str(e)
         })
-    
+
     return {
         "clusters": clusters,
         "exclusions": exclusions,
