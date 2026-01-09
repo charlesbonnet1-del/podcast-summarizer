@@ -22,7 +22,8 @@ import {
   Play,
   AlertTriangle,
   XCircle,
-  Download
+  Download,
+  Trash2
 } from "lucide-react";
 
 // ============================================
@@ -156,6 +157,7 @@ export default function PromptLabPage() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fillingQueue, setFillingQueue] = useState(false);
+  const [clearingQueue, setClearingQueue] = useState(false);
   const [currentStep, setCurrentStep] = useState<"idle" | "fetch" | "cluster" | "select">("idle");
   
   // Pipeline params (sandbox - not saved until "Save" clicked)
@@ -268,6 +270,33 @@ export default function PromptLabPage() {
       setError("Fill queue failed");
     } finally {
       setFillingQueue(false);
+    }
+  }
+
+  async function clearQueue() {
+    if (!confirm("Vider toute la queue ? Cette action est irréversible.")) {
+      return;
+    }
+    setClearingQueue(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/prompt-lab", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear-queue" })
+      });
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setQueue({});
+        setSelectedArticles(new Set());
+      }
+    } catch (err) {
+      console.error("Clear queue failed:", err);
+      setError("Clear queue failed");
+    } finally {
+      setClearingQueue(false);
     }
   }
 
@@ -633,14 +662,23 @@ export default function PromptLabPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">{totalArticles} articles en queue</span>
-            <button 
-              onClick={fillQueue} 
+            <button
+              onClick={fillQueue}
               disabled={fillingQueue}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 disabled:opacity-50 transition-colors text-sm font-medium"
               title="Fetch fresh articles from all sources"
             >
               {fillingQueue ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               Fill Queue
+            </button>
+            <button
+              onClick={clearQueue}
+              disabled={clearingQueue || totalArticles === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 disabled:opacity-50 transition-colors text-sm font-medium"
+              title="Clear all articles from queue"
+            >
+              {clearingQueue ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Clear
             </button>
             <button onClick={loadData} className="p-2 rounded-lg hover:bg-background/50 transition-colors" title="Refresh all">
               <RefreshCw className="w-4 h-4 text-muted-foreground" />
