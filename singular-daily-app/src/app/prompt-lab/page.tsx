@@ -114,7 +114,7 @@ interface TopicIntentions {
 interface GenerationResult {
   script: string;
   enriched_context: string | null;
-  perplexity_citations: Array<{ title: string; url: string }>;
+  perplexity_articles: Array<{ title: string; url: string; source: string }>;
   word_count: number;
   generation_time_ms: number;
   topic: string;
@@ -1086,6 +1086,26 @@ export default function PromptLabPage() {
                   <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl">
                     <h3 className="text-xs font-semibold text-purple-400 mb-2 flex items-center gap-2"><Sparkles className="w-3 h-3" />Perplexity Context</h3>
                     <p className="text-xs text-foreground/80 whitespace-pre-wrap max-h-32 overflow-y-auto">{result.enriched_context}</p>
+                  </div>
+                )}
+
+                {result.perplexity_articles && result.perplexity_articles.length > 0 && (
+                  <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
+                    <h3 className="text-xs font-semibold text-cyan-400 mb-2 flex items-center gap-2"><ExternalLink className="w-3 h-3" />Articles connexes (Perplexity)</h3>
+                    <div className="space-y-2">
+                      {result.perplexity_articles.map((article, i) => (
+                        <a
+                          key={i}
+                          href={article.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
+                        >
+                          <p className="text-xs font-medium text-foreground truncate">{article.title}</p>
+                          <p className="text-[10px] text-muted-foreground">{article.source}</p>
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
 

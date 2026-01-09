@@ -1036,60 +1036,120 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
 
 
 # ============================================
-# PERPLEXITY ENRICHMENT (DIGEST MODE ONLY)
+# PERPLEXITY ENRICHMENT
 # ============================================
 
-ENRICHMENT_PROMPT = """À partir de cet article, fournis un contexte enrichi pour un podcast tech/actualité approfondi.
+ENRICHMENT_PROMPT = """Tu es un expert en veille technologique. Analyse cet article et fournis un enrichissement structuré.
 
 ARTICLE:
 Titre: {title}
 Source: {source}
 Contenu: {content}
 
-FOURNIS EN 250 MOTS MAX:
-1. Contexte historique ou évolution récente du sujet
-2. Comparaison avec la concurrence ou autres acteurs
-3. Réactions du marché, analystes ou experts
-4. Enjeux et implications concrètes
-5. Ce que ça change pour le public/consommateurs
+RÉPONDS UNIQUEMENT EN JSON VALIDE (pas de markdown, pas de ```):
+{{
+    "context": "Contexte enrichi en 150 mots max: historique, enjeux, implications concrètes",
+    "related_articles": [
+        {{
+            "title": "Titre de l'article connexe 1 (le plus pertinent et récent)",
+            "url": "https://url-complete-de-larticle-1.com/...",
+            "source": "Nom du média"
+        }},
+        {{
+            "title": "Titre de l'article connexe 2 (complémentaire au premier)",
+            "url": "https://url-complete-de-larticle-2.com/...",
+            "source": "Nom du média"
+        }}
+    ]
+}}
 
-Sois factuel, concis et cite tes sources entre crochets [source]."""
+IMPORTANT:
+- Les URLs doivent être RÉELLES et COMPLÈTES (pas d'exemples)
+- Privilégie les articles des 7 derniers jours
+- Les articles doivent apporter un angle différent ou complémentaire"""
 
 
 def enrich_content_with_perplexity(
     title: str,
     content: str,
     source_name: str
-) -> Optional[str]:
+) -> dict:
     """
     Enrich article content using Perplexity's web search.
-    Only used for Digest format (15 min) to add depth.
-    Returns enriched context or None if unavailable.
+    Returns dict with context and 2 related articles.
+
+    Returns:
+        {
+            "context": str,  # Enriched context
+            "related_articles": [  # 2 fresh related articles
+                {"title": str, "url": str, "source": str},
+                {"title": str, "url": str, "source": str}
+            ]
+        }
     """
+    empty_result = {"context": None, "related_articles": []}
+
     if not perplexity_client:
         log.debug("Perplexity not available, skipping enrichment")
-        return None
-    
+        return empty_result
+
     try:
         prompt = ENRICHMENT_PROMPT.format(
             title=title,
             source=source_name,
             content=content[:2000]  # Limit input size
         )
-        
+
         response = perplexity_client.chat.completions.create(
             model="sonar",  # Perplexity model with web search
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=400
+            messages=[
+                {"role": "system", "content": "Tu es un expert en veille tech. Réponds uniquement en JSON valide."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=600,
+            temperature=0.3
         )
-        
-        enriched = response.choices[0].message.content.strip()
-        log.info(f"✅ Perplexity enrichment: +{len(enriched.split())} words context")
-        return enriched
-        
+
+        content_raw = response.choices[0].message.content.strip()
+
+        # Clean potential markdown formatting
+        if content_raw.startswith("```"):
+            content_raw = content_raw.split("```")[1]
+            if content_raw.startswith("json"):
+                content_raw = content_raw[4:]
+        content_raw = content_raw.strip()
+
+        # Parse JSON
+        import json
+        result = json.loads(content_raw)
+
+        context = result.get("context", "")
+        related_articles = result.get("related_articles", [])
+
+        # Validate related articles
+        valid_articles = []
+        for art in related_articles[:2]:
+            if art.get("url") and art.get("title") and art["url"].startswith("http"):
+                valid_articles.append({
+                    "title": art.get("title", ""),
+                    "url": art.get("url", ""),
+                    "source": art.get("source", "")
+                })
+
+        log.info(f"✅ Perplexity enrichment: +{len(context.split())} words, {len(valid_articles)} related articles")
+
+        return {
+            "context": context,
+            "related_articles": valid_articles
+        }
+
+    except json.JSONDecodeError as e:
+        log.warning(f"⚠️ Perplexity JSON parse failed: {e}")
+        # Fallback: try to extract context from raw response
+        return {"context": content_raw[:500] if 'content_raw' in dir() else None, "related_articles": []}
     except Exception as e:
         log.warning(f"⚠️ Perplexity enrichment failed: {e}")
-        return None
+        return empty_result
 
 
 def inject_premium_sources_to_deals(user_id: str) -> int:
@@ -1348,11 +1408,14 @@ def generate_dialogue_segment_script(
         return None
     
     try:
-        # Enrich content with Perplexity for Digest mode
+        # Enrich content with Perplexity - returns dict with context and related_articles
         enriched_context = None
+        perplexity_articles = []
         if use_enrichment:
-            enriched_context = enrich_content_with_perplexity(title, content, source_name)
-        
+            enrichment_result = enrich_content_with_perplexity(title, content, source_name)
+            enriched_context = enrichment_result.get("context")
+            perplexity_articles = enrichment_result.get("related_articles", [])
+
         # Build content for prompt
         if enriched_context:
             full_content = f"""ARTICLE PRINCIPAL:
@@ -1419,20 +1482,24 @@ CONTEXTE ENRICHI (sources additionnelles):
             )
             
             script = response.choices[0].message.content.strip()
-            
+
             # Validate dialogue format
             has_tags = '[A]' in script or '[B]' in script
             if has_tags:
                 # Ensure dialogue ends with Alice [A]
                 script = ensure_bob_conclusion(script)
-                log.info(f"✅ Dialogue script generated: {len(script.split())} words" + 
-                        (" (enriched)" if enriched_context else ""))
-                return script
-            
+                log.info(f"✅ Dialogue script generated: {len(script.split())} words" +
+                        (" (enriched)" if enriched_context else "") +
+                        (f" +{len(perplexity_articles)} related" if perplexity_articles else ""))
+                return {
+                    "script": script,
+                    "perplexity_articles": perplexity_articles
+                }
+
             prompt += "\n\nATTENTION: Tu DOIS utiliser [A] et [B] pour chaque réplique!"
-        
-        return script
-        
+
+        return {"script": script, "perplexity_articles": perplexity_articles}
+
     except Exception as e:
         log.error(f"Failed to generate script: {e}")
         return None
@@ -1666,13 +1733,13 @@ def get_or_create_segment(
                 "digest": digest  # Include digest even for cached segments
             }
     
-    # 4. Generate DIALOGUE script (with Perplexity enrichment for Digest)
+    # 4. Generate DIALOGUE script (with Perplexity enrichment)
     # V12: Pass topic_slug to check for previous segment
     # V17: Use segment duration constraints instead of words_per_article
     target_words = format_config.get("segment_target_words", 150)
     max_words = format_config.get("segment_max_words", 200)
-    
-    script = generate_dialogue_segment_script(
+
+    script_result = generate_dialogue_segment_script(
         title=title,
         content=content,
         source_name=source_name,
@@ -1683,27 +1750,30 @@ def get_or_create_segment(
         topic_slug=topic_slug,
         user_id=user_id
     )
-    
-    if not script:
+
+    if not script_result:
         return None
-    
+
+    script = script_result["script"]
+    perplexity_articles = script_result.get("perplexity_articles", [])
+
     # 4. Generate DIALOGUE audio
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_path = os.path.join(tempfile.gettempdir(), f"segment_{content_hash[:8]}_{timestamp}.mp3")
-    
+
     audio_path = generate_dialogue_audio(script, temp_path)
     if not audio_path:
         return None
-    
+
     duration = get_audio_duration(audio_path)
-    
+
     # 5. Upload
     remote_path = f"segments/{target_date.isoformat()}/{edition}/{content_hash[:16]}.mp3"
     audio_url = upload_segment(audio_path, remote_path)
-    
+
     if not audio_url:
         audio_url = audio_path
-    
+
     # 6. Cache
     cache_segment(
         content_hash=content_hash,
@@ -1716,9 +1786,10 @@ def get_or_create_segment(
         audio_url=audio_url,
         audio_duration=duration
     )
-    
-    log.info(f"✅ Segment created: {title[:40]}, {duration}s")
-    
+
+    log.info(f"✅ Segment created: {title[:40]}, {duration}s" +
+             (f" +{len(perplexity_articles)} related articles" if perplexity_articles else ""))
+
     return {
         "audio_url": audio_url,
         "audio_path": audio_path,
@@ -1728,7 +1799,8 @@ def get_or_create_segment(
         "url": url,
         "source_name": source_name,
         "cached": False,
-        "digest": digest  # Include extracted digest
+        "digest": digest,  # Include extracted digest
+        "perplexity_articles": perplexity_articles  # Related articles from Perplexity
     }
 
 
@@ -3657,7 +3729,16 @@ def assemble_lego_podcast(
                     "url": segment.get("url"),
                     "domain": segment.get("source_name", urlparse(item["url"]).netloc)
                 })
-                
+
+                # Add Perplexity related articles to sources
+                for perp_article in segment.get("perplexity_articles", []):
+                    sources_data.append({
+                        "title": perp_article.get("title"),
+                        "url": perp_article.get("url"),
+                        "domain": perp_article.get("source", ""),
+                        "from_perplexity": True  # Mark as Perplexity source
+                    })
+
                 # Collect digest for this article
                 if segment.get("digest"):
                     digests_data.append({

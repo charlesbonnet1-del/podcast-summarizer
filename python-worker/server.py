@@ -1172,19 +1172,19 @@ def prompt_lab_generate():
         else:
             topic_intention = get_topic_intention(topic)
         
-        # Perplexity enrichment
-        # FIX: enrich_content_with_perplexity returns a single string, not a tuple
+        # Perplexity enrichment - returns dict with context and related_articles
         enriched_context = None
-        perplexity_citations = []
-        
+        perplexity_articles = []
+
         if use_enrichment:
-            enriched_context = enrich_content_with_perplexity(
-                combined_title, 
-                combined_content[:2000], 
+            enrichment_result = enrich_content_with_perplexity(
+                combined_title,
+                combined_content[:2000],
                 source_names[0] if source_names else "Unknown"
             )
-            # Note: perplexity_citations stays empty as the function doesn't return citations
-        
+            enriched_context = enrichment_result.get("context")
+            perplexity_articles = enrichment_result.get("related_articles", [])
+
         # Build full content for LLM
         if enriched_context:
             full_content = f"""ARTICLE PRINCIPAL:
@@ -1259,7 +1259,7 @@ CONTEXTE ENRICHI (sources additionnelles):
             "success": True,
             "script": script,
             "enriched_context": enriched_context,
-            "perplexity_citations": perplexity_citations,
+            "perplexity_articles": perplexity_articles,
             "word_count": word_count,
             "generation_time_ms": generation_time_ms,
             "topic": topic,
