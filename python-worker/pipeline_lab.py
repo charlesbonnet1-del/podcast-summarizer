@@ -480,7 +480,7 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         # eps=0.7 -> cos_sim > 1 - 0.7²/2 = 0.755
         # eps=1.0 -> cos_sim > 1 - 1.0²/2 = 0.5
         clusterer = DBSCAN(
-            eps=0.65,  # Requires cosine similarity > 0.79
+            eps=1.0,  # Requires cosine similarity > 0.5 (less strict, more clusters)
             min_samples=min_cluster_size,
             metric='euclidean',
             n_jobs=-1
