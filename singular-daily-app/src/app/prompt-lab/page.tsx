@@ -210,16 +210,25 @@ export default function PromptLabPage() {
     }
   }, [selectedTopic, topicIntentions]);
 
-  async function loadData() {
-    setLoading(true);
+  // Refresh only queue (no loading spinner)
+  async function refreshQueue() {
     try {
       const queueRes = await fetch("/api/prompt-lab?action=queue");
       const queueData = await queueRes.json();
       if (queueData.topics) {
         setQueue(queueData.topics);
         const firstTopic = Object.keys(queueData.topics).find(t => queueData.topics[t].length > 0);
-        if (firstTopic) setSelectedTopic(firstTopic);
+        if (firstTopic && !selectedTopic) setSelectedTopic(firstTopic);
       }
+    } catch (err) {
+      console.error("Failed to refresh queue:", err);
+    }
+  }
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      await refreshQueue();
 
       const promptsRes = await fetch("/api/prompt-lab?action=prompts");
       const promptsData = await promptsRes.json();
@@ -251,36 +260,31 @@ export default function PromptLabPage() {
     setFillingQueue(true);
     setError(null);
     try {
-      console.log("[fillQueue] Starting...");
       const res = await fetch("/api/prompt-lab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "fill-queue" })
       });
-      console.log("[fillQueue] Response status:", res.status);
       const data = await res.json();
-      console.log("[fillQueue] Response data:", data);
 
       if (data.error) {
-        setError(`Fill queue error: ${data.error}`);
+        setError(`Fill queue: ${data.error}`);
         setFillingQueue(false);
-      } else if (data.success) {
-        // Job started - poll for completion (RSS fetching takes time)
-        console.log("[fillQueue] Job started, polling...");
-        const pollInterval = setInterval(async () => {
-          await loadData();
-        }, 5000);
+        return;
+      }
 
-        // Stop polling after 30 seconds
-        setTimeout(() => {
+      // Job started in background - poll queue silently
+      let pollCount = 0;
+      const maxPolls = 6; // 30 seconds total
+      const pollInterval = setInterval(async () => {
+        pollCount++;
+        await refreshQueue();
+        if (pollCount >= maxPolls) {
           clearInterval(pollInterval);
           setFillingQueue(false);
-          console.log("[fillQueue] Polling complete");
-        }, 30000);
-      } else {
-        setError("Fill queue: unexpected response");
-        setFillingQueue(false);
-      }
+        }
+      }, 5000);
+
     } catch (err) {
       console.error("Fill queue failed:", err);
       setError(`Fill queue failed: ${err}`);
