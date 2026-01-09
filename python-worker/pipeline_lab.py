@@ -369,15 +369,16 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         log.info(f"📊 Embedding {len(articles)} articles with OpenAI...")
         
         # Build text for embedding: description + content (NO title, NO source name)
+        # IMPORTANT: Use `or ""` to handle None values from database (not just missing keys)
         texts = []
         for article in articles:
-            description = article.get("description", "")
-            content = article.get("content", article.get("processed_content", ""))
+            description = article.get("description") or ""
+            content = article.get("content") or article.get("processed_content") or ""
             # Use description + content, limited to 1000 chars
             text = f"{description} {content}".strip()[:1000]
             if not text:
                 # Fallback to title if no content
-                text = article.get("title", "No content")
+                text = article.get("title") or "No content"
             texts.append(text)
         
         embeddings = get_embeddings_batch(texts)
