@@ -510,8 +510,7 @@ def cron_fill_queue():
                     "source": art.get("source_name", "Unknown"),
                     "keyword": art.get("keyword", art.get("topic_slug", "general")),
                     "source_score": art.get("score", 50),
-                    "status": "pending",
-                    "description": art.get("description", "")[:1000] if art.get("description") else None
+                    "status": "pending"
                 }).execute()
                 inserted += 1
             except Exception as e:
