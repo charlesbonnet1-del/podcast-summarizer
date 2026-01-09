@@ -97,9 +97,7 @@ export default async function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <FormatToggle 
-            initialFormat={profile?.preferred_format || "digest"}
-          />
+          <FormatToggle />
         </CardContent>
       </Card>
 
