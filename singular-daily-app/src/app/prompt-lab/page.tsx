@@ -251,17 +251,22 @@ export default function PromptLabPage() {
     setFillingQueue(true);
     setError(null);
     try {
+      console.log("[fillQueue] Starting...");
       const res = await fetch("/api/prompt-lab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "fill-queue" })
       });
+      console.log("[fillQueue] Response status:", res.status);
       const data = await res.json();
+      console.log("[fillQueue] Response data:", data);
+
       if (data.error) {
-        setError(data.error);
+        setError(`Fill queue error: ${data.error}`);
         setFillingQueue(false);
-      } else {
+      } else if (data.success) {
         // Job started - poll for completion (RSS fetching takes time)
+        console.log("[fillQueue] Job started, polling...");
         const pollInterval = setInterval(async () => {
           await loadData();
         }, 5000);
@@ -270,11 +275,15 @@ export default function PromptLabPage() {
         setTimeout(() => {
           clearInterval(pollInterval);
           setFillingQueue(false);
+          console.log("[fillQueue] Polling complete");
         }, 30000);
+      } else {
+        setError("Fill queue: unexpected response");
+        setFillingQueue(false);
       }
     } catch (err) {
       console.error("Fill queue failed:", err);
-      setError("Fill queue failed");
+      setError(`Fill queue failed: ${err}`);
       setFillingQueue(false);
     }
   }
