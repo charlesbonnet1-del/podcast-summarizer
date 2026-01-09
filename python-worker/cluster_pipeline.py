@@ -185,11 +185,14 @@ def embed_articles(articles: list[dict]) -> list[dict]:
         return []
     
     # Build text for each article
+    # IMPORTANT: Use `or ""` to handle None values from database
     texts = []
     for article in articles:
-        title = article.get("title", "")
-        description = article.get("description", article.get("content", ""))[:500]
+        title = article.get("title") or ""
+        description = (article.get("description") or article.get("content") or article.get("processed_content") or "")[:500]
         text = f"{title}. {description}".strip()
+        if not text or text == ".":
+            text = "No content"
         texts.append(text)
     
     log.info(f"📊 Embedding {len(articles)} articles...")

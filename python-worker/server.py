@@ -461,11 +461,77 @@ def cron_redemption():
     return jsonify({"success": True, "message": "Redemption job started"})
 
 
+def is_noise_article(title: str, url: str, description: str = "") -> tuple[bool, str]:
+    """
+    Detect if an article is actually noise (non-article page).
+    Returns: (is_noise: bool, reason: str)
+    """
+    title_lower = title.lower().strip()
+    url_lower = url.lower()
+
+    # 1. Title too short (likely navigation page)
+    word_count = len(title.split())
+    if word_count < 4:
+        return True, f"Title too short ({word_count} words)"
+
+    # 2. Title matches common non-article patterns
+    noise_title_patterns = [
+        "home -", "- home", "homepage",
+        "contact -", "- contact", "contact us",
+        "about -", "- about", "about us",
+        "login", "sign in", "sign up", "register",
+        "subscribe", "subscription",
+        "careers", "jobs", "work with us", "join us",
+        "pricing", "plans", "tarifs",
+        "terms", "privacy", "legal", "conditions",
+        "faq", "help center", "support",
+        "404", "page not found", "error",
+        "consultant -", "- consultant",
+        "global management consulting",
+        "who we are", "what we do",
+        "our team", "our mission", "our values",
+        "press room", "newsroom",
+    ]
+
+    for pattern in noise_title_patterns:
+        if pattern in title_lower:
+            return True, f"Title matches noise pattern: '{pattern}'"
+
+    # 3. Title is just company name + section
+    if " - " in title or " | " in title:
+        parts = title.replace(" | ", " - ").split(" - ")
+        if len(parts) == 2:
+            if len(parts[0].split()) <= 2 and len(parts[1].split()) <= 3:
+                return True, f"Title looks like navigation: '{title}'"
+
+    # 4. URL patterns that indicate non-article pages
+    noise_url_patterns = [
+        "/home", "/index", "/default",
+        "/about", "/contact", "/careers", "/jobs",
+        "/login", "/signin", "/signup", "/register",
+        "/subscribe", "/subscription", "/pricing",
+        "/terms", "/privacy", "/legal",
+        "/faq", "/help", "/support",
+        "/tag/", "/category/", "/author/",
+        "/page/", "/p/",
+    ]
+
+    for pattern in noise_url_patterns:
+        if pattern in url_lower:
+            return True, f"URL matches noise pattern: '{pattern}'"
+
+    # 5. No description and short title = probably not an article
+    if not description and word_count < 6:
+        return True, "No description and short title"
+
+    return False, ""
+
+
 @app.route("/cron/fill-queue", methods=["POST"])
 def cron_fill_queue():
     """
     Fill content_queue with fresh articles from all RSS sources.
-    V19: Now runs synchronously to report errors properly.
+    V20: Applies noise filter + scrapes content for better embeddings.
     """
     if not verify_auth():
         return jsonify({"error": "Unauthorized"}), 401
@@ -474,10 +540,11 @@ def cron_fill_queue():
 
     try:
         from sourcing import fetch_all_sources
+        from extractor import extract_article_content
 
         # Fetch all sources (this is the slow part)
         articles = fetch_all_sources(user_id=None)
-        log.info(f"📰 Fetched {len(articles)} articles from sources")
+        log.info(f"📰 Fetched {len(articles)} raw articles from sources")
 
         if not articles:
             return jsonify({
@@ -489,23 +556,51 @@ def cron_fill_queue():
         # Store in content_queue
         inserted = 0
         duplicates = 0
+        noise_filtered = 0
+        scrape_success = 0
         errors = 0
 
         for art in articles:
             try:
+                url = art.get("url", "")
+                title = art.get("title", "")
+                description = art.get("description", "")
+
+                # ========== NOISE FILTER ==========
+                is_noise, noise_reason = is_noise_article(title, url, description)
+                if is_noise:
+                    noise_filtered += 1
+                    log.debug(f"🗑️ Noise filter: {noise_reason}", title=title[:50])
+                    continue
+
                 # Check if URL already exists
                 existing = supabase.table("content_queue") \
                     .select("id") \
-                    .eq("url", art.get("url", "")) \
+                    .eq("url", url) \
                     .execute()
 
                 if existing.data:
                     duplicates += 1
                     continue  # Skip duplicates
 
+                # ========== SCRAPE CONTENT ==========
+                processed_content = ""
+                try:
+                    extraction = extract_article_content(url)
+                    if extraction:
+                        _, content = extraction
+                        if content and len(content) > 100:
+                            processed_content = content[:5000]  # Limit to 5000 chars
+                            scrape_success += 1
+                except Exception as scrape_err:
+                    log.debug(f"Scrape failed for {url[:50]}: {scrape_err}")
+
+                # ========== INSERT ==========
                 supabase.table("content_queue").insert({
-                    "url": art.get("url", ""),
-                    "title": art.get("title", "")[:500],
+                    "url": url,
+                    "title": title[:500],
+                    "description": description[:500] if description else "",
+                    "processed_content": processed_content,
                     "source_name": art.get("source_name", "Unknown"),
                     "source": art.get("source_name", "Unknown"),
                     "keyword": art.get("keyword", art.get("topic_slug", "general")),
@@ -516,13 +611,15 @@ def cron_fill_queue():
                 log.warning(f"Could not insert article: {e}")
                 errors += 1
 
-        log.info(f"✅ Fill queue complete: {inserted} new, {duplicates} duplicates, {errors} errors")
+        log.info(f"✅ Fill queue complete: {inserted} new, {duplicates} duplicates, {noise_filtered} noise, {scrape_success} scraped, {errors} errors")
 
         return jsonify({
             "success": True,
             "message": f"Added {inserted} articles",
             "inserted": inserted,
             "duplicates": duplicates,
+            "noise_filtered": noise_filtered,
+            "scrape_success": scrape_success,
             "errors": errors,
             "total_fetched": len(articles)
         })
