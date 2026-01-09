@@ -260,6 +260,7 @@ export default function PromptLabPage() {
     setFillingQueue(true);
     setError(null);
     try {
+      // This is now synchronous and can take 30-60 seconds
       const res = await fetch("/api/prompt-lab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -267,27 +268,22 @@ export default function PromptLabPage() {
       });
       const data = await res.json();
 
-      if (data.error) {
-        setError(`Fill queue: ${data.error}`);
-        setFillingQueue(false);
-        return;
-      }
-
-      // Job started in background - poll queue silently
-      let pollCount = 0;
-      const maxPolls = 6; // 30 seconds total
-      const pollInterval = setInterval(async () => {
-        pollCount++;
-        await refreshQueue();
-        if (pollCount >= maxPolls) {
-          clearInterval(pollInterval);
-          setFillingQueue(false);
+      if (data.error || data.success === false) {
+        setError(`Fill queue: ${data.error || "Failed"}`);
+      } else if (data.inserted !== undefined) {
+        // Show result
+        if (data.inserted > 0) {
+          alert(`✅ ${data.inserted} articles ajoutés (${data.duplicates || 0} doublons ignorés)`);
+        } else {
+          setError(`Aucun nouvel article (${data.duplicates || 0} doublons, ${data.total_fetched || 0} sources)`);
         }
-      }, 5000);
-
+        // Refresh queue to show new articles
+        await refreshQueue();
+      }
     } catch (err) {
       console.error("Fill queue failed:", err);
       setError(`Fill queue failed: ${err}`);
+    } finally {
       setFillingQueue(false);
     }
   }
