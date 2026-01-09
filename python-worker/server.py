@@ -504,6 +504,7 @@ def cron_fill_queue():
                     continue  # Skip duplicates
 
                 supabase.table("content_queue").insert({
+                    "user_id": "system",
                     "url": art.get("url", ""),
                     "title": art.get("title", "")[:500],
                     "source_name": art.get("source_name", "Unknown"),
@@ -945,6 +946,7 @@ def prompt_lab_add_source():
 
         # Insert into queue
         result = supabase.table("content_queue").insert({
+            "user_id": "system",
             "url": url,
             "title": title[:500] if title else url[:500],
             "source_name": source_name,
