@@ -126,17 +126,17 @@ interface GenerationResult {
 // ============================================
 
 const DEFAULT_PARAMS: PipelineParams = {
-  flash_segment_count: 4,
-  digest_segment_count: 8,
+  flash_segment_count: 5,
+  digest_segment_count: 5,
   min_cluster_size: 3,
   min_articles_fallback: 5,
   content_queue_days: 3,
   maturation_window_hours: 72,
   segment_cache_days: 1,
-  flash_duration_min: 45,
-  flash_duration_max: 60,
-  digest_duration_min: 90,
-  digest_duration_max: 120,
+  flash_duration_min: 50,
+  flash_duration_max: 70,
+  digest_duration_min: 50,
+  digest_duration_max: 70,
   bing_backup_threshold: 5,
   max_articles_per_rss: 10,
   topics_enabled: {
@@ -259,16 +259,22 @@ export default function PromptLabPage() {
       const data = await res.json();
       if (data.error) {
         setError(data.error);
+        setFillingQueue(false);
       } else {
-        // Reload queue after a short delay to let the backend process
+        // Job started - poll for completion (RSS fetching takes time)
+        const pollInterval = setInterval(async () => {
+          await loadData();
+        }, 5000);
+
+        // Stop polling after 30 seconds
         setTimeout(() => {
-          loadData();
-        }, 3000);
+          clearInterval(pollInterval);
+          setFillingQueue(false);
+        }, 30000);
       }
     } catch (err) {
       console.error("Fill queue failed:", err);
       setError("Fill queue failed");
-    } finally {
       setFillingQueue(false);
     }
   }
@@ -609,6 +615,18 @@ export default function PromptLabPage() {
     setSelectedTopic(topic);
   }
 
+  function selectAllArticles() {
+    const allIds = new Set<string>();
+    Object.values(queue).forEach(articles => {
+      articles.forEach(a => allIds.add(a.id));
+    });
+    setSelectedArticles(allIds);
+  }
+
+  function deselectAllArticles() {
+    setSelectedArticles(new Set());
+  }
+
   function togglePipelineTopic(topic: string) {
     setParams(prev => ({
       ...prev,
@@ -693,10 +711,28 @@ export default function PromptLabPage() {
         {/* LEFT SIDEBAR: Articles Queue */}
         <div className="w-80 flex-shrink-0 border-r border-border/30 overflow-y-auto bg-card/30">
           <div className="p-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2 mb-4 text-muted-foreground uppercase tracking-wide">
-              <FileText className="w-4 h-4" />
-              Articles Queue
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
+                <FileText className="w-4 h-4" />
+                Articles Queue
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAllArticles}
+                  disabled={totalArticles === 0}
+                  className="text-[10px] px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
+                >
+                  Tout
+                </button>
+                <button
+                  onClick={deselectAllArticles}
+                  disabled={selectedArticles.size === 0}
+                  className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  Aucun
+                </button>
+              </div>
+            </div>
             <div className="space-y-2">
               {topics.map(topic => {
                 const articles = queue[topic] || [];
@@ -743,22 +779,12 @@ export default function PromptLabPage() {
             {/* 1. FETCH PARAMETERS */}
             <AccordionSection title="1. Fetch Parameters" icon={<Filter className="w-4 h-4 text-blue-400" />} expanded={expandedSections.has("fetch-params")} onToggle={() => toggleSection("fetch-params")} badge={hasParamChanges ? "Modified" : undefined}>
               <div className="space-y-4">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-2 block">Format</label>
-                  <div className="flex gap-2">
-                    <button onClick={() => setFormat("flash")} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${format === "flash" ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-background/50 text-muted-foreground border border-border/30 hover:bg-background/80"}`}>Flash (4min)</button>
-                    <button onClick={() => setFormat("digest")} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${format === "digest" ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" : "bg-background/50 text-muted-foreground border border-border/30 hover:bg-background/80"}`}>Digest (15min)</button>
-                  </div>
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <span className="text-sm font-medium text-blue-400">Format: Flash (5 min)</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Flash Segments</label>
-                    <input type="number" value={params.flash_segment_count} onChange={(e) => updateParam("flash_segment_count", parseInt(e.target.value) || 0)} className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Digest Segments</label>
-                    <input type="number" value={params.digest_segment_count} onChange={(e) => updateParam("digest_segment_count", parseInt(e.target.value) || 0)} className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-sm" />
-                  </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Nombre de segments</label>
+                  <input type="number" value={params.flash_segment_count} onChange={(e) => updateParam("flash_segment_count", parseInt(e.target.value) || 0)} className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-sm" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>

@@ -130,32 +130,33 @@ REPORT_RETENTION_DAYS = 365
 # Format configurations - OPTIMIZED FOR DENSITY
 # V17: Added segment duration constraints (no article limits)
 # V18: Increased word counts - scripts were too short
+# V19: Single format - 5 minutes with 5 segments
 FORMAT_CONFIG = {
     "flash": {
-        "duration_minutes": 4,
-        "total_words": 1200,           # Target ~4-5 min with segments
-        "max_segments": 4,             # V17: 3-4 segments
-        "min_segments": 3,
-        # V18: Increased segment duration - was too short
+        "duration_minutes": 5,
+        "total_words": 1500,           # Target ~5 min with segments
+        "max_segments": 5,             # V19: 5 segments for 5 minutes
+        "min_segments": 4,
+        # V19: ~60s per segment for 5 min total
         "segment_target_seconds": 60,  # Target ~60s per segment
-        "segment_max_seconds": 90,     # Hard max 90s (can stretch for major events)
+        "segment_max_seconds": 75,     # Hard max 75s
         "segment_target_words": 180,   # ~60s at 180 WPM (dialogue pace)
-        "segment_max_words": 250,      # ~90s at 180 WPM
-        "segment_min_words": 150,      # V18: Minimum to prevent too-short scripts
+        "segment_max_words": 225,      # ~75s at 180 WPM
+        "segment_min_words": 150,      # Minimum to prevent too-short scripts
         "style": "concis mais informatif"
     },
+    # V19: digest deprecated - use flash for all podcasts
     "digest": {
-        "duration_minutes": 15,
-        "total_words": 3500,
-        "max_segments": 8,             # V17: 6-8 segments
-        "min_segments": 6,
-        # V18: Increased segment duration - was too short
-        "segment_target_seconds": 120, # Target ~120s per segment
-        "segment_max_seconds": 150,    # Hard max 150s (can stretch for major events)
-        "segment_target_words": 350,   # ~120s at 180 WPM (dialogue pace)
-        "segment_max_words": 450,      # ~150s at 180 WPM
-        "segment_min_words": 300,      # V18: Minimum to prevent too-short scripts
-        "style": "approfondi et analytique"
+        "duration_minutes": 5,
+        "total_words": 1500,
+        "max_segments": 5,
+        "min_segments": 4,
+        "segment_target_seconds": 60,
+        "segment_max_seconds": 75,
+        "segment_target_words": 180,
+        "segment_max_words": 225,
+        "segment_min_words": 150,
+        "style": "concis mais informatif"
     }
 }
 

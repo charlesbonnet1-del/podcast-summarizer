@@ -35,24 +35,24 @@ log = structlog.get_logger()
 # ============================================
 
 DEFAULT_PARAMS = {
-    # Segment counts
-    "flash_segment_count": 4,
-    "digest_segment_count": 8,
-    
+    # V19: Single format - 5 segments for 5 minute podcast
+    "flash_segment_count": 5,
+    "digest_segment_count": 5,  # deprecated - same as flash
+
     # Clustering
     "min_cluster_size": 3,
     "min_articles_fallback": 5,  # If no cluster, need at least this many articles
-    
+
     # Time windows
     "content_queue_days": 3,
     "maturation_window_hours": 72,
     "segment_cache_days": 1,
-    
-    # Duration targets (seconds)
-    "flash_duration_min": 45,
-    "flash_duration_max": 60,
-    "digest_duration_min": 90,
-    "digest_duration_max": 120,
+
+    # Duration targets (seconds) - V19: ~60s per segment
+    "flash_duration_min": 50,
+    "flash_duration_max": 70,
+    "digest_duration_min": 50,
+    "digest_duration_max": 70,
     
     # Topics (all enabled by default)
     "topics_enabled": {
