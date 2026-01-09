@@ -545,16 +545,19 @@ DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast professionnel. Écris un
 {historical_context}
 {historical_instruction}
 
+{perplexity_instruction}
+
 {previous_segment_rule}
 {previous_segment_context}
 
 ## LES HÔTES
 - [B] L'ANALYSTE (voix masculine) = Présente les faits clés avec données
-- [A] LA SCEPTIQUE (voix féminine) = Challenge et apporte des nuances
+- [A] LA SCEPTIQUE (voix féminine) = Challenge, cite les sources Perplexity, apporte des nuances
 
 ## RÈGLES ABSOLUES
 ⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
 ⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
+⚠️ CITE LES SOURCES: Mentionne les médias cités dans l'ANALYSE ENRICHIE
 ⚠️ STYLE {style}: Chaque phrase apporte de l'information
 ⚠️ **LONGUEUR OBLIGATOIRE: MINIMUM {word_count} MOTS** - Un script trop court sera rejeté
 
@@ -587,15 +590,17 @@ DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast professionnel. Écr
 {historical_context}
 {historical_instruction}
 
+{perplexity_instruction}
+
 ## LES HÔTES
 - [B] L'ANALYSTE (voix masculine) = Synthétise les informations des différentes sources
-- [A] LA SCEPTIQUE (voix féminine) = Challenge et met en perspective
+- [A] LA SCEPTIQUE (voix féminine) = Challenge, cite les sources Perplexity, met en perspective (thèse/antithèse)
 
 ## RÈGLES ABSOLUES
 ⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
 ⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
 ⚠️ STYLE DENSE: Chaque phrase apporte de l'information
-⚠️ CITE LES SOURCES: "Selon [source]...", "D'après [source]..."
+⚠️ CITE LES SOURCES: "Selon [source]...", "D'après [source]..." - INCLUS les sources Perplexity!
 ⚠️ **LONGUEUR OBLIGATOIRE: MINIMUM {word_count} MOTS** - Un script trop court sera rejeté
 
 ## FORMAT
@@ -1045,51 +1050,69 @@ def generate_dialogue_audio(script: str, output_path: str) -> str | None:
 # PERPLEXITY ENRICHMENT
 # ============================================
 
-ENRICHMENT_PROMPT = """Tu es un expert en veille technologique. Analyse cet article et fournis un enrichissement structuré.
+ENRICHMENT_PROMPT = """Tu es un expert en veille technologique et journalisme d'analyse.
 
-ARTICLE:
-Titre: {title}
-Source: {source}
-Contenu: {content}
+SUJETS À ANALYSER:
+{titles}
+
+SOURCES ORIGINALES: {sources}
+
+EXTRAIT DU CONTENU:
+{content}
+
+MISSION: Fournis une ANALYSE ENRICHIE qui va AU-DELÀ des articles sources. Utilise ta capacité de recherche web pour apporter du NOUVEAU.
 
 RÉPONDS UNIQUEMENT EN JSON VALIDE (pas de markdown, pas de ```):
 {{
-    "context": "Contexte enrichi en 150 mots max: historique, enjeux, implications concrètes",
+    "context": "📌 CONTEXTE: [Situe le sujet dans son contexte historique et actuel - 2-3 phrases avec données chiffrées si possible]\n\n⚖️ THÈSE: [Point de vue dominant, tendance principale, arguments pour - 2-3 phrases]\n\n🔄 ANTITHÈSE: [Point de vue opposé, critiques, limites, risques - 2-3 phrases]\n\n👥 IMPACT: [Ce que ça change concrètement pour les professionnels et utilisateurs - 2-3 phrases]\n\n🔮 PERSPECTIVE: [Évolution probable, prochaines étapes attendues - 1-2 phrases]\n\n📚 Sources: [Liste tes sources web consultées]",
     "related_articles": [
         {{
-            "title": "Titre de l'article connexe 1 (le plus pertinent et récent)",
-            "url": "https://url-complete-de-larticle-1.com/...",
-            "source": "Nom du média"
+            "title": "Titre exact de l'article 1",
+            "url": "https://url-reelle-verifiee.com/article1",
+            "source": "Nom du média",
+            "insight": "Ce que cet article apporte de nouveau en 15 mots max"
         }},
         {{
-            "title": "Titre de l'article connexe 2 (complémentaire au premier)",
-            "url": "https://url-complete-de-larticle-2.com/...",
-            "source": "Nom du média"
+            "title": "Titre exact de l'article 2",
+            "url": "https://url-reelle-verifiee.com/article2",
+            "source": "Nom du média",
+            "insight": "Ce que cet article apporte de nouveau en 15 mots max"
+        }},
+        {{
+            "title": "Titre exact de l'article 3",
+            "url": "https://url-reelle-verifiee.com/article3",
+            "source": "Nom du média",
+            "insight": "Ce que cet article apporte de nouveau en 15 mots max"
         }}
     ]
 }}
 
-IMPORTANT:
-- Les URLs doivent être RÉELLES et COMPLÈTES (pas d'exemples)
-- Privilégie les articles des 7 derniers jours
-- Les articles doivent apporter un angle différent ou complémentaire"""
+RÈGLES CRITIQUES:
+- Le "context" DOIT faire 200+ mots avec TOUTE la structure demandée
+- CITE tes sources web dans le contexte (ex: "Selon TechCrunch...")
+- Les URLs doivent être RÉELLES (pas d'exemples, pas de placeholder)
+- Apporte des INFOS NOUVELLES, pas un résumé des articles fournis
+- L'insight de chaque article doit expliquer sa valeur ajoutée"""
 
 
 def enrich_content_with_perplexity(
     title: str,
     content: str,
-    source_name: str
+    source_name: str,
+    all_titles: list[str] = None,
+    all_sources: list[str] = None
 ) -> dict:
     """
     Enrich article content using Perplexity's web search.
-    Returns dict with context and 2 related articles.
+    Returns dict with context and 3 related articles.
 
     Returns:
         {
-            "context": str,  # Enriched context
-            "related_articles": [  # 2 fresh related articles
-                {"title": str, "url": str, "source": str},
-                {"title": str, "url": str, "source": str}
+            "context": str,  # Enriched context with thesis/antithesis
+            "related_articles": [  # 3 fresh related articles
+                {"title": str, "url": str, "source": str, "insight": str},
+                {"title": str, "url": str, "source": str, "insight": str},
+                {"title": str, "url": str, "source": str, "insight": str}
             ]
         }
     """
@@ -1100,19 +1123,31 @@ def enrich_content_with_perplexity(
         return empty_result
 
     try:
+        # Build titles list from all_titles or fallback to single title
+        if all_titles and len(all_titles) > 0:
+            titles_text = "\n".join([f"- {t}" for t in all_titles[:5]])  # Max 5 titles
+        else:
+            titles_text = f"- {title}"
+
+        # Build sources list
+        if all_sources and len(all_sources) > 0:
+            sources_text = ", ".join(list(set(all_sources[:5])))  # Unique sources
+        else:
+            sources_text = source_name
+
         prompt = ENRICHMENT_PROMPT.format(
-            title=title,
-            source=source_name,
-            content=content[:2000]  # Limit input size
+            titles=titles_text,
+            sources=sources_text,
+            content=content[:3000]  # Increased input size for better context
         )
 
         response = perplexity_client.chat.completions.create(
             model="sonar",  # Perplexity model with web search
             messages=[
-                {"role": "system", "content": "Tu es un expert en veille tech. Réponds uniquement en JSON valide."},
+                {"role": "system", "content": "Tu es un expert en veille tech et journalisme d'analyse. Tu fournis des analyses structurées avec thèse/antithèse. Réponds uniquement en JSON valide."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=600,
+            max_tokens=1200,  # Increased for longer structured response
             temperature=0.3
         )
 
@@ -1132,14 +1167,15 @@ def enrich_content_with_perplexity(
         context = result.get("context", "")
         related_articles = result.get("related_articles", [])
 
-        # Validate related articles
+        # Validate related articles - now 3 instead of 2
         valid_articles = []
-        for art in related_articles[:2]:
+        for art in related_articles[:3]:
             if art.get("url") and art.get("title") and art["url"].startswith("http"):
                 valid_articles.append({
                     "title": art.get("title", ""),
                     "url": art.get("url", ""),
-                    "source": art.get("source", "")
+                    "source": art.get("source", ""),
+                    "insight": art.get("insight", "")  # New field
                 })
 
         log.info(f"✅ Perplexity enrichment: +{len(context.split())} words, {len(valid_articles)} related articles")
