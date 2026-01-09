@@ -1358,17 +1358,19 @@ def prompt_lab_generate():
         combined_content = ""
         combined_title = ""
         source_names = []
-        
+        all_titles = []  # Collect all titles for Perplexity
+
         log.info(f"📝 Processing {len(articles)} articles for generation")
-        
+
         for article in articles:
             title = article.get("title", "Sans titre")
             source_name = article.get("source_name", article.get("source", "Unknown"))
             url = article.get("url", "")
-            
+
             if not combined_title:
                 combined_title = title
-            
+
+            all_titles.append(title)  # Collect all titles
             source_names.append(source_name)
             
             # Use content already available (from pipeline or DB)
@@ -1413,8 +1415,10 @@ def prompt_lab_generate():
         if use_enrichment:
             enrichment_result = enrich_content_with_perplexity(
                 combined_title,
-                combined_content[:2000],
-                source_names[0] if source_names else "Unknown"
+                combined_content[:3000],  # Increased content for better context
+                source_names[0] if source_names else "Unknown",
+                all_titles=all_titles,  # Pass all article titles
+                all_sources=source_names  # Pass all source names
             )
             enriched_context = enrichment_result.get("context")
             perplexity_articles = enrichment_result.get("related_articles", [])
@@ -1459,7 +1463,17 @@ def prompt_lab_generate():
             content_parts.append(historical_section)
 
         if enriched_context:
-            content_parts.append(f"CONTEXTE ENRICHI (Perplexity):\n{enriched_context}")
+            # Build Perplexity section with articles for citation
+            perplexity_section = f"ANALYSE ENRICHIE (sources Perplexity - À CITER DANS LE DIALOGUE):\n{enriched_context}"
+            if perplexity_articles:
+                perplexity_section += "\n\n📰 ARTICLES CONNEXES À MENTIONNER:"
+                for i, art in enumerate(perplexity_articles, 1):
+                    source = art.get("source", "")
+                    insight = art.get("insight", "")
+                    perplexity_section += f"\n{i}. [{source}] {art.get('title', '')}"
+                    if insight:
+                        perplexity_section += f" → {insight}"
+            content_parts.append(perplexity_section)
 
         full_content = "\n\n".join(content_parts)
         
@@ -1477,6 +1491,17 @@ def prompt_lab_generate():
             historical_instruction = "Ce sujet revient régulièrement dans l'actualité. Tu peux faire référence à notre couverture précédente."
         elif trend == "declining":
             historical_instruction = "Ce sujet était plus présent récemment. C'est peut-être une mise à jour finale."
+
+        # Build Perplexity citation instruction if enrichment was used
+        perplexity_instruction = ""
+        if enriched_context and perplexity_articles:
+            perplexity_sources = [art.get("source", "") for art in perplexity_articles if art.get("source")]
+            if perplexity_sources:
+                perplexity_instruction = f"""
+⚠️ CITATION OBLIGATOIRE: Tu DOIS citer les sources Perplexity dans le dialogue:
+- Utilise des formulations comme: "Selon {perplexity_sources[0]}...", "D'après une analyse de {perplexity_sources[1] if len(perplexity_sources) > 1 else perplexity_sources[0]}..."
+- Mentionne au moins 2 des sources listées dans l'ANALYSE ENRICHIE
+- Intègre les perspectives thèse/antithèse dans l'échange"""
 
         # Common template variables
         template_vars = {
@@ -1498,6 +1523,8 @@ def prompt_lab_generate():
             "historical_instruction": historical_instruction,
             "trend": trend,
             "coverage_count": historical_context.get("coverage_count", 0),
+            # Perplexity citation instruction
+            "perplexity_instruction": perplexity_instruction,
         }
         
         if len(articles) > 1:

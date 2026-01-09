@@ -247,8 +247,12 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
                 })
                 continue
             
-            # Skip if topic not in our fetch list
-            if topic not in fetch_topics:
+            # "general" articles are from generalist sources - they should be included
+            # and will be assigned to clusters by embedding similarity
+            is_general = (topic == "general")
+
+            # Skip if topic not in our fetch list (but always allow "general")
+            if not is_general and topic not in fetch_topics:
                 exclusions.append({
                     "type": "topic_not_enabled",
                     "title": title[:50],
@@ -256,7 +260,7 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
                     "reason": f"Topic '{topic}' not in enabled topics"
                 })
                 continue
-            
+
             article = {
                 "id": art.get("id"),
                 "url": url,
@@ -264,27 +268,40 @@ def sandbox_fetch(params: dict, topics: list[str] = None) -> dict:
                 "source_type": art.get("source_type", "queue"),
                 "source_name": art.get("source_name", art.get("source", "Unknown")),
                 "source_country": art.get("source_country", "FR"),
-                "topic": topic,
+                "topic": topic,  # Keep original topic for reference
                 "keyword": topic,
                 "description": description,
                 "content": art.get("processed_content", art.get("content", "")),
                 "published": art.get("published_at", art.get("created_at", "")),
                 "fetched_at": art.get("created_at", datetime.now().isoformat()),
-                "source_score": art.get("source_score", 50)
+                "source_score": art.get("source_score", 50),
+                "is_general_source": is_general  # Flag for clustering
             }
             articles.append(article)
-            articles_by_topic[topic].append(article)
+
+            # Track by topic (general articles tracked separately)
+            if is_general:
+                if "general" not in articles_by_topic:
+                    articles_by_topic["general"] = []
+                articles_by_topic["general"].append(article)
+            else:
+                articles_by_topic[topic].append(article)
             stats["queue_articles"] += 1
         
         # Count topics that got articles
         stats["topics_fetched"] = sum(1 for t in fetch_topics if articles_by_topic.get(t))
         stats["total_articles"] = len(articles)
         stats["noise_filtered"] = noise_count
+        stats["general_sources"] = len(articles_by_topic.get("general", []))
         stats["duration_seconds"] = (datetime.now() - start_time).total_seconds()
-        
+
         if noise_count > 0:
             log.info(f"🗑️ Filtered {noise_count} noise articles (non-article pages)")
-        
+
+        general_count = stats["general_sources"]
+        if general_count > 0:
+            log.info(f"📰 Including {general_count} articles from generalist sources (will cluster by similarity)")
+
         # Add per-topic stats
         stats["by_topic"] = {
             topic: len(arts) for topic, arts in articles_by_topic.items()
@@ -463,7 +480,7 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         # eps=0.7 -> cos_sim > 1 - 0.7²/2 = 0.755
         # eps=1.0 -> cos_sim > 1 - 1.0²/2 = 0.5
         clusterer = DBSCAN(
-            eps=0.65,  # Requires cosine similarity > 0.79
+            eps=1.0,  # Requires cosine similarity > 0.5 (less strict, more clusters)
             min_samples=min_cluster_size,
             metric='euclidean',
             n_jobs=-1
@@ -485,12 +502,20 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
         
         # Build cluster objects
         for label, cluster_articles in cluster_groups.items():
-            # Determine dominant topic
+            # Determine dominant topic (ignore "general" - it's a source type, not a topic)
             topic_counts = {}
             for art in cluster_articles:
                 topic = art.get("topic", art.get("keyword", "unknown"))
-                topic_counts[topic] = topic_counts.get(topic, 0) + 1
-            dominant_topic = max(topic_counts, key=topic_counts.get) if topic_counts else "unknown"
+                # Skip "general" when counting - these are generalist sources
+                if topic != "general":
+                    topic_counts[topic] = topic_counts.get(topic, 0) + 1
+
+            # Use dominant non-general topic, fallback to "mixed" if all are general
+            if topic_counts:
+                dominant_topic = max(topic_counts, key=topic_counts.get)
+            else:
+                # All articles are "general" - label based on content (use first article's description)
+                dominant_topic = "mixed"
             
             # Get unique sources
             sources = list(set(a.get("source_name", "Unknown") for a in cluster_articles))
