@@ -59,6 +59,14 @@ export async function POST(request: NextRequest) {
     } else if (action === "clear-queue") {
       endpoint = "/prompt-lab/clear-queue";
       payload = {};
+    } else if (action === "add-source") {
+      endpoint = "/prompt-lab/add-source";
+      payload = {
+        url: body.url,
+        title: body.title,
+        source_name: body.source_name,
+        topic: body.topic,
+      };
     }
 
     console.log(`[prompt-lab] POST ${endpoint} to ${WORKER_URL}`);

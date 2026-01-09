@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { 
-  LayoutDashboard, 
-  Sparkles, 
-  Send, 
-  Loader2, 
+import {
+  LayoutDashboard,
+  Sparkles,
+  Send,
+  Loader2,
   ExternalLink,
   Check,
   ChevronDown,
@@ -23,7 +23,8 @@ import {
   AlertTriangle,
   XCircle,
   Download,
-  Trash2
+  Trash2,
+  Plus
 } from "lucide-react";
 
 // ============================================
@@ -113,7 +114,7 @@ interface TopicIntentions {
 interface GenerationResult {
   script: string;
   enriched_context: string | null;
-  perplexity_citations: Array<{ title: string; url: string }>;
+  perplexity_articles: Array<{ title: string; url: string; source: string }>;
   word_count: number;
   generation_time_ms: number;
   topic: string;
@@ -158,6 +159,12 @@ export default function PromptLabPage() {
   const [saving, setSaving] = useState(false);
   const [fillingQueue, setFillingQueue] = useState(false);
   const [clearingQueue, setClearingQueue] = useState(false);
+  const [addingSource, setAddingSource] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualSourceName, setManualSourceName] = useState("");
+  const [manualTopic, setManualTopic] = useState("");
   const [currentStep, setCurrentStep] = useState<"idle" | "fetch" | "cluster" | "select">("idle");
   
   // Pipeline params (sandbox - not saved until "Save" clicked)
@@ -312,6 +319,45 @@ export default function PromptLabPage() {
       setError("Clear queue failed");
     } finally {
       setClearingQueue(false);
+    }
+  }
+
+  async function addManualSource() {
+    if (!manualUrl.trim()) {
+      setError("URL is required");
+      return;
+    }
+    setAddingSource(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/prompt-lab", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add-source",
+          url: manualUrl.trim(),
+          title: manualTitle.trim() || undefined,
+          source_name: manualSourceName.trim() || undefined,
+          topic: manualTopic || "general"
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        // Reset form and refresh queue
+        setManualUrl("");
+        setManualTitle("");
+        setManualSourceName("");
+        setManualTopic("");
+        setShowAddForm(false);
+        await refreshQueue();
+      }
+    } catch (err) {
+      console.error("Add source failed:", err);
+      setError("Add source failed");
+    } finally {
+      setAddingSource(false);
     }
   }
 
@@ -720,6 +766,81 @@ export default function PromptLabPage() {
         {/* LEFT SIDEBAR: Articles Queue */}
         <div className="w-80 flex-shrink-0 border-r border-border/30 overflow-y-auto bg-card/30">
           <div className="p-4">
+            {/* Manual Source Addition */}
+            <div className="mb-4">
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 transition-colors text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                Ajouter source manuelle
+              </button>
+
+              {showAddForm && (
+                <div className="mt-3 p-3 bg-background/50 border border-border/30 rounded-xl space-y-3">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-1 block">URL *</label>
+                    <input
+                      type="url"
+                      value={manualUrl}
+                      onChange={(e) => setManualUrl(e.target.value)}
+                      placeholder="https://example.com/article"
+                      className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-1 block">Titre (optionnel)</label>
+                    <input
+                      type="text"
+                      value={manualTitle}
+                      onChange={(e) => setManualTitle(e.target.value)}
+                      placeholder="Titre de l'article"
+                      className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-1 block">Source (optionnel)</label>
+                    <input
+                      type="text"
+                      value={manualSourceName}
+                      onChange={(e) => setManualSourceName(e.target.value)}
+                      placeholder="Nom de la source"
+                      className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-1 block">Topic</label>
+                    <select
+                      value={manualTopic}
+                      onChange={(e) => setManualTopic(e.target.value)}
+                      className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    >
+                      <option value="">general</option>
+                      {Object.keys(params.topics_enabled).map(topic => (
+                        <option key={topic} value={topic}>{topic}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowAddForm(false)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-muted/50 text-muted-foreground hover:bg-muted transition-colors text-xs"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={addManualSource}
+                      disabled={addingSource || !manualUrl.trim()}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 disabled:opacity-50 transition-colors text-xs font-medium"
+                    >
+                      {addingSource ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                      Ajouter
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
                 <FileText className="w-4 h-4" />
@@ -965,6 +1086,26 @@ export default function PromptLabPage() {
                   <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl">
                     <h3 className="text-xs font-semibold text-purple-400 mb-2 flex items-center gap-2"><Sparkles className="w-3 h-3" />Perplexity Context</h3>
                     <p className="text-xs text-foreground/80 whitespace-pre-wrap max-h-32 overflow-y-auto">{result.enriched_context}</p>
+                  </div>
+                )}
+
+                {result.perplexity_articles && result.perplexity_articles.length > 0 && (
+                  <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
+                    <h3 className="text-xs font-semibold text-cyan-400 mb-2 flex items-center gap-2"><ExternalLink className="w-3 h-3" />Articles connexes (Perplexity)</h3>
+                    <div className="space-y-2">
+                      {result.perplexity_articles.map((article, i) => (
+                        <a
+                          key={i}
+                          href={article.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
+                        >
+                          <p className="text-xs font-medium text-foreground truncate">{article.title}</p>
+                          <p className="text-[10px] text-muted-foreground">{article.source}</p>
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
 

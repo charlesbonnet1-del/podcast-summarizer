@@ -235,6 +235,8 @@ for topics in VERTICALS_TOPICS.values():
     SUPPORTED_TOPICS.extend(topics)
 # Add legacy topics as valid
 SUPPORTED_TOPICS.extend(LEGACY_TOPIC_MAPPING.keys())
+# Add "general" as a special topic (feeds all topics, never creates segments)
+SUPPORTED_TOPICS.append("general")
 
 
 def get_vertical_for_topic(topic: str) -> str | None:

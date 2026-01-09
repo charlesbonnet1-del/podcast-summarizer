@@ -509,7 +509,6 @@ def cron_fill_queue():
                     "source_name": art.get("source_name", "Unknown"),
                     "source": art.get("source_name", "Unknown"),
                     "keyword": art.get("keyword", art.get("topic_slug", "general")),
-                    "source_score": art.get("score", 50),
                     "status": "pending"
                 }).execute()
                 inserted += 1
@@ -896,6 +895,80 @@ def prompt_lab_clear_queue():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/prompt-lab/add-source", methods=["POST"])
+def prompt_lab_add_source():
+    """
+    Manually add a source URL to the content queue.
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        data = request.get_json() or {}
+        url = data.get("url", "").strip()
+        title = data.get("title", "").strip()
+        source_name = data.get("source_name", "").strip()
+        topic = data.get("topic", "general").strip()
+
+        if not url:
+            return jsonify({"error": "URL is required"}), 400
+
+        # Ensure URL has protocol
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        # Check for duplicates
+        existing = supabase.table("content_queue") \
+            .select("id") \
+            .eq("url", url) \
+            .execute()
+
+        if existing.data:
+            return jsonify({"error": "URL already exists in queue"}), 400
+
+        # Extract title from URL if not provided
+        if not title:
+            try:
+                import requests as req
+                from bs4 import BeautifulSoup
+                response = req.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                soup = BeautifulSoup(response.text, "html.parser")
+                title = soup.title.string if soup.title else url
+            except Exception:
+                title = url
+
+        # Extract source name from domain if not provided
+        if not source_name:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            source_name = parsed.netloc.replace("www.", "")
+
+        # Insert into queue
+        result = supabase.table("content_queue").insert({
+            "url": url,
+            "title": title[:500] if title else url[:500],
+            "source_name": source_name,
+            "source": source_name,
+            "keyword": topic,
+            "status": "pending"
+        }).execute()
+
+        log.info("Manual source added", url=url, topic=topic)
+
+        return jsonify({
+            "success": True,
+            "article": {
+                "url": url,
+                "title": title,
+                "source_name": source_name,
+                "topic": topic
+            }
+        })
+    except Exception as e:
+        log.error("Add source error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/prompt-lab/prompts", methods=["GET"])
 def prompt_lab_get_prompts():
     """
@@ -1097,19 +1170,19 @@ def prompt_lab_generate():
         else:
             topic_intention = get_topic_intention(topic)
         
-        # Perplexity enrichment
-        # FIX: enrich_content_with_perplexity returns a single string, not a tuple
+        # Perplexity enrichment - returns dict with context and related_articles
         enriched_context = None
-        perplexity_citations = []
-        
+        perplexity_articles = []
+
         if use_enrichment:
-            enriched_context = enrich_content_with_perplexity(
-                combined_title, 
-                combined_content[:2000], 
+            enrichment_result = enrich_content_with_perplexity(
+                combined_title,
+                combined_content[:2000],
                 source_names[0] if source_names else "Unknown"
             )
-            # Note: perplexity_citations stays empty as the function doesn't return citations
-        
+            enriched_context = enrichment_result.get("context")
+            perplexity_articles = enrichment_result.get("related_articles", [])
+
         # Build full content for LLM
         if enriched_context:
             full_content = f"""ARTICLE PRINCIPAL:
@@ -1184,7 +1257,7 @@ CONTEXTE ENRICHI (sources additionnelles):
             "success": True,
             "script": script,
             "enriched_context": enriched_context,
-            "perplexity_citations": perplexity_citations,
+            "perplexity_articles": perplexity_articles,
             "word_count": word_count,
             "generation_time_ms": generation_time_ms,
             "topic": topic,
