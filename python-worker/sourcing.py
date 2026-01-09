@@ -249,30 +249,28 @@ def get_vertical_for_topic(topic: str) -> str | None:
 class GSheetSourceLibrary:
     """
     Read and manage RSS sources from Google Sheets.
-    
+
     Single worksheet "sources" with dynamic range A2:G (no upper limit).
-    
-    Column mapping (0-indexed from A2) - V14 FIX matches actual GSheet:
-    A (0): topic (asia, ia, crypto, etc. - must be in SUPPORTED_TOPICS)
-    B (1): origin (FR/INT)
-    C (2): source_name
-    D (3): type (Flux RSS, etc.)
-    E (4): url_rss
-    F (5): score (optional, default 50)
-    G (6): system_status (optional)
-    
-    Note: vertical is derived from topic, not stored in GSheet
+
+    V19 FIX - Actual column mapping from GSheet:
+    A (0): topic (asia, ia, crypto, etc.)
+    B (1): source_name
+    C (2): tier (authority, generalist, corporate)
+    D (3): url_rss
+    E (4): score
+    F (5): priority
+    G (6): language (en, fr, etc.)
     """
-    
-    # Column indices (0-indexed) - V14: Fixed to match actual GSheet structure
+
+    # Column indices (0-indexed) - V19: Fixed to match actual GSheet structure
     COL_TOPIC = 0       # A: topic (asia, ia, etc.)
-    COL_ORIGIN = 1      # B: origin (FR/INT)
-    COL_SOURCE_NAME = 2 # C: source_name
-    COL_TYPE = 3        # D: type
-    COL_URL_RSS = 4     # E: url_rss
-    COL_SCORE = 5       # F: score
-    COL_STATUS = 6      # G: system_status (optional)
-    
+    COL_SOURCE_NAME = 1 # B: source_name
+    COL_TIER = 2        # C: tier (authority, generalist, corporate)
+    COL_URL_RSS = 3     # D: url_rss
+    COL_SCORE = 4       # E: score
+    COL_PRIORITY = 5    # F: priority
+    COL_LANGUAGE = 6    # G: language (en, fr, etc.)
+
     # Single worksheet name
     WORKSHEET_NAME = "sources"
     
@@ -334,24 +332,27 @@ class GSheetSourceLibrary:
             
             sources = []
             for row_idx, row in enumerate(all_values, start=2):  # Start at row 2
-                # Skip empty rows - V14: Need at least 5 columns (topic, origin, name, type, url)
-                if not row or len(row) < 5:
+                # Skip empty rows - V19: Need at least 4 columns (topic, name, tier, url)
+                if not row or len(row) < 4:
                     continue
-                
-                # V14 FIX: Extract values with correct column mapping
-                # A=topic, B=origin, C=source_name, D=type, E=url_rss, F=score
+
+                # V19 FIX: Extract values with correct column mapping
+                # A=topic, B=source_name, C=tier, D=url_rss, E=score, F=priority, G=language
                 topic = row[self.COL_TOPIC].strip().lower() if len(row) > self.COL_TOPIC else ""
-                origin = row[self.COL_ORIGIN].strip().upper() if len(row) > self.COL_ORIGIN else "FR"
                 source_name = row[self.COL_SOURCE_NAME].strip() if len(row) > self.COL_SOURCE_NAME else ""
-                source_type = row[self.COL_TYPE].strip() if len(row) > self.COL_TYPE else ""
+                source_type = row[self.COL_TIER].strip() if len(row) > self.COL_TIER else ""  # tier as type
                 url_rss = row[self.COL_URL_RSS].strip() if len(row) > self.COL_URL_RSS else ""
-                
+
                 # Score with default
                 try:
                     score = int(row[self.COL_SCORE]) if len(row) > self.COL_SCORE and row[self.COL_SCORE].strip() else 50
                 except (ValueError, IndexError):
                     score = 50
-                
+
+                # Language as origin (en → INT, fr → FR)
+                language = row[self.COL_LANGUAGE].strip().lower() if len(row) > self.COL_LANGUAGE else "en"
+                origin = "FR" if language == "fr" else "INT"
+
                 # Validate required fields
                 if not url_rss or not topic:
                     continue
