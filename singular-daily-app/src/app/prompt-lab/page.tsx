@@ -795,15 +795,9 @@ export default function PromptLabPage() {
                   <label className="text-xs text-muted-foreground mb-1 block">Nombre de segments</label>
                   <input type="number" value={params.flash_segment_count} onChange={(e) => updateParam("flash_segment_count", parseInt(e.target.value) || 0)} className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-sm" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Min Cluster Size</label>
-                    <input type="number" value={params.min_cluster_size} onChange={(e) => updateParam("min_cluster_size", parseInt(e.target.value) || 0)} className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Bing Threshold</label>
-                    <input type="number" value={params.bing_backup_threshold} onChange={(e) => updateParam("bing_backup_threshold", parseInt(e.target.value) || 0)} className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-sm" />
-                  </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Min Cluster Size</label>
+                  <input type="number" value={params.min_cluster_size} onChange={(e) => updateParam("min_cluster_size", parseInt(e.target.value) || 0)} className="w-full p-2 bg-background/50 border border-border/50 rounded-lg text-sm" />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-2 block">Topics ({enabledTopicsCount}/15 enabled)</label>
