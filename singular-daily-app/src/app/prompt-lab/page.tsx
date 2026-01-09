@@ -281,6 +281,14 @@ export default function PromptLabPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "fill-queue" })
       });
+
+      // Handle non-JSON responses (timeouts, server errors)
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${text.substring(0, 200)}`);
+      }
+
       const data = await res.json();
 
       if (data.error || data.success === false) {
@@ -315,6 +323,14 @@ export default function PromptLabPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "clear-queue" })
       });
+
+      // Handle non-JSON responses
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${text.substring(0, 200)}`);
+      }
+
       const data = await res.json();
       if (data.error) {
         setError(data.error);
@@ -349,6 +365,14 @@ export default function PromptLabPage() {
           topic: manualTopic || "general"
         })
       });
+
+      // Handle non-JSON responses
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${text.substring(0, 200)}`);
+      }
+
       const data = await res.json();
       if (data.error) {
         setError(data.error);
@@ -588,6 +612,14 @@ export default function PromptLabPage() {
           model: selectedModel
         })
       });
+
+      // Handle non-JSON responses
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${text.substring(0, 200)}`);
+      }
+
       const data = await res.json();
       if (data.error) {
         setError(data.error);
