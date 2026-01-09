@@ -504,7 +504,6 @@ def cron_fill_queue():
                     continue  # Skip duplicates
 
                 supabase.table("content_queue").insert({
-                    "user_id": "system",
                     "url": art.get("url", ""),
                     "title": art.get("title", "")[:500],
                     "source_name": art.get("source_name", "Unknown"),
@@ -944,9 +943,8 @@ def prompt_lab_add_source():
             parsed = urlparse(url)
             source_name = parsed.netloc.replace("www.", "")
 
-        # Insert into queue
+        # Insert into queue (user_id is null for system-generated content)
         result = supabase.table("content_queue").insert({
-            "user_id": "system",
             "url": url,
             "title": title[:500] if title else url[:500],
             "source_name": source_name,
