@@ -1,0 +1,134 @@
+topic,source_name,tier,url_rss,score,priority,language
+ia,AI Snake Oil,authority,https://www.aisnakeoil.com/feed,85,1,en
+ia,Latent Space,authority,https://www.latent.space/feed,90,1,en
+ia,SemiAnalysis,authority,https://www.semianalysis.com/feed,90,1,en
+ia,Fabricated Knowledge,specialist,https://www.fabricatedknowledge.com/feed,85,1,en
+ia,The Algorithmic Bridge,specialist,https://thealgorithmicbridge.substack.com/feed,75,2,en
+ia,Import AI (Jack Clark),authority,https://importai.substack.com/feed,90,1,en
+ia,Interconnects (Nathan Lambert),specialist,https://www.interconnects.ai/feed,85,1,en
+ia,Transformer Circuits (Anthropic),corporate,https://transformer-circuits.pub/rss.xml,90,1,en
+ia,The Gradient,specialist,https://thegradient.pub/rss/,80,2,en
+ia,Ahead of AI (Sebastian Raschka),specialist,https://magazine.sebastianraschka.com/feed,85,1,en
+ia,AI Supremacy,specialist,https://aisupremacy.substack.com/feed,70,2,en
+ia,The Batch (DeepLearning.AI),corporate,https://www.deeplearning.ai/the-batch/feed/,85,1,en
+ia,Last Week in AI,specialist,https://lastweekin.ai/feed,75,2,en
+ia,Davis Summarizes Papers,specialist,https://dblalock.substack.com/feed,80,2,en
+ia,Chip Huyen,specialist,https://huyenchip.com/feed.xml,85,1,en
+general,404 Media,authority,https://www.404media.co/rss/,90,1,en
+general,The Markup,authority,https://themarkup.org/feeds/rss.xml,90,1,en
+general,Semafor Tech,authority,https://www.semafor.com/vertical/tech/rss.xml,85,1,en
+attention,Garbage Day,specialist,https://www.garbageday.email/feed,80,1,en
+info,Platformer,authority,https://www.platformer.news/rss/,90,1,en
+info,Big Technology,specialist,https://bigtechnology.substack.com/feed,80,1,en
+ia,Alignment Forum,authority,https://www.alignmentforum.org/feed.xml,85,1,en
+ia,LessWrong AI,specialist,https://www.lesswrong.com/feed.xml?view=ai,80,2,en
+ia,80000 Hours,specialist,https://80000hours.org/feed/,75,2,en
+ia,MIRI Blog,specialist,https://intelligence.org/blog/feed/,80,2,en
+general,Astral Codex Ten,authority,https://www.astralcodexten.com/feed,85,1,en
+ia,AI Alignment Newsletter,specialist,https://rohinshah.com/alignment-newsletter/feed/,80,2,en
+ia,The Zvi,specialist,https://thezvi.substack.com/feed,80,1,en
+deals,Not Boring (Packy McCormick),authority,https://www.notboring.co/feed,90,1,en
+deals,The Generalist,authority,https://www.generalist.com/feed,85,1,en
+deals,Newcomer (Eric Newcomer),authority,https://www.newcomer.co/feed,90,1,en
+macro,The Diff (Byrne Hobart),authority,https://www.thediff.co/feed,90,1,en
+deals,Lenny's Newsletter,specialist,https://www.lennysnewsletter.com/feed,85,1,en
+deals,Elad Gil Blog,authority,https://blog.eladgil.com/feeds/posts/default,85,1,en
+deals,Contrary Research,specialist,https://research.contrary.com/feed,80,2,en
+deals,CB Insights,specialist,https://www.cbinsights.com/research/feed/,80,1,en
+deals,Axios Pro Rata,authority,https://www.axios.com/pro-rata/feed,85,1,en
+deals,Term Sheet (Fortune),authority,https://fortune.com/tag/term-sheet/feed/,80,1,en
+deals,StrictlyVC,specialist,https://www.strictlyvc.com/feed/,80,1,en
+energy,Volts (David Roberts),authority,https://www.volts.wtf/feed,90,1,en
+energy,Canary Media,authority,https://www.canarymedia.com/feed/,85,1,en
+energy,Heatmap News,authority,https://heatmap.news/feed.xml,85,1,en
+energy,The Cool Down,generalist,https://www.thecooldown.com/feed/,70,2,en
+energy,Carbon Brief,authority,https://www.carbonbrief.org/feed,90,1,en
+energy,Recharge News,specialist,https://www.rechargenews.com/rss,80,1,en
+energy,Energy Monitor,specialist,https://www.energymonitor.ai/feed/,80,1,en
+energy,Transition Zero,specialist,https://www.transitionzero.org/feed,75,2,en
+health,Out-of-Pocket,specialist,https://www.outofpocket.health/feed,85,1,en
+health,Second Opinion,specialist,https://www.secondopinionnewsletter.com/feed,80,2,en
+health,In the Pipeline (Derek Lowe),authority,https://www.science.org/blogs/pipeline/feed,90,1,en
+health,Timmerman Report,authority,https://timmermanreport.com/feed/,85,1,en
+health,BioCentury,authority,https://www.biocentury.com/feed,85,1,en
+health,Drug Channels,specialist,https://www.drugchannels.net/feeds/posts/default,80,2,en
+health,Healthcare Dive,specialist,https://www.healthcaredive.com/feeds/news/,80,1,en
+health,Rock Health,specialist,https://rockhealth.com/feed/,80,2,en
+regulation,Lawfare,authority,https://www.lawfaremedia.org/feed,90,1,en
+regulation,Just Security,authority,https://www.justsecurity.org/feed/,85,1,en
+asia,Sinocism (Bill Bishop),authority,https://sinocism.com/feed,95,1,en
+asia,ChinaTalk,authority,https://www.chinatalk.media/feed,90,1,en
+macro,Noahpinion (Noah Smith),authority,https://www.noahpinion.blog/feed,85,1,en
+regulation,Persuasion (Yascha Mounk),specialist,https://www.persuasion.community/feed,80,2,en
+macro,Adam Tooze Chartbook,authority,https://adamtooze.substack.com/feed,90,1,en
+asia,China Project,specialist,https://thechinaproject.com/feed/,80,1,en
+asia,Pekingnology,specialist,https://www.pekingnology.com/feed,80,2,en
+macro,Apricitas Economics,specialist,https://www.apricitas.io/feed,85,1,en
+macro,Odd Lots (Bloomberg),authority,https://feeds.bloomberg.com/podcasts/odd_lots.xml,85,1,en
+cyber,Risky Business,authority,https://risky.biz/feeds/risky-business/,90,1,en
+cyber,This Week in Security,specialist,https://thisweekin4.security/feed,75,2,en
+cyber,Darknet Diaries,specialist,https://darknetdiaries.com/feed/,80,2,en
+cyber,Graham Cluley,specialist,https://grahamcluley.com/feed/,80,2,en
+cyber,Malwarebytes Labs,specialist,https://www.malwarebytes.com/blog/feed,80,1,en
+cyber,SANS ISC,authority,https://isc.sans.edu/rssfeed.xml,85,1,en
+cyber,Recorded Future,specialist,https://www.recordedfuture.com/feed,80,1,en
+cyber,Security Affairs,specialist,https://securityaffairs.com/feed,75,2,en
+deep_tech,Quanta Magazine,authority,https://www.quantamagazine.org/feed,95,1,en
+deep_tech,Ars Technica Science,authority,https://feeds.arstechnica.com/arstechnica/science,85,1,en
+deep_tech,Semiconductor Digest,specialist,https://www.semiconductor-digest.com/feed/,75,2,en
+deep_tech,Next Platform,specialist,https://www.nextplatform.com/feed/,80,1,en
+deep_tech,HPCwire,specialist,https://www.hpcwire.com/feed/,75,2,en
+deep_tech,Tom's Hardware,generalist,https://www.tomshardware.com/feeds/all,70,2,en
+deep_tech,WikiChip,specialist,https://fuse.wikichip.org/feed/,80,2,en
+space,Payload Space,specialist,https://payloadspace.com/feed/,85,1,en
+space,Everyday Astronaut,generalist,https://everydayastronaut.com/feed/,70,2,en
+space,Eric Berger (Ars),authority,https://arstechnica.com/author/ericberger/feed/,85,1,en
+space,Jeff Foust (Space News),authority,https://spacenews.com/author/jeff-foust/feed/,85,1,en
+crypto,Messari,authority,https://messari.io/rss,85,1,en
+crypto,a]6z crypto,corporate,https://a16zcrypto.com/feed/,85,1,en
+crypto,Paradigm Research,corporate,https://www.paradigm.xyz/feed.xml,85,1,en
+crypto,Vitalik Buterin,authority,https://vitalik.eth.limo/feed.xml,95,1,en
+crypto,Polynya,specialist,https://polynya.mirror.xyz/feed/atom,80,2,en
+info,Press Gazette,specialist,https://pressgazette.co.uk/feed/,75,2,en
+info,Nieman Lab,authority,https://www.niemanlab.org/feed/,85,1,en
+attention,The Ankler,specialist,https://www.theankler.com/feed,80,2,en
+attention,Puck News,authority,https://puck.news/feed/,85,1,en
+attention,The Hollywood Reporter,generalist,https://www.hollywoodreporter.com/feed/,70,2,en
+persuasion,Marketing Brew,specialist,https://www.marketingbrew.com/feed,80,1,en
+persuasion,The Hustle,generalist,https://thehustle.co/feed/,70,2,en
+persuasion,Morning Brew,generalist,https://www.morningbrew.com/daily/feed,70,2,en
+general,Axios,authority,https://api.axios.com/feed/,85,1,en
+general,Protocol (archive),specialist,https://www.protocol.com/feeds/feed.rss,75,2,en
+general,Rest of World,authority,https://restofworld.org/feed/,90,1,en
+general,MIT Tech Review,authority,https://www.technologyreview.com/feed/,90,1,en
+general,Ars Technica,authority,https://feeds.arstechnica.com/arstechnica/index,85,1,en
+general,The Verge,generalist,https://www.theverge.com/rss/index.xml,80,1,en
+general,Wired,generalist,https://www.wired.com/feed/rss,80,1,en
+ia,Towards Data Science,generalist,https://towardsdatascience.com/feed,70,2,en
+ia,Machine Learning Mastery,generalist,https://machinelearningmastery.com/feed/,70,2,en
+ia,Distill.pub,authority,https://distill.pub/rss.xml,90,1,en
+macro,Matt Levine Money Stuff,authority,https://www.bloomberg.com/opinion/authors/ARbTQlRLRjE/matthew-s-levine.rss,95,1,en
+macro,FT Alphaville,authority,https://www.ft.com/alphaville?format=rss,90,1,en
+macro,Calculated Risk,specialist,https://www.calculatedriskblog.com/feeds/posts/default,80,2,en
+deals,Pitchbook News,authority,https://pitchbook.com/news/feed,85,1,en
+deals,TechCrunch Startups,authority,https://techcrunch.com/category/startups/feed/,85,1,en
+deals,The Information,authority,https://www.theinformation.com/feed,95,1,en
+regulation,Tech Policy Press,specialist,https://techpolicy.press/feed/,80,1,en
+regulation,Algorithm Watch,specialist,https://algorithmwatch.org/en/feed/,80,2,en
+regulation,Access Now,specialist,https://www.accessnow.org/feed/,75,2,en
+regulation,EFF Deeplinks,authority,https://www.eff.org/rss/updates.xml,85,1,en
+asia,Nikkei Asia,authority,https://asia.nikkei.com/rss/feed/nar,90,1,en
+asia,South China Morning Post,authority,https://www.scmp.com/rss/91/feed,90,1,en
+asia,The Ken,authority,https://the-ken.com/feed/,85,1,en
+asia,Tech in Asia,specialist,https://www.techinasia.com/feed,80,1,en
+asia,KrASIA,specialist,https://kr-asia.com/feed,80,2,en
+general,L'Usine Digitale,specialist,https://www.usine-digitale.fr/rss,80,1,fr
+general,Maddyness,specialist,https://www.maddyness.com/feed/,75,1,fr
+general,FrenchWeb,specialist,https://www.frenchweb.fr/feed,75,2,fr
+general,Siècle Digital,generalist,https://siecledigital.fr/feed/,70,2,fr
+ia,ActuIA,specialist,https://www.actuia.com/feed/,75,1,fr
+cyber,LeMagIT Security,specialist,https://www.lemagit.fr/rss/Security.xml,75,1,fr
+cyber,CERT-FR,authority,https://www.cert.ssi.gouv.fr/feed/,90,1,fr
+energy,Techniques de l'Ingénieur,specialist,https://www.techniques-ingenieur.fr/feed/,75,2,fr
+macro,Les Echos Tech,authority,https://www.lesechos.fr/tech-medias/rss.xml,85,1,fr
+deals,Journal du Net,generalist,https://www.journaldunet.com/rss/,70,2,fr

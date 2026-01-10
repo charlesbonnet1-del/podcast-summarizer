@@ -445,10 +445,10 @@ class GSheetSourceLibrary:
         """Decrement source score when RSS fetch fails."""
         if not self.worksheet:
             return
-        
+
         try:
-            # Score is in column G (7th column)
-            cell = f"G{row_index}"
+            # Score is in column E (5th column) - V19 fix
+            cell = f"E{row_index}"
             current = self.worksheet.acell(cell).value
             current_score = int(current) if current else 50
             new_score = max(0, current_score - amount)
@@ -456,6 +456,146 @@ class GSheetSourceLibrary:
             log.debug("Score decremented", row=row_index, old=current_score, new=new_score)
         except Exception as e:
             log.warning("Failed to decrement score", error=str(e))
+
+    def mark_row_as_broken(self, row_index: int):
+        """
+        Mark a row as broken by coloring it red.
+        Used when RSS feed is non-functional.
+        """
+        if not self.worksheet:
+            return
+
+        try:
+            # Red background color
+            self.worksheet.format(f"A{row_index}:G{row_index}", {
+                "backgroundColor": {
+                    "red": 1.0,
+                    "green": 0.8,
+                    "blue": 0.8
+                }
+            })
+            log.info(f"🔴 Marked row {row_index} as broken (red)")
+        except Exception as e:
+            log.warning(f"Failed to mark row {row_index} as broken", error=str(e))
+
+    def mark_row_as_working(self, row_index: int):
+        """
+        Mark a row as working by removing red color (white background).
+        Used when RSS feed is confirmed functional.
+        """
+        if not self.worksheet:
+            return
+
+        try:
+            # White/default background
+            self.worksheet.format(f"A{row_index}:G{row_index}", {
+                "backgroundColor": {
+                    "red": 1.0,
+                    "green": 1.0,
+                    "blue": 1.0
+                }
+            })
+            log.debug(f"✅ Marked row {row_index} as working (white)")
+        except Exception as e:
+            log.warning(f"Failed to mark row {row_index} as working", error=str(e))
+
+    def validate_all_rss_feeds(self, batch_size: int = 50) -> dict:
+        """
+        Validate all RSS feeds in the library and color broken ones red.
+
+        Args:
+            batch_size: Number of feeds to check per call (to avoid timeout)
+
+        Returns:
+            {"checked": int, "working": int, "broken": int, "broken_sources": list}
+        """
+        if not self.worksheet:
+            return {"error": "Worksheet not loaded"}
+
+        all_sources = self.get_all_sources()
+
+        if not all_sources:
+            return {"error": "No sources found"}
+
+        results = {
+            "checked": 0,
+            "working": 0,
+            "broken": 0,
+            "broken_sources": []
+        }
+
+        # Limit to batch_size
+        sources_to_check = all_sources[:batch_size]
+
+        log.info(f"🔍 Validating {len(sources_to_check)} RSS feeds...")
+
+        for source in sources_to_check:
+            row_idx = source.get("row_index")
+            url = source.get("url")
+            name = source.get("name", "Unknown")
+
+            if not row_idx or not url:
+                continue
+
+            results["checked"] += 1
+
+            # Test the RSS feed
+            is_working = self._test_rss_feed(url)
+
+            if is_working:
+                results["working"] += 1
+                self.mark_row_as_working(row_idx)
+            else:
+                results["broken"] += 1
+                results["broken_sources"].append({
+                    "name": name,
+                    "url": url[:60],
+                    "row": row_idx
+                })
+                self.mark_row_as_broken(row_idx)
+
+            # Rate limiting
+            time.sleep(0.3)
+
+        log.info(f"✅ RSS validation complete: {results['working']}/{results['checked']} working, {results['broken']} broken")
+
+        return results
+
+    def _test_rss_feed(self, url: str) -> bool:
+        """
+        Test if an RSS feed is functional.
+
+        Returns:
+            True if feed returns valid RSS/XML, False otherwise
+        """
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+
+            response = httpx.get(url, headers=headers, timeout=10, follow_redirects=True)
+
+            # Check HTTP status
+            if response.status_code >= 400:
+                log.debug(f"RSS test failed: HTTP {response.status_code} for {url[:50]}")
+                return False
+
+            # Check if response looks like RSS/XML
+            content = response.text[:500].lower()
+            is_rss = any(marker in content for marker in ['<rss', '<feed', '<?xml', '<channel'])
+
+            if not is_rss:
+                log.debug(f"RSS test failed: Not RSS content for {url[:50]}")
+                return False
+
+            return True
+
+        except httpx.TimeoutException:
+            log.debug(f"RSS test failed: Timeout for {url[:50]}")
+            return False
+        except Exception as e:
+            log.debug(f"RSS test failed: {e} for {url[:50]}")
+            return False
 
 
 # ============================================

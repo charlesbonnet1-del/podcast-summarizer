@@ -552,12 +552,12 @@ DIALOGUE_SEGMENT_PROMPT = """Tu es scripteur de podcast professionnel. Écris un
 
 ## LES HÔTES
 - [B] L'ANALYSTE (voix masculine) = Présente les faits clés avec données
-- [A] LA SCEPTIQUE (voix féminine) = Challenge, cite les sources Perplexity, apporte des nuances
+- [A] LA SCEPTIQUE (voix féminine) = Challenge, cite les sources additionnelles, apporte des nuances
 
 ## RÈGLES ABSOLUES
 ⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
 ⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
-⚠️ CITE LES SOURCES: Mentionne les médias cités dans l'ANALYSE ENRICHIE
+⚠️ CITE LES SOURCES: Mentionne les médias cités dans le CONTEXTE COMPLÉMENTAIRE
 ⚠️ STYLE {style}: Chaque phrase apporte de l'information
 ⚠️ **LONGUEUR OBLIGATOIRE: MINIMUM {word_count} MOTS** - Un script trop court sera rejeté
 
@@ -594,13 +594,13 @@ DIALOGUE_MULTI_SOURCE_PROMPT = """Tu es scripteur de podcast professionnel. Écr
 
 ## LES HÔTES
 - [B] L'ANALYSTE (voix masculine) = Synthétise les informations des différentes sources
-- [A] LA SCEPTIQUE (voix féminine) = Challenge, cite les sources Perplexity, met en perspective (thèse/antithèse)
+- [A] LA SCEPTIQUE (voix féminine) = Challenge, cite les sources additionnelles, met en perspective (thèse/antithèse)
 
 ## RÈGLES ABSOLUES
 ⚠️ PAS DE NOMS (pas de "Bob", "Alice", etc.)
 ⚠️ PAS DE TICS: "Tu vois", "Écoute", "Attends", "En fait", "C'est intéressant"
 ⚠️ STYLE DENSE: Chaque phrase apporte de l'information
-⚠️ CITE LES SOURCES: "Selon [source]...", "D'après [source]..." - INCLUS les sources Perplexity!
+⚠️ CITE LES SOURCES: "Selon [source]...", "D'après [source]..." - INCLUS les sources du contexte!
 ⚠️ **LONGUEUR OBLIGATOIRE: MINIMUM {word_count} MOTS** - Un script trop court sera rejeté
 
 ## FORMAT

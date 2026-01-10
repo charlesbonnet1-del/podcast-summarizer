@@ -1463,17 +1463,17 @@ def prompt_lab_generate():
             content_parts.append(historical_section)
 
         if enriched_context:
-            # Build Perplexity section with articles for citation
-            perplexity_section = f"ANALYSE ENRICHIE (sources Perplexity - À CITER DANS LE DIALOGUE):\n{enriched_context}"
+            # Build enrichment section WITHOUT mentioning "Perplexity" (internal tool)
+            enrichment_section = f"CONTEXTE COMPLÉMENTAIRE:\n{enriched_context}"
             if perplexity_articles:
-                perplexity_section += "\n\n📰 ARTICLES CONNEXES À MENTIONNER:"
+                enrichment_section += "\n\n📰 SOURCES ADDITIONNELLES:"
                 for i, art in enumerate(perplexity_articles, 1):
                     source = art.get("source", "")
                     insight = art.get("insight", "")
-                    perplexity_section += f"\n{i}. [{source}] {art.get('title', '')}"
+                    enrichment_section += f"\n{i}. [{source}] {art.get('title', '')}"
                     if insight:
-                        perplexity_section += f" → {insight}"
-            content_parts.append(perplexity_section)
+                        enrichment_section += f" → {insight}"
+            content_parts.append(enrichment_section)
 
         full_content = "\n\n".join(content_parts)
         
@@ -1492,16 +1492,16 @@ def prompt_lab_generate():
         elif trend == "declining":
             historical_instruction = "Ce sujet était plus présent récemment. C'est peut-être une mise à jour finale."
 
-        # Build Perplexity citation instruction if enrichment was used
-        perplexity_instruction = ""
+        # Build citation instruction for additional sources (NO mention of internal tools)
+        enrichment_instruction = ""
         if enriched_context and perplexity_articles:
-            perplexity_sources = [art.get("source", "") for art in perplexity_articles if art.get("source")]
-            if perplexity_sources:
-                perplexity_instruction = f"""
-⚠️ CITATION OBLIGATOIRE: Tu DOIS citer les sources Perplexity dans le dialogue:
-- Utilise des formulations comme: "Selon {perplexity_sources[0]}...", "D'après une analyse de {perplexity_sources[1] if len(perplexity_sources) > 1 else perplexity_sources[0]}..."
-- Mentionne au moins 2 des sources listées dans l'ANALYSE ENRICHIE
-- Intègre les perspectives thèse/antithèse dans l'échange"""
+            additional_sources = [art.get("source", "") for art in perplexity_articles if art.get("source")]
+            if additional_sources:
+                enrichment_instruction = f"""
+⚠️ SOURCES ADDITIONNELLES À CITER:
+- Utilise des formulations comme: "Selon {additional_sources[0]}...", "D'après {additional_sources[1] if len(additional_sources) > 1 else additional_sources[0]}..."
+- Mentionne au moins 2 des sources listées dans le CONTEXTE COMPLÉMENTAIRE
+- Intègre les différentes perspectives dans l'échange"""
 
         # Common template variables
         template_vars = {
@@ -1523,8 +1523,8 @@ def prompt_lab_generate():
             "historical_instruction": historical_instruction,
             "trend": trend,
             "coverage_count": historical_context.get("coverage_count", 0),
-            # Perplexity citation instruction
-            "perplexity_instruction": perplexity_instruction,
+            # Citation instruction for additional sources
+            "perplexity_instruction": enrichment_instruction,  # Keep var name for backward compat
         }
         
         if len(articles) > 1:
