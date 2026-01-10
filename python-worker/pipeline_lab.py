@@ -418,6 +418,28 @@ def infer_topic_from_embeddings(cluster_embeddings: list, topic_embeddings: dict
     return best_topic, best_similarity
 
 
+def validate_article_topic_match(article_embedding: list, topic_embedding: list, threshold: float = 0.35) -> tuple[bool, float]:
+    """
+    Check if an article's embedding matches a topic embedding.
+
+    Args:
+        article_embedding: The article's embedding vector
+        topic_embedding: The topic's embedding vector
+        threshold: Minimum similarity to consider a match
+
+    Returns:
+        (is_match, similarity_score)
+    """
+    import numpy as np
+    from sklearn.preprocessing import normalize
+
+    art_norm = normalize([article_embedding])[0]
+    topic_norm = normalize([topic_embedding])[0]
+    similarity = float(np.dot(art_norm, topic_norm))
+
+    return similarity >= threshold, similarity
+
+
 # ============================================
 # SANDBOX CLUSTER
 # ============================================
@@ -591,35 +613,16 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
 
         log.info(f"📊 HAC produced {len(cluster_groups)} raw clusters, {len(valid_cluster_groups)} valid (>= {min_cluster_size} articles)")
 
-        # ========== STEP 5: BUILD CLUSTER OBJECTS WITH TOPIC INFERENCE ==========
+        # ========== STEP 5: BUILD CLUSTER OBJECTS WITH CONTENT-BASED TOPIC ==========
         # Get topic embeddings for inference (cached)
         topic_embeddings = get_topic_embeddings()
 
+        # Track stats for new validations
+        stats["clusters_rejected_low_coherence"] = 0
+        stats["articles_removed_topic_mismatch"] = 0
+
         for label, cluster_articles in valid_cluster_groups.items():
-            # Determine dominant topic (ignore "general")
-            topic_counts = {}
-            for art in cluster_articles:
-                topic = art.get("topic", art.get("keyword", "unknown"))
-                if topic != "general":
-                    topic_counts[topic] = topic_counts.get(topic, 0) + 1
-
-            # Use dominant non-general topic
-            if topic_counts:
-                dominant_topic = max(topic_counts, key=topic_counts.get)
-                topic_confidence = topic_counts[dominant_topic] / len(cluster_articles)
-            else:
-                # All articles are "general" - use embedding similarity to infer topic
-                cluster_embeddings = [art["embedding"] for art in cluster_articles]
-                inferred_topic, similarity_score = infer_topic_from_embeddings(
-                    cluster_embeddings, topic_embeddings
-                )
-                dominant_topic = inferred_topic
-                topic_confidence = similarity_score
-                log.info(f"🎯 Inferred topic '{inferred_topic}' for general-only cluster (similarity: {similarity_score:.3f})")
-
-            # Get unique sources
-            sources = list(set(a.get("source_name", "Unknown") for a in cluster_articles))
-
+            # ========== CORRECTION 2: Check coherence FIRST ==========
             # Compute cluster coherence (average pairwise similarity within cluster)
             if len(cluster_articles) > 1:
                 cluster_embs = np.array([art["embedding"] for art in cluster_articles])
@@ -632,19 +635,94 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
             else:
                 coherence = 1.0
 
+            # Reject cluster if coherence is too low (articles are too different)
+            MIN_COHERENCE = 0.55
+            if coherence < MIN_COHERENCE:
+                log.warning(f"⚠️ Rejecting cluster {label}: coherence {coherence:.3f} < {MIN_COHERENCE}")
+                stats["clusters_rejected_low_coherence"] += 1
+                for art in cluster_articles:
+                    exclusions.append({
+                        "type": "low_coherence_cluster",
+                        "article": art.get("title", "")[:50],
+                        "topic": art.get("topic", "unknown"),
+                        "reason": f"Cluster coherence {coherence:.3f} < {MIN_COHERENCE} threshold"
+                    })
+                    stats["articles_excluded"] += 1
+                continue
+
+            # ========== CORRECTION 1: ALWAYS use content-based topic inference ==========
+            # Don't rely on source topic - use embedding similarity to topic descriptions
+            cluster_embeddings = [art["embedding"] for art in cluster_articles]
+            inferred_topic, topic_similarity = infer_topic_from_embeddings(
+                cluster_embeddings, topic_embeddings
+            )
+
+            # Log the inference with source topics for comparison
+            source_topics = [art.get("topic", "unknown") for art in cluster_articles]
+            source_topic_counts = {}
+            for t in source_topics:
+                if t != "general":
+                    source_topic_counts[t] = source_topic_counts.get(t, 0) + 1
+
+            if source_topic_counts:
+                dominant_source_topic = max(source_topic_counts, key=source_topic_counts.get)
+                if dominant_source_topic != inferred_topic:
+                    log.info(f"🔄 Topic override: source='{dominant_source_topic}' → content='{inferred_topic}' (sim: {topic_similarity:.3f})")
+
+            log.info(f"🎯 Cluster {label}: topic='{inferred_topic}' (similarity: {topic_similarity:.3f}, coherence: {coherence:.3f})")
+
+            # ========== CORRECTION 3: Validate each article matches the inferred topic ==========
+            validated_articles = []
+            topic_embedding = topic_embeddings[inferred_topic]
+
+            for art in cluster_articles:
+                is_match, art_topic_sim = validate_article_topic_match(
+                    art["embedding"], topic_embedding, threshold=0.30
+                )
+
+                if is_match:
+                    validated_articles.append(art)
+                else:
+                    log.debug(f"🚫 Article removed from cluster: '{art.get('title', '')[:40]}' (topic sim: {art_topic_sim:.3f})")
+                    exclusions.append({
+                        "type": "topic_mismatch",
+                        "article": art.get("title", "")[:50],
+                        "inferred_topic": inferred_topic,
+                        "article_topic_similarity": round(art_topic_sim, 3),
+                        "reason": f"Article doesn't match cluster topic '{inferred_topic}' (sim: {art_topic_sim:.3f} < 0.30)"
+                    })
+                    stats["articles_removed_topic_mismatch"] += 1
+                    stats["articles_excluded"] += 1
+
+            # Skip cluster if too few articles remain after validation
+            if len(validated_articles) < min_cluster_size:
+                log.warning(f"⚠️ Cluster {label} dropped: only {len(validated_articles)} articles after validation")
+                for art in validated_articles:
+                    exclusions.append({
+                        "type": "cluster_too_small_after_validation",
+                        "article": art.get("title", "")[:50],
+                        "topic": inferred_topic,
+                        "reason": f"Cluster shrunk to {len(validated_articles)} articles after topic validation"
+                    })
+                    stats["articles_excluded"] += 1
+                continue
+
+            # Get unique sources
+            sources = list(set(a.get("source_name", "Unknown") for a in validated_articles))
+
             clusters.append({
-                "topic": dominant_topic,
+                "topic": inferred_topic,
                 "cluster_id": f"cluster_{label}",
-                "size": len(cluster_articles),
-                "articles": cluster_articles,
-                "representative_title": cluster_articles[0].get("title", ""),
+                "size": len(validated_articles),
+                "articles": validated_articles,
+                "representative_title": validated_articles[0].get("title", ""),
                 "sources": sources,
                 "source_diversity": len(sources),
                 "coherence": round(coherence, 3),
-                "topic_confidence": round(topic_confidence, 3)
+                "topic_confidence": round(topic_similarity, 3)
             })
             stats["clusters_formed"] += 1
-            stats["articles_clustered"] += len(cluster_articles)
+            stats["articles_clustered"] += len(validated_articles)
 
         # Handle singleton/excluded articles
         for art in singleton_articles:
