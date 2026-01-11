@@ -452,6 +452,42 @@ def click_first_link(links: list[dict]):
 
 
 # ============================================
+# EMBEDDING GENERATION
+# ============================================
+
+def generate_embeddings_batch(texts: list[str]) -> list[list[float] | None]:
+    """Generate embeddings for multiple texts using OpenAI."""
+    if not texts:
+        return []
+
+    try:
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            log.warning("OpenAI API key not available")
+            return [None] * len(texts)
+
+        client = OpenAI(api_key=api_key)
+        truncated = [t[:8000] for t in texts]
+
+        response = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=truncated
+        )
+
+        embeddings = [None] * len(texts)
+        for item in response.data:
+            embeddings[item.index] = item.embedding
+
+        return embeddings
+
+    except Exception as e:
+        log.error(f"Embedding generation failed: {e}")
+        return [None] * len(texts)
+
+
+# ============================================
 # ARTICLE STORAGE
 # ============================================
 
@@ -462,32 +498,42 @@ def store_newsletter_articles(
     newsletter_from: str
 ) -> int:
     """
-    Store extracted links in the articles table.
+    Store extracted links in the articles table with embeddings.
 
     Returns:
         Number of new articles stored
     """
     stored = 0
 
+    # Filter out duplicates first
+    new_links = []
     for link in links:
+        url = link['url']
+        existing = supabase.table("articles") \
+            .select("id") \
+            .eq("url", url) \
+            .execute()
+        if not existing.data:
+            new_links.append(link)
+
+    if not new_links:
+        return 0
+
+    # Generate embeddings for all new links at once
+    texts = [
+        f"{link.get('title') or newsletter_subject}. From newsletter: {newsletter_subject}"
+        for link in new_links
+    ]
+    embeddings = generate_embeddings_batch(texts)
+
+    # Store articles with embeddings
+    for i, link in enumerate(new_links):
         try:
             url = link['url']
             title = link.get('title') or newsletter_subject
-
-            # Check if URL already exists
-            existing = supabase.table("articles") \
-                .select("id") \
-                .eq("url", url) \
-                .execute()
-
-            if existing.data:
-                continue  # Skip duplicate
-
-            # Infer topic from newsletter sender or content
             topic = infer_topic_from_newsletter(newsletter_from, title)
 
-            # Insert article
-            supabase.table("articles").insert({
+            insert_data = {
                 "url": url,
                 "title": title[:500],
                 "description": f"From newsletter: {newsletter_subject[:200]}",
@@ -495,8 +541,13 @@ def store_newsletter_articles(
                 "source_type": "newsletter",
                 "topic": topic,
                 "published_at": datetime.now(timezone.utc).isoformat(),
-            }).execute()
+            }
 
+            # Add embedding if available
+            if i < len(embeddings) and embeddings[i]:
+                insert_data["embedding"] = embeddings[i]
+
+            supabase.table("articles").insert(insert_data).execute()
             stored += 1
 
         except Exception as e:
