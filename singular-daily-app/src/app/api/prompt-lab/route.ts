@@ -8,9 +8,13 @@ export async function GET(request: NextRequest) {
   const action = searchParams.get("action");
 
   try {
-    let endpoint = "/prompt-lab/queue";
+    let endpoint = "/prompt-lab/prompts";
+
     if (action === "prompts") {
       endpoint = "/prompt-lab/prompts";
+    } else if (action === "fresh-articles") {
+      // New V2: Get fresh articles (< 48h) from articles table
+      endpoint = "/articles/fresh";
     }
 
     const res = await fetch(`${WORKER_URL}${endpoint}`, {

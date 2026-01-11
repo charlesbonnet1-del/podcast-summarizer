@@ -22,8 +22,6 @@ import {
   Play,
   AlertTriangle,
   XCircle,
-  Download,
-  Trash2,
   Plus,
   History
 } from "lucide-react";
@@ -178,8 +176,7 @@ export default function PromptLabPage() {
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [fillingQueue, setFillingQueue] = useState(false);
-  const [clearingQueue, setClearingQueue] = useState(false);
+  const [refreshingArticles, setRefreshingArticles] = useState(false);
   const [addingSource, setAddingSource] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [manualUrl, setManualUrl] = useState("");
@@ -198,8 +195,8 @@ export default function PromptLabPage() {
   const [clusterResult, setClusterResult] = useState<StepResult | null>(null);
   const [selectResult, setSelectResult] = useState<StepResult | null>(null);
   
-  // Queue data
-  const [queue, setQueue] = useState<TopicArticles>({});
+  // Fresh articles data (< 48h)
+  const [freshArticles, setFreshArticles] = useState<TopicArticles>({});
   
   // Prompts (sandbox)
   const [prompts, setPrompts] = useState<Prompts>({ dialogue_segment: "", dialogue_multi_source: "" });
@@ -239,25 +236,35 @@ export default function PromptLabPage() {
     }
   }, [selectedTopic, topicIntentions]);
 
-  // Refresh only queue (no loading spinner)
-  async function refreshQueue() {
+  // Load fresh articles (< 48h)
+  async function loadFreshArticles(showSpinner = false) {
+    if (showSpinner) setRefreshingArticles(true);
     try {
-      const queueRes = await fetch("/api/prompt-lab?action=queue");
-      const queueData = await queueRes.json();
-      if (queueData.topics) {
-        setQueue(queueData.topics);
-        const firstTopic = Object.keys(queueData.topics).find(t => queueData.topics[t].length > 0);
+      const res = await fetch("/api/prompt-lab?action=fresh-articles");
+      const data = await res.json();
+      if (data.articles) {
+        // Group by topic
+        const byTopic: TopicArticles = {};
+        for (const article of data.articles) {
+          const topic = article.topic || "general";
+          if (!byTopic[topic]) byTopic[topic] = [];
+          byTopic[topic].push(article);
+        }
+        setFreshArticles(byTopic);
+        const firstTopic = Object.keys(byTopic).find(t => byTopic[t].length > 0);
         if (firstTopic && !selectedTopic) setSelectedTopic(firstTopic);
       }
     } catch (err) {
-      console.error("Failed to refresh queue:", err);
+      console.error("Failed to load fresh articles:", err);
+    } finally {
+      if (showSpinner) setRefreshingArticles(false);
     }
   }
 
   async function loadData() {
     setLoading(true);
     try {
-      await refreshQueue();
+      await loadFreshArticles();
 
       const promptsRes = await fetch("/api/prompt-lab?action=prompts");
       const promptsData = await promptsRes.json();
@@ -282,81 +289,6 @@ export default function PromptLabPage() {
       setError("Failed to load data");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function fillQueue() {
-    setFillingQueue(true);
-    setError(null);
-    try {
-      // This is now synchronous and can take 30-60 seconds
-      const res = await fetch("/api/prompt-lab", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "fill-queue" })
-      });
-
-      // Handle non-JSON responses (timeouts, server errors)
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await res.text();
-        throw new Error(`Server error: ${text.substring(0, 200)}`);
-      }
-
-      const data = await res.json();
-
-      if (data.error || data.success === false) {
-        setError(`Fill queue: ${data.error || "Failed"}`);
-      } else if (data.inserted !== undefined) {
-        // Show result
-        if (data.inserted > 0) {
-          alert(`✅ ${data.inserted} articles ajoutés (${data.duplicates || 0} doublons ignorés)`);
-        } else {
-          setError(`Aucun nouvel article (${data.duplicates || 0} doublons, ${data.total_fetched || 0} sources)`);
-        }
-        // Refresh queue to show new articles
-        await refreshQueue();
-      }
-    } catch (err) {
-      console.error("Fill queue failed:", err);
-      setError(`Fill queue failed: ${err}`);
-    } finally {
-      setFillingQueue(false);
-    }
-  }
-
-  async function clearQueue() {
-    if (!confirm("Vider toute la queue ? Cette action est irréversible.")) {
-      return;
-    }
-    setClearingQueue(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/prompt-lab", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "clear-queue" })
-      });
-
-      // Handle non-JSON responses
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await res.text();
-        throw new Error(`Server error: ${text.substring(0, 200)}`);
-      }
-
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-      } else {
-        setQueue({});
-        setSelectedArticles(new Set());
-      }
-    } catch (err) {
-      console.error("Clear queue failed:", err);
-      setError("Clear queue failed");
-    } finally {
-      setClearingQueue(false);
     }
   }
 
@@ -391,13 +323,13 @@ export default function PromptLabPage() {
       if (data.error) {
         setError(data.error);
       } else {
-        // Reset form and refresh queue
+        // Reset form and refresh fresh articles
         setManualUrl("");
         setManualTitle("");
         setManualSourceName("");
         setManualTopic("");
         setShowAddForm(false);
-        await refreshQueue();
+        await loadFreshArticles();
       }
     } catch (err) {
       console.error("Add source failed:", err);
@@ -571,7 +503,7 @@ export default function PromptLabPage() {
     setResult(null);
 
     try {
-      // Collect full article data from queue (sidebar) or from pipeline results
+      // Collect full article data from fresh articles (sidebar) or from pipeline results
       const articlesToSend: Article[] = [];
       
       // First, try to get articles from selectResult segments (pipeline path)
@@ -601,10 +533,10 @@ export default function PromptLabPage() {
         }
       }
       
-      // Fall back to queue articles (sidebar selection)
+      // Fall back to fresh articles (sidebar selection)
       if (articlesToSend.length === 0) {
-        for (const topic of Object.keys(queue)) {
-          for (const art of queue[topic]) {
+        for (const topic of Object.keys(freshArticles)) {
+          for (const art of freshArticles[topic]) {
             if (selectedArticles.has(art.id)) {
               articlesToSend.push(art);
             }
@@ -716,7 +648,7 @@ export default function PromptLabPage() {
   }
 
   function selectAllInTopic(topic: string) {
-    const articles = queue[topic] || [];
+    const articles = freshArticles[topic] || [];
     setSelectedArticles(prev => {
       const next = new Set(prev);
       articles.forEach(a => next.add(a.id));
@@ -727,7 +659,7 @@ export default function PromptLabPage() {
 
   function selectAllArticles() {
     const allIds = new Set<string>();
-    Object.values(queue).forEach(articles => {
+    Object.values(freshArticles).forEach(articles => {
       articles.forEach(a => allIds.add(a.id));
     });
     setSelectedArticles(allIds);
@@ -760,8 +692,8 @@ export default function PromptLabPage() {
     );
   }
 
-  const topics = Object.keys(queue).sort((a, b) => (queue[b]?.length || 0) - (queue[a]?.length || 0));
-  const totalArticles = Object.values(queue).flat().length;
+  const topics = Object.keys(freshArticles).sort((a, b) => (freshArticles[b]?.length || 0) - (freshArticles[a]?.length || 0));
+  const totalArticles = Object.values(freshArticles).flat().length;
   const enabledTopicsCount = Object.values(params.topics_enabled).filter(Boolean).length;
   const hasParamChanges = JSON.stringify(params) !== JSON.stringify(savedParams);
   const hasPromptChanges = editedPrompt !== savedPrompts.dialogue_segment;
@@ -789,27 +721,18 @@ export default function PromptLabPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">{totalArticles} articles en queue</span>
+            <span className="text-sm text-muted-foreground">
+              <Clock className="w-4 h-4 inline mr-1" />
+              {totalArticles} articles frais (&lt; 48h)
+            </span>
             <button
-              onClick={fillQueue}
-              disabled={fillingQueue}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 disabled:opacity-50 transition-colors text-sm font-medium"
-              title="Fetch fresh articles from all sources"
+              onClick={() => loadFreshArticles(true)}
+              disabled={refreshingArticles}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 disabled:opacity-50 transition-colors text-sm font-medium"
+              title="Rafraîchir les articles"
             >
-              {fillingQueue ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Fill Queue
-            </button>
-            <button
-              onClick={clearQueue}
-              disabled={clearingQueue || totalArticles === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 disabled:opacity-50 transition-colors text-sm font-medium"
-              title="Clear all articles from queue"
-            >
-              {clearingQueue ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              Clear
-            </button>
-            <button onClick={loadData} className="p-2 rounded-lg hover:bg-background/50 transition-colors" title="Refresh all">
-              <RefreshCw className="w-4 h-4 text-muted-foreground" />
+              {refreshingArticles ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Rafraîchir
             </button>
           </div>
         </div>
@@ -818,7 +741,7 @@ export default function PromptLabPage() {
       {/* Main Layout */}
       <div className="pt-16 h-screen flex">
         
-        {/* LEFT SIDEBAR: Articles Queue */}
+        {/* LEFT SIDEBAR: Fresh Articles (< 48h) */}
         <div className="w-80 flex-shrink-0 border-r border-border/30 overflow-y-auto bg-card/30">
           <div className="p-4">
             {/* Manual Source Addition */}
@@ -898,8 +821,8 @@ export default function PromptLabPage() {
 
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
-                <FileText className="w-4 h-4" />
-                Articles Queue
+                <Clock className="w-4 h-4" />
+                Articles Frais
               </h2>
               <div className="flex gap-2">
                 <button
@@ -920,7 +843,7 @@ export default function PromptLabPage() {
             </div>
             <div className="space-y-2">
               {topics.map(topic => {
-                const articles = queue[topic] || [];
+                const articles = freshArticles[topic] || [];
                 const isCollapsed = collapsedQueueTopics.has(topic);
                 const selectedCount = articles.filter(a => selectedArticles.has(a.id)).length;
                 return (
@@ -1069,7 +992,7 @@ export default function PromptLabPage() {
                 <div className="flex items-center justify-between">
                   <select value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)} className="flex-1 mr-2 p-2 bg-background/50 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
                     <option value="">Select a topic...</option>
-                    {topics.map(topic => <option key={topic} value={topic}>{topic.toUpperCase()} ({queue[topic]?.length || 0})</option>)}
+                    {topics.map(topic => <option key={topic} value={topic}>{topic.toUpperCase()} ({freshArticles[topic]?.length || 0})</option>)}
                   </select>
                   <button onClick={handleSaveIntention} disabled={saving || !hasIntentionChanges} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs">
                     {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
