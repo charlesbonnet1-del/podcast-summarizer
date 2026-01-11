@@ -25,15 +25,14 @@ CREATE TABLE IF NOT EXISTS articles (
 
     -- Timestamps
     published_at TIMESTAMPTZ,  -- When article was published
-    fetched_at TIMESTAMPTZ DEFAULT NOW(),  -- When we fetched it
+    fetched_at TIMESTAMPTZ DEFAULT NOW()  -- When we fetched it
 
-    -- Computed column for fresh/archive
-    -- Fresh = fetched in last 48 hours
-    is_fresh BOOLEAN GENERATED ALWAYS AS (fetched_at > NOW() - INTERVAL '48 hours') STORED
+    -- Note: is_fresh is computed at query time, not stored
+    -- Fresh = fetched_at > NOW() - INTERVAL '48 hours'
 );
 
 -- Indexes for fast queries
-CREATE INDEX IF NOT EXISTS idx_articles_fresh ON articles(fetched_at DESC) WHERE is_fresh = true;
+CREATE INDEX IF NOT EXISTS idx_articles_fetched ON articles(fetched_at DESC);
 CREATE INDEX IF NOT EXISTS idx_articles_topic ON articles(topic);
 CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source_name);
 CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url);
