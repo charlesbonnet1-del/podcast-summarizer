@@ -29,12 +29,13 @@ log = structlog.get_logger()
 # ============================================
 
 # Words in titles that indicate navigation/non-article pages
+# NOTE: Only exact navigation phrases, NOT common words like "about"
 NOISE_TITLE_WORDS = {
-    "home", "subscribe", "subscription", "contact", "about", "login", "careers",
+    "home", "subscribe", "subscription", "contact", "login", "careers",
     "consultant", "sign up", "sign in", "register", "newsletter", "cookie",
     "privacy policy", "terms of service", "404", "page not found",
-    "accueil", "inscription", "connexion", "contact", "à propos", "carrières",
-    "mentions légales", "politique de confidentialité"
+    "accueil", "inscription", "connexion", "mentions légales",
+    "politique de confidentialité"
 }
 
 # URL patterns that indicate non-article pages
