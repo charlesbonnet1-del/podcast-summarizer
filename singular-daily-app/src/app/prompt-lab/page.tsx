@@ -463,7 +463,7 @@ export default function PromptLabPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "run",
+          action: "run-v2",
           params,
           format,
           topics: Object.entries(params.topics_enabled)
