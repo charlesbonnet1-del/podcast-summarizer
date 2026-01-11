@@ -25,7 +25,12 @@ from pipeline_lab import (
     sandbox_fetch,
     sandbox_cluster,
     sandbox_select,
-    sandbox_full_pipeline
+    sandbox_full_pipeline,
+    # V2: New architecture
+    sandbox_fetch_v2,
+    sandbox_cluster_v2,
+    sandbox_full_pipeline_v2,
+    mark_cluster_as_used
 )
 
 load_dotenv()
@@ -631,6 +636,135 @@ def cron_fill_queue():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# ============================================
+# NEW ARCHITECTURE: Articles + Freshness
+# ============================================
+
+@app.route("/cron/fetch-batch", methods=["POST"])
+def cron_fetch_batch():
+    """
+    Fetch a batch of RSS sources and store articles with embeddings.
+
+    NEW ARCHITECTURE (V2):
+    - Rotational fetch: oldest sources first
+    - Parallel HTTP: 10 concurrent requests
+    - Embeddings at fetch time
+    - Stored in 'articles' table (not content_queue)
+
+    Body params (optional):
+    - batch_size: Number of sources to fetch (default: 150)
+    - sync_gsheet: If true, sync sources from GSheet first
+
+    Called by cron every 15 minutes.
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json() or {}
+    batch_size = data.get("batch_size", 150)
+    sync_gsheet = data.get("sync_gsheet", False)
+
+    log.info(f"📡 Fetch batch triggered (batch_size={batch_size}, sync_gsheet={sync_gsheet})")
+
+    try:
+        from article_fetcher import fetch_and_store_batch, sync_sources_from_gsheet, get_supabase
+
+        # Optionally sync sources from GSheet first
+        if sync_gsheet:
+            supabase_client = get_supabase()
+            sync_count = sync_sources_from_gsheet(supabase_client)
+            log.info(f"📋 Synced {sync_count} sources from GSheet")
+
+        # Fetch batch
+        stats = fetch_and_store_batch(batch_size=batch_size)
+
+        return jsonify({
+            "success": True,
+            "message": f"Fetched {stats['sources_fetched']} sources, {stats['articles_new']} new articles",
+            **stats
+        })
+
+    except Exception as e:
+        log.error(f"❌ Fetch batch error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/cron/sync-sources", methods=["POST"])
+def cron_sync_sources():
+    """
+    Sync RSS sources from GSheet to source_fetch_status table.
+    Run this when adding new sources to GSheet.
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    log.info("📋 Source sync triggered")
+
+    try:
+        from article_fetcher import sync_sources_from_gsheet, get_supabase
+
+        supabase_client = get_supabase()
+        count = sync_sources_from_gsheet(supabase_client)
+
+        return jsonify({
+            "success": True,
+            "message": f"Synced {count} sources from GSheet",
+            "sources_synced": count
+        })
+
+    except Exception as e:
+        log.error(f"❌ Source sync error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/articles/fresh", methods=["GET"])
+def get_fresh_articles_endpoint():
+    """
+    Get fresh articles (last 48 hours) for clustering.
+
+    Query params:
+    - hours: Hours to look back (default: 48)
+    - topic: Optional topic filter
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    hours = request.args.get("hours", 48, type=int)
+    topic = request.args.get("topic", None)
+
+    try:
+        from article_fetcher import get_fresh_articles
+
+        articles = get_fresh_articles(hours_back=hours, topic=topic)
+
+        return jsonify({
+            "success": True,
+            "count": len(articles),
+            "hours_back": hours,
+            "topic": topic,
+            "articles": [
+                {
+                    "id": a["id"],
+                    "url": a["url"],
+                    "title": a["title"],
+                    "source_name": a["source_name"],
+                    "topic": a["topic"],
+                    "fetched_at": a["fetched_at"],
+                    "has_embedding": a.get("embedding") is not None
+                }
+                for a in articles
+            ]
+        })
+
+    except Exception as e:
+        log.error(f"❌ Fresh articles error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/source/<domain>/score", methods=["GET"])
 def get_source_score(domain: str):
     """Get dynamic score for a specific source."""
@@ -857,12 +991,55 @@ def pipeline_lab_run():
         params = {**get_default_params(), **(data.get("params") or {})}
         format_type = data.get("format", "flash")
         topics = data.get("topics")
-        
-        result = sandbox_full_pipeline(params, format_type, topics)
+
+        # Check if V2 architecture is requested
+        use_v2 = params.get("use_v2_architecture", False)
+
+        if use_v2:
+            log.info("🆕 Using V2 architecture (fresh articles + archive enrichment)")
+            result = sandbox_full_pipeline_v2(params, format_type, topics)
+        else:
+            result = sandbox_full_pipeline(params, format_type, topics)
+
         return jsonify(result)
-        
+
     except Exception as e:
         log.error("Pipeline lab run error", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/pipeline-lab/run-v2", methods=["POST"])
+def pipeline_lab_run_v2():
+    """
+    Run the V2 pipeline (new architecture) in sandbox mode.
+
+    Same as /pipeline-lab/run but always uses V2:
+    - Fresh articles from 'articles' table (last 48h)
+    - Archive enrichment for clusters
+    - Cluster deduplication (avoid same as yesterday)
+
+    Body:
+        {
+            "params": {...},     // Optional custom params
+            "format": "flash",   // "flash" or "digest"
+            "topics": [...]      // Optional list of topics
+        }
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        data = request.get_json() or {}
+        params = {**get_default_params(), **(data.get("params") or {})}
+        format_type = data.get("format", "flash")
+        topics = data.get("topics")
+
+        log.info("🆕 Running V2 pipeline (fresh articles + archive enrichment)")
+        result = sandbox_full_pipeline_v2(params, format_type, topics)
+        return jsonify(result)
+
+    except Exception as e:
+        log.error("Pipeline lab V2 run error", error=str(e))
         return jsonify({"error": str(e)}), 500
 
 

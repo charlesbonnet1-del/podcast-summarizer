@@ -54,7 +54,7 @@ DEFAULT_PARAMS = {
     "flash_duration_max": 70,
     "digest_duration_min": 50,
     "digest_duration_max": 70,
-    
+
     # Topics (all enabled by default)
     "topics_enabled": {
         "asia": True,
@@ -73,13 +73,29 @@ DEFAULT_PARAMS = {
         "resources": True,
         "space": True
     },
-    
+
     # Bing backup threshold
     "bing_backup_threshold": 5,  # Topics with < N articles get Bing backup
-    
+
     # RSS limits
     "max_articles_per_rss": 10,
-    "rss_timeout_seconds": 10
+    "rss_timeout_seconds": 10,
+
+    # ========== NEW ARCHITECTURE (V2) ==========
+    # Fresh articles window
+    "fresh_hours": 48,  # Articles are "fresh" for 48 hours
+
+    # Archive enrichment
+    "max_archive_articles": 2,  # Max archive articles per cluster
+    "archive_min_similarity": 0.7,  # Min similarity for archive match
+    "archive_max_age_days": 90,  # Max age of archive articles
+
+    # Cluster deduplication
+    "check_cluster_dedup": True,  # Check if cluster was already used
+    "cluster_dedup_days": 7,  # Days to look back for dedup
+
+    # Architecture selection
+    "use_v2_architecture": False,  # Set to True to use new articles table
 }
 
 
@@ -905,6 +921,404 @@ def sandbox_select(clusters: list[dict], articles: list[dict], params: dict, for
         "segments": segments,
         "exclusions": exclusions,
         "stats": stats
+    }
+
+
+# ============================================
+# NEW ARCHITECTURE: Fresh + Archive
+# ============================================
+
+def fetch_fresh_articles(hours_back: int = 48, topics: list[str] = None) -> list[dict]:
+    """
+    Fetch fresh articles from the new 'articles' table.
+
+    This is the NEW architecture replacement for content_queue.
+    Articles are fetched by article_fetcher.py cron job.
+
+    Args:
+        hours_back: How many hours to look back (default: 48)
+        topics: Optional list of topics to filter
+
+    Returns:
+        List of articles with embeddings
+    """
+    from datetime import datetime, timezone, timedelta
+
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+
+        query = supabase.table("articles") \
+            .select("id, url, title, description, content, embedding, source_name, source_url, topic, published_at, fetched_at") \
+            .gte("fetched_at", cutoff.isoformat()) \
+            .not_.is_("embedding", "null") \
+            .order("fetched_at", desc=True)
+
+        if topics:
+            query = query.in_("topic", topics)
+
+        result = query.execute()
+        articles = result.data or []
+
+        log.info(f"📰 Fetched {len(articles)} fresh articles from new architecture (last {hours_back}h)")
+
+        # Log topic distribution
+        topic_counts = {}
+        for a in articles:
+            t = a.get("topic", "unknown")
+            topic_counts[t] = topic_counts.get(t, 0) + 1
+        if topic_counts:
+            log.info(f"📊 Topics: {dict(sorted(topic_counts.items(), key=lambda x: -x[1]))}")
+
+        return articles
+
+    except Exception as e:
+        log.error(f"❌ Failed to fetch fresh articles: {e}")
+        return []
+
+
+def enrich_cluster_with_archive(
+    cluster: dict,
+    max_archive_articles: int = 2,
+    min_similarity: float = 0.7,
+    max_age_days: int = 90
+) -> dict:
+    """
+    Enrich a cluster with relevant archive articles.
+
+    Finds archive articles (> 48h old) that are similar to the cluster's centroid.
+
+    Args:
+        cluster: Cluster dict with articles and embeddings
+        max_archive_articles: Max archive articles to add
+        min_similarity: Minimum cosine similarity threshold
+        max_age_days: Max age of archive articles in days
+
+    Returns:
+        Enriched cluster with archive_articles added
+    """
+    import numpy as np
+    from sklearn.preprocessing import normalize
+
+    try:
+        articles = cluster.get("articles", [])
+        if not articles:
+            return cluster
+
+        # Compute cluster centroid
+        embeddings = [a.get("embedding") for a in articles if a.get("embedding")]
+        if not embeddings:
+            return cluster
+
+        embeddings_array = np.array(embeddings)
+        centroid = np.mean(embeddings_array, axis=0).tolist()
+
+        # Get article URLs to exclude
+        exclude_urls = [a.get("url") for a in articles if a.get("url")]
+
+        # Search archive using the Supabase function
+        try:
+            result = supabase.rpc("find_archive_context", {
+                "cluster_centroid": centroid,
+                "exclude_urls": exclude_urls,
+                "max_results": max_archive_articles,
+                "min_similarity": min_similarity,
+                "max_age_days": max_age_days
+            }).execute()
+
+            archive_articles = result.data or []
+
+            if archive_articles:
+                log.info(f"🗄️ Found {len(archive_articles)} archive articles for cluster '{cluster.get('topic')}'")
+                for a in archive_articles:
+                    log.debug(f"   - [{a.get('topic')}] {a.get('title', '')[:50]} (sim: {a.get('similarity', 0):.3f})")
+
+            # Add archive articles to cluster
+            cluster["archive_articles"] = archive_articles
+            cluster["archive_count"] = len(archive_articles)
+
+        except Exception as e:
+            # Function might not exist yet
+            log.warning(f"Archive search failed (migration not applied?): {e}")
+            cluster["archive_articles"] = []
+            cluster["archive_count"] = 0
+
+    except Exception as e:
+        log.error(f"❌ Archive enrichment failed: {e}")
+        cluster["archive_articles"] = []
+        cluster["archive_count"] = 0
+
+    return cluster
+
+
+def check_cluster_already_used(cluster: dict, days_back: int = 7) -> bool:
+    """
+    Check if a cluster was already used recently.
+
+    Prevents creating the same segment as yesterday.
+
+    Args:
+        cluster: Cluster dict with articles
+        days_back: How far back to check
+
+    Returns:
+        True if cluster was already used
+    """
+    try:
+        articles = cluster.get("articles", [])
+        if not articles:
+            return False
+
+        article_urls = [a.get("url") for a in articles if a.get("url")]
+        if not article_urls:
+            return False
+
+        result = supabase.rpc("is_cluster_used", {
+            "article_urls_to_check": article_urls,
+            "days_back": days_back
+        }).execute()
+
+        is_used = result.data or False
+
+        if is_used:
+            log.info(f"⚠️ Cluster already used: '{cluster.get('representative_title', '')[:50]}...'")
+
+        return is_used
+
+    except Exception as e:
+        # Function might not exist yet
+        log.debug(f"Cluster check failed (migration not applied?): {e}")
+        return False
+
+
+def mark_cluster_as_used(cluster: dict) -> str | None:
+    """
+    Mark a cluster as used after creating a segment.
+
+    Args:
+        cluster: Cluster dict with articles
+
+    Returns:
+        Cluster ID or None on failure
+    """
+    try:
+        articles = cluster.get("articles", [])
+        article_urls = [a.get("url") for a in articles if a.get("url")]
+
+        if not article_urls:
+            return None
+
+        result = supabase.rpc("mark_cluster_used", {
+            "p_article_urls": article_urls,
+            "p_topic": cluster.get("topic", "unknown"),
+            "p_representative_title": cluster.get("representative_title", "")[:200]
+        }).execute()
+
+        return result.data
+
+    except Exception as e:
+        log.debug(f"Mark cluster failed (migration not applied?): {e}")
+        return None
+
+
+def sandbox_fetch_v2(params: dict, topics: list[str] = None) -> dict:
+    """
+    NEW ARCHITECTURE: Fetch from 'articles' table instead of content_queue.
+
+    This uses articles fetched by the article_fetcher.py cron job.
+    Articles have embeddings pre-computed at fetch time.
+
+    Args:
+        params: Pipeline parameters
+        topics: Optional list of topics to filter
+
+    Returns:
+        {
+            "articles": [...],
+            "exclusions": [...],
+            "stats": {...}
+        }
+    """
+    start_time = datetime.now()
+    articles = []
+    exclusions = []
+    stats = {
+        "source": "articles_table",
+        "architecture": "fresh_archive_v2"
+    }
+
+    try:
+        # Get enabled topics from params if not explicitly provided
+        if not topics:
+            enabled_topics = params.get("topics_enabled", {})
+            topics = [t for t, enabled in enabled_topics.items() if enabled]
+
+        hours_back = params.get("fresh_hours", 48)
+
+        # Fetch fresh articles
+        raw_articles = fetch_fresh_articles(hours_back=hours_back, topics=topics if topics else None)
+
+        stats["raw_articles_fetched"] = len(raw_articles)
+        stats["topics_queried"] = topics if topics else "all"
+        stats["hours_back"] = hours_back
+
+        # Convert to expected format (some fields may differ from content_queue)
+        for art in raw_articles:
+            articles.append({
+                "id": art.get("id"),
+                "url": art.get("url"),
+                "title": art.get("title"),
+                "description": art.get("description"),
+                "content": art.get("content"),
+                "processed_content": art.get("content"),  # Alias
+                "embedding": art.get("embedding"),
+                "source_name": art.get("source_name"),
+                "topic": art.get("topic"),
+                "published_at": art.get("published_at"),
+                "fetched_at": art.get("fetched_at"),
+                "keyword": art.get("topic"),  # Alias for compatibility
+            })
+
+        stats["articles_returned"] = len(articles)
+
+        # Topic distribution
+        topic_counts = {}
+        for a in articles:
+            t = a.get("topic", "unknown")
+            topic_counts[t] = topic_counts.get(t, 0) + 1
+        stats["topic_distribution"] = topic_counts
+
+        stats["duration_seconds"] = (datetime.now() - start_time).total_seconds()
+
+    except Exception as e:
+        log.error(f"❌ sandbox_fetch_v2 error: {e}")
+        import traceback
+        traceback.print_exc()
+        exclusions.append({
+            "type": "fatal_error",
+            "reason": str(e)
+        })
+
+    return {
+        "articles": articles,
+        "exclusions": exclusions,
+        "stats": stats
+    }
+
+
+def sandbox_cluster_v2(articles: list[dict], params: dict) -> dict:
+    """
+    NEW ARCHITECTURE: Cluster with archive enrichment + deduplication.
+
+    Same as sandbox_cluster but:
+    1. Enriches clusters with archive articles
+    2. Checks for cluster deduplication (avoid same as yesterday)
+
+    Args:
+        articles: List of articles (with embeddings from fetch_v2)
+        params: Custom parameters
+
+    Returns:
+        {
+            "clusters": [...],
+            "exclusions": [...],
+            "stats": {...}
+        }
+    """
+    # First, run the base clustering
+    result = sandbox_cluster(articles, params)
+
+    clusters = result.get("clusters", [])
+    stats = result.get("stats", {})
+    exclusions = result.get("exclusions", [])
+
+    # NEW: Archive enrichment and deduplication
+    enriched_clusters = []
+    deduplicated_count = 0
+
+    max_archive = params.get("max_archive_articles", 2)
+    archive_similarity = params.get("archive_min_similarity", 0.7)
+    archive_max_age = params.get("archive_max_age_days", 90)
+    check_dedup = params.get("check_cluster_dedup", True)
+    dedup_days = params.get("cluster_dedup_days", 7)
+
+    for cluster in clusters:
+        # Step 1: Check if cluster was already used
+        if check_dedup and check_cluster_already_used(cluster, days_back=dedup_days):
+            deduplicated_count += 1
+            for art in cluster.get("articles", []):
+                exclusions.append({
+                    "type": "cluster_already_used",
+                    "article": art.get("title", "")[:50],
+                    "topic": cluster.get("topic"),
+                    "reason": f"This cluster was already used in the last {dedup_days} days"
+                })
+            continue
+
+        # Step 2: Enrich with archive articles
+        enriched = enrich_cluster_with_archive(
+            cluster,
+            max_archive_articles=max_archive,
+            min_similarity=archive_similarity,
+            max_age_days=archive_max_age
+        )
+        enriched_clusters.append(enriched)
+
+    stats["clusters_deduplicated"] = deduplicated_count
+    stats["clusters_after_dedup"] = len(enriched_clusters)
+    stats["total_archive_articles"] = sum(c.get("archive_count", 0) for c in enriched_clusters)
+    stats["archive_enrichment_enabled"] = max_archive > 0
+    stats["deduplication_enabled"] = check_dedup
+
+    log.info(f"✅ Clustering V2 complete: {len(enriched_clusters)} clusters ({deduplicated_count} deduplicated), {stats['total_archive_articles']} archive articles added")
+
+    return {
+        "clusters": enriched_clusters,
+        "exclusions": exclusions,
+        "stats": stats
+    }
+
+
+def sandbox_full_pipeline_v2(params: dict, format_type: str = "flash", topics: list[str] = None) -> dict:
+    """
+    NEW ARCHITECTURE: Full pipeline using fresh articles + archive enrichment.
+
+    This is the V2 pipeline that uses:
+    - articles table instead of content_queue
+    - Archive enrichment for clusters
+    - Cluster deduplication
+
+    Returns:
+        {
+            "fetch": {...},
+            "cluster": {...},
+            "select": {...},
+            "final_segments": [...],
+            "total_duration_seconds": float
+        }
+    """
+    start_time = datetime.now()
+
+    # Step 1: Fetch from new articles table
+    fetch_result = sandbox_fetch_v2(params, topics)
+
+    # Step 2: Cluster with archive enrichment + dedup
+    cluster_result = sandbox_cluster_v2(fetch_result["articles"], params)
+
+    # Step 3: Select (same as before)
+    select_result = sandbox_select(
+        cluster_result["clusters"],
+        fetch_result["articles"],
+        params,
+        format_type
+    )
+
+    return {
+        "fetch": fetch_result,
+        "cluster": cluster_result,
+        "select": select_result,
+        "final_segments": select_result["segments"],
+        "total_duration_seconds": (datetime.now() - start_time).total_seconds(),
+        "architecture": "fresh_archive_v2"
     }
 
 
