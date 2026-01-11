@@ -63,6 +63,15 @@ export async function POST(request: NextRequest) {
         };
         break;
 
+      case "run-v2":
+        endpoint = "/pipeline-lab/run-v2";
+        payload = {
+          params: body.params,
+          format: body.format,
+          topics: body.topics,
+        };
+        break;
+
       case "generate-script":
         endpoint = "/pipeline-lab/generate-script";
         payload = {
