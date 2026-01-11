@@ -1092,7 +1092,12 @@ RÈGLES CRITIQUES:
 - CITE tes sources web dans le contexte (ex: "Selon TechCrunch...")
 - Les URLs doivent être RÉELLES (pas d'exemples, pas de placeholder)
 - Apporte des INFOS NOUVELLES, pas un résumé des articles fournis
-- L'insight de chaque article doit expliquer sa valeur ajoutée"""
+- L'insight de chaque article doit expliquer sa valeur ajoutée
+
+PRIORITÉ DES SOURCES:
+- PRIVILÉGIE les sources SPÉCIALISÉES du domaine (ex: Ars Technica, Wired, MIT Tech Review pour la tech ; Krebs on Security, The Record pour cyber ; SpaceNews pour espace, etc.)
+- En cas d'absence de sources spécialisées pertinentes, tu peux utiliser des sources généralistes de qualité (Reuters, Bloomberg, Le Monde, etc.)
+- ÉVITE les agrégateurs de news, blogs personnels ou sites de faible autorité"""
 
 
 def enrich_content_with_perplexity(
