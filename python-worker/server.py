@@ -721,6 +721,39 @@ def cron_sync_sources():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/cron/fetch-newsletters", methods=["POST"])
+def cron_fetch_newsletters():
+    """
+    Fetch newsletters from Gmail and extract article links.
+
+    Reads unread emails, extracts article links, stores in articles table.
+    Simulates engagement (tracking pixels, clicks) to stay on lists.
+
+    Called by cron (e.g., every 30 minutes).
+    """
+    if not verify_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+
+    log.info("📬 Newsletter fetch triggered")
+
+    try:
+        from newsletter_fetcher import fetch_and_store_newsletters
+
+        stats = fetch_and_store_newsletters()
+
+        return jsonify({
+            "success": True,
+            "message": f"Processed {stats['emails_processed']} emails, {stats['articles_new']} new articles",
+            **stats
+        })
+
+    except Exception as e:
+        log.error(f"❌ Newsletter fetch error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/articles/fresh", methods=["GET"])
 def get_fresh_articles_endpoint():
     """
