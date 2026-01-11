@@ -552,45 +552,53 @@ def fetch_and_store_batch(batch_size: int = BATCH_SIZE) -> dict:
     else:
         new_articles = []
 
-    # Step 6: Generate embeddings for new articles
+    # Step 6 & 7: Generate embeddings and store in SMALL BATCHES to save memory
+    CHUNK_SIZE = 50  # Process 50 articles at a time
+
     if new_articles:
-        # Prepare text for embedding (title + description)
-        texts = [
-            f"{a['title']}. {a.get('description', '')}"
-            for a in new_articles
-        ]
+        for chunk_start in range(0, len(new_articles), CHUNK_SIZE):
+            chunk_end = min(chunk_start + CHUNK_SIZE, len(new_articles))
+            chunk = new_articles[chunk_start:chunk_end]
 
-        # Generate embeddings in batch (up to 100 at a time for API limits)
-        all_embeddings = []
-        for i in range(0, len(texts), 100):
-            batch_texts = texts[i:i+100]
-            batch_embeddings = generate_embeddings_batch(batch_texts)
-            all_embeddings.extend(batch_embeddings)
+            log.info(f"📦 Processing chunk {chunk_start//CHUNK_SIZE + 1}: articles {chunk_start+1}-{chunk_end}")
 
-        # Step 7: Store articles in DB
-        for i, article in enumerate(new_articles):
-            try:
-                insert_data = {
-                    "url": article["url"],
-                    "title": article["title"],
-                    "description": article.get("description"),
-                    "source_name": article["source_name"],
-                    "source_url": article.get("source_url"),
-                    "topic": article["topic"],
-                    "published_at": article.get("published_at").isoformat() if article.get("published_at") else None,
-                }
+            # Generate embeddings for this chunk only
+            texts = [
+                f"{a['title']}. {a.get('description', '')}"
+                for a in chunk
+            ]
+            chunk_embeddings = generate_embeddings_batch(texts)
 
-                # Add embedding if available
-                if i < len(all_embeddings) and all_embeddings[i]:
-                    insert_data["embedding"] = all_embeddings[i]
+            # Store this chunk immediately
+            for i, article in enumerate(chunk):
+                try:
+                    insert_data = {
+                        "url": article["url"],
+                        "title": article["title"],
+                        "description": article.get("description"),
+                        "source_name": article["source_name"],
+                        "source_url": article.get("source_url"),
+                        "topic": article["topic"],
+                        "published_at": article.get("published_at").isoformat() if article.get("published_at") else None,
+                    }
 
-                supabase.table("articles").insert(insert_data).execute()
-                stats["articles_new"] += 1
+                    # Add embedding if available
+                    if i < len(chunk_embeddings) and chunk_embeddings[i]:
+                        insert_data["embedding"] = chunk_embeddings[i]
 
-            except Exception as e:
-                # Handle duplicate URL conflict silently
-                if "duplicate" not in str(e).lower() and "unique" not in str(e).lower():
-                    log.debug("Article insert failed", url=article["url"][:50], error=str(e))
+                    supabase.table("articles").insert(insert_data).execute()
+                    stats["articles_new"] += 1
+
+                except Exception as e:
+                    # Handle duplicate URL conflict silently
+                    if "duplicate" not in str(e).lower() and "unique" not in str(e).lower():
+                        log.debug("Article insert failed", url=article["url"][:50], error=str(e))
+
+            # Clear chunk from memory
+            del chunk_embeddings
+            del texts
+
+        log.info(f"✅ Stored {stats['articles_new']} articles")
 
     # Step 8: Update source fetch status
     now = datetime.now(timezone.utc)
