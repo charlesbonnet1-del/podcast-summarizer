@@ -669,6 +669,25 @@ export default function PromptLabPage() {
     setSelectedArticles(new Set());
   }
 
+  function selectSegmentArticles(segment: Segment) {
+    // Clear previous selection and select only this segment's articles
+    const segmentArticleIds = new Set<string>();
+    if (segment.articles) {
+      for (const art of segment.articles) {
+        const id = art.id || art.url;
+        if (id) segmentArticleIds.add(id);
+      }
+    }
+    setSelectedArticles(segmentArticleIds);
+    setSelectedTopic(segment.topic);
+    // Auto-expand the generate section
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      next.add("generate");
+      return next;
+    });
+  }
+
   function togglePipelineTopic(topic: string) {
     setParams(prev => ({
       ...prev,
@@ -960,7 +979,7 @@ export default function PromptLabPage() {
                   {selectResult.segments && selectResult.segments.length > 0 && (
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {selectResult.segments.map((seg, i) => (
-                        <SegmentCard key={i} segment={seg} />
+                        <SegmentCard key={i} segment={seg} onSelect={selectSegmentArticles} />
                       ))}
                     </div>
                   )}
@@ -1232,22 +1251,30 @@ function ClusterCard({ cluster }: { cluster: Cluster }) {
   );
 }
 
-function SegmentCard({ segment }: { segment: Segment }) {
+function SegmentCard({ segment, onSelect }: { segment: Segment; onSelect?: (segment: Segment) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <div className="bg-emerald-500/10 rounded-lg border border-emerald-500/20 overflow-hidden">
-      <button 
-        onClick={() => setExpanded(!expanded)}
-        className="w-full p-2 flex items-center justify-between hover:bg-emerald-500/20 transition-colors"
-      >
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className="p-2 flex items-center justify-between">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-2 flex-1 min-w-0 hover:bg-emerald-500/20 transition-colors rounded p-1 -m-1"
+        >
           {expanded ? <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
           <span className="text-xs uppercase text-emerald-400 font-medium">{segment.topic}</span>
           <span className={`text-xs px-1.5 py-0.5 rounded ${segment.type === "cluster" ? "bg-purple-500/20 text-purple-400" : "bg-amber-500/20 text-amber-400"}`}>{segment.type}</span>
           <span className="text-xs text-muted-foreground flex-shrink-0">{segment.articles?.length || 0} articles</span>
-        </div>
-      </button>
+        </button>
+        {onSelect && (
+          <button
+            onClick={() => onSelect(segment)}
+            className="ml-2 px-2 py-1 text-[10px] font-medium rounded bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50 transition-colors"
+          >
+            Utiliser
+          </button>
+        )}
+      </div>
       <p className="px-2 pb-2 text-xs truncate text-muted-foreground">{segment.representative_title}</p>
       
       {expanded && segment.articles && segment.articles.length > 0 && (
