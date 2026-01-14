@@ -652,7 +652,8 @@ def sandbox_cluster(articles: list[dict], params: dict) -> dict:
                 coherence = 1.0
 
             # Reject cluster if coherence is too low (articles are too different)
-            MIN_COHERENCE = 0.55
+            # V2: Increased from 0.55 to 0.62 for stricter quality control
+            MIN_COHERENCE = 0.62
             if coherence < MIN_COHERENCE:
                 log.warning(f"⚠️ Rejecting cluster {label}: coherence {coherence:.3f} < {MIN_COHERENCE}")
                 stats["clusters_rejected_low_coherence"] += 1
@@ -850,14 +851,17 @@ def sandbox_select(clusters: list[dict], articles: list[dict], params: dict, for
         for topic, topic_clusters in topics_with_clusters.items():
             if len(segments) >= target_segments:
                 break
-            
-            # Take best cluster (largest)
-            best_cluster = max(topic_clusters, key=lambda c: c.get("size", 0))
+
+            # Take best cluster by COHERENCE (not size)
+            # Coherence = average pairwise similarity within cluster (higher = more cohesive topic)
+            best_cluster = max(topic_clusters, key=lambda c: c.get("coherence", 0))
             
             segments.append({
                 "topic": topic,
                 "type": "cluster",
                 "cluster_size": best_cluster.get("size", 0),
+                "coherence": best_cluster.get("coherence", 0),
+                "source_diversity": best_cluster.get("source_diversity", 1),
                 "articles": best_cluster.get("articles", []),
                 "representative_title": best_cluster.get("representative_title", ""),
                 "duration_target": (duration_min + duration_max) // 2
