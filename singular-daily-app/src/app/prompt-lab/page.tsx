@@ -1064,33 +1064,38 @@ export default function PromptLabPage() {
                   <span className="text-muted-foreground">Topic: <strong className="text-foreground">{result.topic}</strong></span>
                 </div>
 
-                {result.enriched_context && (
+                {(result.enriched_context || (result.perplexity_articles && result.perplexity_articles.length > 0)) && (
                   <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl">
-                    <h3 className="text-xs font-semibold text-purple-400 mb-2 flex items-center gap-2"><Sparkles className="w-3 h-3" />Perplexity Context</h3>
-                    <p className="text-xs text-foreground/80 whitespace-pre-wrap max-h-32 overflow-y-auto">{result.enriched_context}</p>
-                  </div>
-                )}
-
-                {result.perplexity_articles && result.perplexity_articles.length > 0 && (
-                  <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl">
-                    <h3 className="text-xs font-semibold text-cyan-400 mb-2 flex items-center gap-2"><ExternalLink className="w-3 h-3" />Articles connexes ({result.perplexity_articles.length} sources Perplexity)</h3>
-                    <div className="space-y-2">
-                      {result.perplexity_articles.map((article, i) => (
-                        <a
-                          key={i}
-                          href={article.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block p-2 bg-background/50 rounded-lg hover:bg-background/80 transition-colors"
-                        >
-                          <p className="text-xs font-medium text-foreground">{article.title}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] text-cyan-400 font-medium">{article.source}</span>
-                            {article.insight && <span className="text-[10px] text-muted-foreground">→ {article.insight}</span>}
-                          </div>
-                        </a>
-                      ))}
-                    </div>
+                    <h3 className="text-xs font-semibold text-purple-400 mb-2 flex items-center gap-2">
+                      <Sparkles className="w-3 h-3" />
+                      Perplexity Context
+                      {result.perplexity_articles && result.perplexity_articles.length > 0 && (
+                        <span className="text-[10px] text-purple-300">({result.perplexity_articles.length} sources)</span>
+                      )}
+                    </h3>
+                    {result.enriched_context && (
+                      <p className="text-xs text-foreground/80 whitespace-pre-wrap max-h-32 overflow-y-auto mb-3">{result.enriched_context}</p>
+                    )}
+                    {result.perplexity_articles && result.perplexity_articles.length > 0 && (
+                      <div className="space-y-2 border-t border-purple-500/20 pt-2">
+                        <p className="text-[10px] text-purple-300 font-medium">Sources utilisées:</p>
+                        {result.perplexity_articles.map((article, i) => (
+                          <a
+                            key={i}
+                            href={article.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block p-2 bg-background/30 rounded-lg hover:bg-background/50 transition-colors"
+                          >
+                            <p className="text-xs font-medium text-foreground">{article.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-purple-400 font-medium">{article.source}</span>
+                              {article.insight && <span className="text-[10px] text-muted-foreground">→ {article.insight}</span>}
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
